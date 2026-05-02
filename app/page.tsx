@@ -2,27 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import {
-  Card,
-  Button,
-  Field,
-  Input,
-  Select,
-  Textarea,
-  Section,
-  Badge,
-} from "@/components/Ui";
-import {
-  Building2,
-  Euro,
-  CalendarDays,
-  Clock,
-  Truck,
-  Smartphone,
-  ClipboardCheck,
-  Settings as SettingsIcon,
-  LogOut,
-} from "lucide-react";
+import { Card, Button, Field, Input, Select, Textarea, Section, Badge } from "@/components/Ui";
+import { Building2, Euro, CalendarDays, Clock, Truck, Smartphone, ClipboardCheck, Settings as SettingsIcon, LogOut } from "lucide-react";
 
 const modules = [
   { id: "dashboard", title: "Tableau de bord", icon: Building2 },
@@ -33,14 +14,14 @@ const modules = [
   { id: "vehicles", title: "Véhicules", icon: Truck },
   { id: "mobile", title: "Mobile terrain", icon: Smartphone },
   { id: "requests", title: "Demandes internes", icon: ClipboardCheck },
-  { id: "settings", title: "Personnalisation", icon: SettingsIcon },
+  { id: "settings", title: "Personnalisation", icon: SettingsIcon }
 ];
 
 function money(v: any) {
   return new Intl.NumberFormat("fr-FR", {
     style: "currency",
     currency: "EUR",
-    maximumFractionDigits: 0,
+    maximumFractionDigits: 0
   }).format(Number(v || 0));
 }
 
@@ -61,20 +42,19 @@ function cleanFileName(name: string) {
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-zA-Z0-9-_]/g, "-")
     .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
     .toLowerCase();
 
-  return `${Date.now()}-${cleaned}${extension ? "." + extension.toLowerCase() : ""}`;
+  return `${Date.now()}-${cleaned || "fichier"}${extension ? "." + extension.toLowerCase() : ""}`;
 }
 
 async function upload(bucket: string, file: File) {
   const path = cleanFileName(file.name);
-
   const { error } = await supabase.storage.from(bucket).upload(path, file);
 
   if (error) throw error;
 
   const { data } = supabase.storage.from(bucket).getPublicUrl(path);
-
   return data.publicUrl;
 }
 
@@ -121,7 +101,7 @@ export default function Page() {
       timeRes,
       vehiclesRes,
       requestsRes,
-      profileRes,
+      profileRes
     ] = await Promise.all([
       supabase.from("projects").select("*").order("created_at", { ascending: false }),
       supabase.from("chantier_photos").select("*").order("created_at", { ascending: false }),
@@ -131,7 +111,7 @@ export default function Page() {
       supabase.from("time_entries").select("*").order("created_at", { ascending: false }),
       supabase.from("vehicles").select("*").order("created_at", { ascending: false }),
       supabase.from("internal_requests").select("*").order("created_at", { ascending: false }),
-      supabase.from("profiles").select("*").maybeSingle(),
+      supabase.from("profiles").select("*").maybeSingle()
     ]);
 
     setProjects(projectsRes.data || []);
@@ -292,7 +272,6 @@ function Projects({ projects, photos, documents, refreshAll }: any) {
     if (!form.name) return;
 
     const { error } = await supabase.from("projects").insert(form);
-
     if (error) return alert(error.message);
 
     setForm({ name: "", client: "", address: "", status: "En cours", progress: 0, manager: "" });
@@ -302,9 +281,7 @@ function Projects({ projects, photos, documents, refreshAll }: any) {
   async function createPhoto(e: any) {
     e.preventDefault();
 
-    const formElement = e.currentTarget;
-    const file = formElement?.photoFile?.files?.[0];
-
+    const file = e.currentTarget?.photoFile?.files?.[0];
     if (!file || !photo.title) return alert("Photo et titre obligatoires");
 
     setBusy(true);
@@ -314,16 +291,13 @@ function Projects({ projects, photos, documents, refreshAll }: any) {
 
       const { error } = await supabase.from("chantier_photos").insert({
         ...photo,
-        file_url,
+        file_url
       });
 
       if (error) throw error;
 
-      formElement?.reset?.();
       setPhoto({ ...photo, title: "", note: "" });
-
       await refreshAll();
-
       alert("Photo envoyée avec succès");
     } catch (err: any) {
       alert(err.message);
@@ -335,9 +309,7 @@ function Projects({ projects, photos, documents, refreshAll }: any) {
   async function createDoc(e: any) {
     e.preventDefault();
 
-    const formElement = e.currentTarget;
-    const file = formElement?.documentFile?.files?.[0];
-
+    const file = e.currentTarget?.documentFile?.files?.[0];
     if (!file || !doc.name) return alert("Document et nom obligatoires");
 
     setBusy(true);
@@ -347,16 +319,13 @@ function Projects({ projects, photos, documents, refreshAll }: any) {
 
       const { error } = await supabase.from("chantier_documents").insert({
         ...doc,
-        file_url,
+        file_url
       });
 
       if (error) throw error;
 
-      formElement?.reset?.();
       setDoc({ ...doc, name: "" });
-
       await refreshAll();
-
       alert("Document envoyé avec succès");
     } catch (err: any) {
       alert(err.message);
@@ -466,21 +435,19 @@ function Payments({ projects, payments, refreshAll, projectName }: any) {
     e.preventDefault();
 
     let file_url = null;
-    const formElement = e.currentTarget;
-    const file = formElement?.paymentFile?.files?.[0];
+    const file = e.currentTarget?.paymentFile?.files?.[0];
 
     if (file) file_url = await upload("documents", file);
 
     const { error } = await supabase.from("payments").insert({
       ...form,
       amount: Number(form.amount),
-      file_url,
+      file_url
     });
 
     if (error) return alert(error.message);
 
     setForm({ ...form, label: "", amount: "" });
-    formElement?.reset?.();
     await refreshAll();
   }
 
