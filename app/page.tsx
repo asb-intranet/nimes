@@ -1,8 +1,9 @@
 "use client";
+
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { Card, Button, Field, Input, Select, Textarea, Section, Badge } from "@/components/Ui";
-import { Building2, Euro, CalendarDays, Clock, Truck, Smartphone, ClipboardCheck, Settings, LogOut } from "lucide-react";
+import { Building2, Euro, CalendarDays, Clock, Truck, Smartphone, ClipboardCheck, Settings as SettingsIcon, LogOut } from "lucide-react";
 
 const modules=[
  {id:"dashboard",title:"Tableau de bord",icon:Building2},
@@ -13,7 +14,7 @@ const modules=[
  {id:"vehicles",title:"Véhicules",icon:Truck},
  {id:"mobile",title:"Mobile terrain",icon:Smartphone},
  {id:"requests",title:"Demandes internes",icon:ClipboardCheck},
- {id:"settings",title:"Personnalisation",icon:Settings}
+ {id:"settings",title:"Personnalisation",icon:SettingsIcon}
 ];
 
 function money(v:any){return new Intl.NumberFormat("fr-FR",{style:"currency",currency:"EUR",maximumFractionDigits:0}).format(Number(v||0))}
@@ -58,7 +59,7 @@ export default function Page(){
  {active==="vehicles"&&<Vehicles vehicles={vehicles} refreshAll={refreshAll}/>}
  {active==="mobile"&&<MobileView/>}
  {active==="requests"&&<Requests projects={projects} requests={requests} refreshAll={refreshAll} projectName={projectName}/>}
- {active==="settings"&&<Settings/>}
+ {active==="settings"&&<SettingsPage/>}
  </section></main></div>
 }
 
@@ -82,6 +83,9 @@ function Planning({projects,planning,refreshAll,projectName}:any){const [form,se
 function TimeEntries({projects,timeEntries,refreshAll,projectName}:any){const [form,setForm]=useState({employee:"",project_id:"",work_date:new Date().toISOString().slice(0,10),start_time:"08:00",end_time:"17:00",pause_minutes:60});useEffect(()=>{if(projects[0])setForm(f=>({...f,project_id:projects[0].id}))},[projects]);async function add(e:any){e.preventDefault();const {error}=await supabase.from("time_entries").insert(form);if(error)return alert(error.message);refreshAll()}return <div><Section title="Pointage personnel"/><Card><form onSubmit={add} className="grid gap-3 md:grid-cols-3"><Field label="Salarié"><Input value={form.employee} onChange={(e:any)=>setForm({...form,employee:e.target.value})}/></Field><Field label="Chantier"><Select value={form.project_id} onChange={(e:any)=>setForm({...form,project_id:e.target.value})}>{projects.map((p:any)=><option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field><Field label="Date"><Input type="date" value={form.work_date} onChange={(e:any)=>setForm({...form,work_date:e.target.value})}/></Field><Field label="Arrivée"><Input type="time" value={form.start_time} onChange={(e:any)=>setForm({...form,start_time:e.target.value})}/></Field><Field label="Départ"><Input type="time" value={form.end_time} onChange={(e:any)=>setForm({...form,end_time:e.target.value})}/></Field><Field label="Pause min"><Input type="number" value={form.pause_minutes} onChange={(e:any)=>setForm({...form,pause_minutes:Number(e.target.value)})}/></Field><div>Total : {calc(form.start_time,form.end_time,form.pause_minutes)}</div><Button>Ajouter pointage</Button></form></Card><div className="mt-6 space-y-3">{timeEntries.map((x:any)=><Card key={x.id}><b>{x.employee}</b> · {projectName(x.project_id)}<p>{x.work_date} · {x.start_time} → {x.end_time} · {calc(x.start_time,x.end_time,x.pause_minutes)}</p></Card>)}</div></div>}
 
 function Vehicles({vehicles,refreshAll}:any){const [form,setForm]=useState({name:"",driver:"",km:"",status:"RAS",alert:""});async function add(e:any){e.preventDefault();const {error}=await supabase.from("vehicles").insert({...form,km:Number(form.km||0)});if(error)return alert(error.message);setForm({name:"",driver:"",km:"",status:"RAS",alert:""});refreshAll()}return <div><Section title="Gestion véhicules"/><Card><form onSubmit={add} className="grid gap-3 md:grid-cols-3"><Field label="Véhicule"><Input value={form.name} onChange={(e:any)=>setForm({...form,name:e.target.value})}/></Field><Field label="Conducteur"><Input value={form.driver} onChange={(e:any)=>setForm({...form,driver:e.target.value})}/></Field><Field label="KM"><Input type="number" value={form.km} onChange={(e:any)=>setForm({...form,km:e.target.value})}/></Field><Field label="Statut"><Select value={form.status} onChange={(e:any)=>setForm({...form,status:e.target.value})}><option>RAS</option><option>Entretien</option><option>Problème</option></Select></Field><Field label="Alerte"><Input value={form.alert} onChange={(e:any)=>setForm({...form,alert:e.target.value})}/></Field><Button>Ajouter véhicule</Button></form></Card><div className="mt-6 grid gap-4 md:grid-cols-2">{vehicles.map((v:any)=><Card key={v.id}><b>{v.name}</b><p>{v.driver} · {v.km} km</p><p className="text-red-600">{v.alert}</p></Card>)}</div></div>}
+
 function MobileView(){return <div><Section title="Application mobile terrain" subtitle="PWA installable depuis Chrome/Safari."/><Card><p>Ouvre l'URL Vercel sur téléphone puis “Ajouter à l’écran d’accueil”.</p><ul className="mt-4 list-disc pl-6"><li>Photos terrain</li><li>Pointage</li><li>Demandes internes</li><li>Documents chantier</li></ul></Card></div>}
+
 function Requests({projects,requests,refreshAll,projectName}:any){const [form,setForm]=useState({type:"Matériel",project_id:"",requester:"",message:"",status:"Ouverte"});useEffect(()=>{if(projects[0])setForm(f=>({...f,project_id:projects[0].id}))},[projects]);async function add(e:any){e.preventDefault();const {error}=await supabase.from("internal_requests").insert(form);if(error)return alert(error.message);setForm({...form,message:""});refreshAll()}return <div><Section title="Demandes internes"/><Card><form onSubmit={add} className="grid gap-3 md:grid-cols-2"><Field label="Type"><Select value={form.type} onChange={(e:any)=>setForm({...form,type:e.target.value})}><option>Matériel</option><option>Véhicule</option><option>Congé</option><option>Sécurité</option></Select></Field><Field label="Chantier"><Select value={form.project_id} onChange={(e:any)=>setForm({...form,project_id:e.target.value})}>{projects.map((p:any)=><option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field><Field label="Demandeur"><Input value={form.requester} onChange={(e:any)=>setForm({...form,requester:e.target.value})}/></Field><div className="md:col-span-2"><Field label="Message"><Textarea value={form.message} onChange={(e:any)=>setForm({...form,message:e.target.value})}/></Field></div><Button>Créer demande</Button></form></Card><div className="mt-6 space-y-3">{requests.map((r:any)=><Card key={r.id}><b>{r.type}</b> · {projectName(r.project_id)}<p>{r.message}</p></Card>)}</div></div>}
-function Settings(){return <div><Section title="Personnalisation intranet"/><Card><p>Prochaine évolution : écran admin complet pour gérer modules, rôles, utilisateurs, logo et couleurs.</p></Card></div>}
+
+function SettingsPage(){return <div><Section title="Personnalisation intranet"/><Card><p>Prochaine évolution : écran admin complet pour gérer modules, rôles, utilisateurs, logo et couleurs.</p></Card></div>}
