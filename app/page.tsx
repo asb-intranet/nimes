@@ -278,33 +278,43 @@ function Projects({ projects, photos, documents, refreshAll }: any) {
     await refreshAll();
   }
 
-  async function createPhoto(e: any) {
-    e.preventDefault();
+  async function createPhoto(e:any){
+  e.preventDefault()
 
-    const file = e.currentTarget?.photoFile?.files?.[0];
-    if (!file || !photo.title) return alert("Photo et titre obligatoires");
+  const formEl = e.currentTarget
 
-    setBusy(true);
+  const file = formEl.photoFile.files[0]
+  if(!file || !photo.title) return alert("Photo et titre obligatoires")
 
-    try {
-      const file_url = await upload("photos", file);
+  setBusy(true)
 
-      const { error } = await supabase.from("chantier_photos").insert({
-        ...photo,
-        file_url
-      });
+  try {
+    const file_url = await upload("photos", file)
 
-      if (error) throw error;
+    const { error } = await supabase
+      .from("chantier_photos")
+      .insert({ ...photo, file_url })
 
-      setPhoto({ ...photo, title: "", note: "" });
-      await refreshAll();
-      alert("Photo envoyée avec succès");
-    } catch (err: any) {
-      alert(err.message);
-    } finally {
-      setBusy(false);
-    }
+    if (error) throw error
+
+    // reset propre
+    formEl.reset()
+
+    setPhoto({
+      project_id: photo.project_id,
+      title: "",
+      phase: "Avant travaux",
+      note: ""
+    })
+
+    refreshAll()
+
+  } catch (err:any) {
+    alert(err.message)
+  } finally {
+    setBusy(false)
   }
+}
 
   async function createDoc(e: any) {
     e.preventDefault();
