@@ -1,0 +1,12 @@
+import React from "react";
+export function Card({children,className=""}:any){return <div className={`rounded-3xl border border-slate-100 bg-white p-5 shadow-sm ${className}`}>{children}</div>}
+export function Button({children,variant="primary",className="",...props}:any){
+ const s:any={primary:"bg-slate-900 text-white",secondary:"border border-slate-200 bg-white",danger:"bg-red-600 text-white",green:"bg-emerald-600 text-white"};
+ return <button className={`rounded-2xl px-4 py-2 text-sm font-bold ${s[variant]} ${className}`} {...props}>{children}</button>
+}
+export function Field({label,children}:any){return <label className="block"><span className="text-xs font-bold uppercase text-slate-500">{label}</span>{children}</label>}
+export function Input(props:any){return <input className="mt-1 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" {...props}/>}
+export function Select(props:any){return <select className="mt-1 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm" {...props}/>}
+export function Textarea(props:any){return <textarea className="mt-1 min-h-24 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" {...props}/>}
+export function Section({title,subtitle}:any){return <div className="mb-5"><h2 className="text-2xl font-black">{title}</h2>{subtitle&&<p className="text-sm text-slate-500">{subtitle}</p>}</div>}
+export function Badge({children,tone="slate"}:any){const t:any={slate:"bg-slate-100 text-slate-700",red:"bg-red-100 text-red-700",green:"bg-emerald-100 text-emerald-700",amber:"bg-amber-100 text-amber-700"};return <span className={`rounded-full px-2 py-1 text-xs font-bold ${t[tone]}`}>{children}</span>}
