@@ -3,78 +3,49 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { Card, Button, Field, Input, Select, Textarea, Section, Badge } from "@/components/Ui";
-import { Building2, Euro, CalendarDays, Clock, Truck, Smartphone, ClipboardCheck, Settings as SettingsIcon, LogOut } from "lucide-react";
+import { Building2, Camera, FileText, Users, Truck, MessageSquare, Smartphone, LayoutDashboard, LogOut, Pencil } from "lucide-react";
 
-const modules = [
-  { id: "dashboard", title: "Tableau de bord", icon: Building2 },
-  { id: "projects", title: "Gestion chantiers", icon: Building2 },
-  { id: "payments", title: "Paiements / échéanciers", icon: Euro },
-  { id: "planning", title: "Planning", icon: CalendarDays },
-  { id: "time", title: "Pointage personnel", icon: Clock },
+const menu = [
+  { id: "dashboard", title: "Tableau de bord", icon: LayoutDashboard },
+  { id: "projects", title: "Chantiers", icon: Building2 },
+  { id: "employees", title: "Salariés", icon: Users },
   { id: "vehicles", title: "Véhicules", icon: Truck },
-  { id: "mobile", title: "Mobile terrain", icon: Smartphone },
-  { id: "requests", title: "Demandes internes", icon: ClipboardCheck },
-  { id: "settings", title: "Personnalisation", icon: SettingsIcon }
+  { id: "requests", title: "Demandes internes", icon: MessageSquare },
+  { id: "mobile", title: "Mobile terrain", icon: Smartphone }
 ];
 
-function money(v: any) {
-  return new Intl.NumberFormat("fr-FR", {
-    style: "currency",
-    currency: "EUR",
-    maximumFractionDigits: 0
-  }).format(Number(v || 0));
-}
-
-function calc(start: string, end: string, pause: number) {
-  if (!start || !end) return "0h00";
-  const [h1, m1] = start.split(":").map(Number);
-  const [h2, m2] = end.split(":").map(Number);
-  const total = Math.max(0, h2 * 60 + m2 - (h1 * 60 + m1) - Number(pause || 0));
-  return `${Math.floor(total / 60)}h${String(total % 60).padStart(2, "0")}`;
-}
+const statusLabels: any = { preparation: "À préparer", en_cours: "En cours", termine: "Terminé", archive: "Archivé" };
+const statusTone: any = { preparation: "amber", en_cours: "green", termine: "blue", archive: "slate" };
 
 function cleanFileName(name: string) {
   const extension = name.includes(".") ? name.split(".").pop() : "";
   const base = name.replace(/\.[^/.]+$/, "");
-
-  const cleaned = base
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-zA-Z0-9-_]/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "")
-    .toLowerCase();
-
+  const cleaned = base.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9-_]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "").toLowerCase();
   return `${Date.now()}-${cleaned || "fichier"}${extension ? "." + extension.toLowerCase() : ""}`;
 }
 
-async function upload(bucket: string, file: File) {
+async function uploadFile(bucket: string, file: File) {
   const path = cleanFileName(file.name);
   const { error } = await supabase.storage.from(bucket).upload(path, file);
-
   if (error) throw error;
-
-  const { data } = supabase.storage.from(bucket).getPublicUrl(path);
-  return data.publicUrl;
+  return supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl;
 }
 
 export default function Page() {
   const [session, setSession] = useState<any>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-
   const [active, setActive] = useState("dashboard");
   const [loading, setLoading] = useState(true);
 
   const [projects, setProjects] = useState<any[]>([]);
   const [photos, setPhotos] = useState<any[]>([]);
-  const [documents, setDocuments] = useState<any[]>([]);
-  const [payments, setPayments] = useState<any[]>([]);
-  const [planning, setPlanning] = useState<any[]>([]);
-  const [timeEntries, setTimeEntries] = useState<any[]>([]);
+  const [docs, setDocs] = useState<any[]>([]);
+  const [employees, setEmployees] = useState<any[]>([]);
+  const [links, setLinks] = useState<any[]>([]);
+  const [notes, setNotes] = useState<any[]>([]);
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [requests, setRequests] = useState<any[]>([]);
-  const [profile, setProfile] = useState<any>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -82,47 +53,27 @@ export default function Page() {
       if (data.session) refreshAll();
       setLoading(false);
     });
-
     const { data: listener } = supabase.auth.onAuthStateChange((_event, currentSession) => {
       setSession(currentSession);
       if (currentSession) refreshAll();
     });
-
     return () => listener.subscription.unsubscribe();
   }, []);
 
   async function refreshAll() {
-    const [
-      projectsRes,
-      photosRes,
-      docsRes,
-      paymentsRes,
-      planningRes,
-      timeRes,
-      vehiclesRes,
-      requestsRes,
-      profileRes
-    ] = await Promise.all([
+    const [p, ph, d, e, l, n, v, r] = await Promise.all([
       supabase.from("projects").select("*").order("created_at", { ascending: false }),
       supabase.from("chantier_photos").select("*").order("created_at", { ascending: false }),
       supabase.from("chantier_documents").select("*").order("created_at", { ascending: false }),
-      supabase.from("payments").select("*").order("created_at", { ascending: false }),
-      supabase.from("planning").select("*").order("start_date", { ascending: true }),
-      supabase.from("time_entries").select("*").order("created_at", { ascending: false }),
+      supabase.from("employees").select("*").order("created_at", { ascending: false }),
+      supabase.from("employee_projects").select("*"),
+      supabase.from("chantier_notes").select("*").order("created_at", { ascending: false }),
       supabase.from("vehicles").select("*").order("created_at", { ascending: false }),
-      supabase.from("internal_requests").select("*").order("created_at", { ascending: false }),
-      supabase.from("profiles").select("*").maybeSingle()
+      supabase.from("internal_requests").select("*").order("created_at", { ascending: false })
     ]);
 
-    setProjects(projectsRes.data || []);
-    setPhotos(photosRes.data || []);
-    setDocuments(docsRes.data || []);
-    setPayments(paymentsRes.data || []);
-    setPlanning(planningRes.data || []);
-    setTimeEntries(timeRes.data || []);
-    setVehicles(vehiclesRes.data || []);
-    setRequests(requestsRes.data || []);
-    setProfile(profileRes.data || null);
+    setProjects(p.data || []); setPhotos(ph.data || []); setDocs(d.data || []); setEmployees(e.data || []);
+    setLinks(l.data || []); setNotes(n.data || []); setVehicles(v.data || []); setRequests(r.data || []);
   }
 
   async function signIn(e: any) {
@@ -144,20 +95,13 @@ export default function Page() {
 
   if (!session) {
     return (
-      <main className="flex min-h-screen items-center justify-center p-5">
+      <main className="flex min-h-screen items-center justify-center bg-slate-50 p-5">
         <Card className="w-full max-w-md">
-          <h1 className="text-3xl font-black">ASB Intranet</h1>
+          <h1 className="text-3xl font-black">ASB Intranet V2</h1>
           <p className="mt-2 text-sm text-slate-500">Connexion collaborateurs</p>
-
           <form onSubmit={signIn} className="mt-6 space-y-4">
-            <Field label="Email">
-              <Input type="email" value={email} onChange={(e: any) => setEmail(e.target.value)} />
-            </Field>
-
-            <Field label="Mot de passe">
-              <Input type="password" value={password} onChange={(e: any) => setPassword(e.target.value)} />
-            </Field>
-
+            <Field label="Email"><Input type="email" value={email} onChange={(e: any) => setEmail(e.target.value)} /></Field>
+            <Field label="Mot de passe"><Input type="password" value={password} onChange={(e: any) => setPassword(e.target.value)} /></Field>
             <Button className="w-full">Se connecter</Button>
           </form>
         </Card>
@@ -167,85 +111,64 @@ export default function Page() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
-      <aside className="fixed left-0 top-0 hidden h-full w-80 border-r bg-white p-6 lg:block">
+      <aside className="fixed left-0 top-0 hidden h-full w-80 border-r border-slate-100 bg-white p-6 lg:block">
         <div className="mb-8 rounded-3xl bg-slate-900 p-5 text-white">
-          <div className="text-2xl font-black">ASB Intranet</div>
-          <div className="text-sm text-slate-300">Cloud entreprise</div>
-          <div className="mt-3 text-xs text-slate-400">Rôle : {profile?.role || "à définir"}</div>
+          <div className="text-2xl font-black">ASB Intranet V2</div>
+          <div className="mt-1 text-sm text-slate-300">Suivi chantier mobile</div>
         </div>
-
         <nav className="space-y-2">
-          {modules.map((m) => {
+          {menu.map((m) => {
             const Icon = m.icon;
-            return (
-              <button
-                key={m.id}
-                onClick={() => setActive(m.id)}
-                className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-bold ${
-                  active === m.id ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"
-                }`}
-              >
-                <Icon size={18} /> {m.title}
-              </button>
-            );
+            return <button key={m.id} onClick={() => setActive(m.id)} className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-bold ${active === m.id ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"}`}><Icon size={18} /> {m.title}</button>;
           })}
         </nav>
-
-        <Button variant="secondary" className="absolute bottom-6 left-6 right-6" onClick={signOut}>
-          <LogOut size={16} className="mr-2" /> Déconnexion
-        </Button>
+        <Button variant="secondary" className="absolute bottom-6 left-6 right-6" onClick={signOut}><LogOut size={16} className="mr-2" /> Déconnexion</Button>
       </aside>
 
       <main className="lg:ml-80">
-        <header className="sticky top-0 z-20 border-b bg-white/90 p-5">
+        <header className="sticky top-0 z-20 border-b border-slate-100 bg-white/90 p-5 backdrop-blur">
           <div className="text-sm text-slate-500">Connecté : {session.user.email}</div>
-          <h1 className="text-3xl font-black">{modules.find((m) => m.id === active)?.title}</h1>
-
+          <h1 className="text-3xl font-black">{menu.find((m) => m.id === active)?.title}</h1>
           <div className="mt-3 flex flex-wrap gap-2 lg:hidden">
-            {modules.map((m) => (
-              <Button key={m.id} variant={active === m.id ? "primary" : "secondary"} onClick={() => setActive(m.id)}>
-                {m.title}
-              </Button>
-            ))}
+            {menu.map((m) => <Button key={m.id} variant={active === m.id ? "primary" : "secondary"} onClick={() => setActive(m.id)}>{m.title}</Button>)}
           </div>
         </header>
 
         <section className="p-5 lg:p-8">
-          {active === "dashboard" && <Dashboard projects={projects} photos={photos} documents={documents} payments={payments} setActive={setActive} />}
-          {active === "projects" && <Projects projects={projects} photos={photos} documents={documents} refreshAll={refreshAll} />}
-          {active === "payments" && <Payments projects={projects} payments={payments} refreshAll={refreshAll} projectName={projectName} />}
-          {active === "planning" && <Planning projects={projects} planning={planning} refreshAll={refreshAll} projectName={projectName} />}
-          {active === "time" && <TimeEntries projects={projects} timeEntries={timeEntries} refreshAll={refreshAll} projectName={projectName} />}
+          {active === "dashboard" && <Dashboard projects={projects} photos={photos} docs={docs} requests={requests} setActive={setActive} />}
+          {active === "projects" && <Projects projects={projects} photos={photos} docs={docs} notes={notes} employees={employees} links={links} refreshAll={refreshAll} />}
+          {active === "employees" && <Employees employees={employees} projects={projects} refreshAll={refreshAll} />}
           {active === "vehicles" && <Vehicles vehicles={vehicles} refreshAll={refreshAll} />}
-          {active === "mobile" && <MobileView />}
-          {active === "requests" && <Requests projects={projects} requests={requests} refreshAll={refreshAll} projectName={projectName} />}
-          {active === "settings" && <SettingsPage />}
+          {active === "requests" && <Requests requests={requests} projects={projects} refreshAll={refreshAll} projectName={projectName} />}
+          {active === "mobile" && <Mobile projects={projects} refreshAll={refreshAll} />}
         </section>
       </main>
     </div>
   );
 }
 
-function Dashboard({ projects, photos, documents, payments, setActive }: any) {
-  const overdue = payments.filter((p: any) => p.status === "En retard").reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
-
+function Dashboard({ projects, photos, docs, requests, setActive }: any) {
+  const enCours = projects.filter((p: any) => p.status === "en_cours").length;
+  const termines = projects.filter((p: any) => p.status === "termine").length;
+  const archives = projects.filter((p: any) => p.status === "archive").length;
   return (
     <div>
-      <Section title="Tableau de bord" subtitle="Vue globale entreprise." />
-
-      <div className="grid gap-4 md:grid-cols-4">
+      <Section title="Tableau de bord" subtitle="Vue globale des chantiers, documents et demandes." />
+      <div className="grid gap-4 md:grid-cols-5">
         <Card><p className="text-sm text-slate-500">Chantiers</p><p className="text-3xl font-black">{projects.length}</p></Card>
-        <Card><p className="text-sm text-slate-500">Photos</p><p className="text-3xl font-black">{photos.length}</p></Card>
-        <Card><p className="text-sm text-slate-500">Documents</p><p className="text-3xl font-black">{documents.length}</p></Card>
-        <Card><p className="text-sm text-slate-500">Retards paiement</p><p className="text-3xl font-black text-red-600">{money(overdue)}</p></Card>
+        <Card><p className="text-sm text-slate-500">En cours</p><p className="text-3xl font-black text-emerald-600">{enCours}</p></Card>
+        <Card><p className="text-sm text-slate-500">Terminés</p><p className="text-3xl font-black">{termines}</p></Card>
+        <Card><p className="text-sm text-slate-500">Archivés</p><p className="text-3xl font-black">{archives}</p></Card>
+        <Card><p className="text-sm text-slate-500">Demandes</p><p className="text-3xl font-black text-amber-600">{requests.length}</p></Card>
       </div>
-
-      <div className="mt-6 grid gap-4 md:grid-cols-3">
+      <div className="mt-6 grid gap-4 lg:grid-cols-3">
         {projects.map((p: any) => (
-          <Card key={p.id}>
-            <h3 className="font-black">{p.name}</h3>
-            <p className="text-sm text-slate-500">{p.client}</p>
-            <p className="mt-3 text-sm">Avancement : <b>{p.progress || 0}%</b></p>
+          <Card key={p.id} className="border-l-8" style={{ borderLeftColor: p.color || "#0f172a" }}>
+            <div className="flex items-start justify-between gap-3">
+              <div><h3 className="font-black">{p.name}</h3><p className="mt-1 text-sm text-slate-500">{p.address}</p></div>
+              <Badge tone={statusTone[p.status] || "slate"}>{statusLabels[p.status] || p.status}</Badge>
+            </div>
+            <p className="mt-3 text-sm">Photos : <b>{photos.filter((x: any) => x.project_id === p.id).length}</b> · Documents : <b>{docs.filter((x: any) => x.project_id === p.id).length}</b></p>
             <Button className="mt-4" onClick={() => setActive("projects")}>Ouvrir</Button>
           </Card>
         ))}
@@ -254,410 +177,236 @@ function Dashboard({ projects, photos, documents, payments, setActive }: any) {
   );
 }
 
-function Projects({ projects, photos, documents, refreshAll }: any) {
-  const [form, setForm] = useState({ name: "", client: "", address: "", status: "En cours", progress: 0, manager: "" });
-  const [photo, setPhoto] = useState({ project_id: "", title: "", phase: "Avant travaux", note: "" });
-  const [doc, setDoc] = useState({ project_id: "", name: "", type: "Devis" });
-  const [busy, setBusy] = useState(false);
+function Projects({ projects, photos, docs, notes, employees, links, refreshAll }: any) {
+  const [selectedId, setSelectedId] = useState("");
+  const current = projects.find((p: any) => p.id === selectedId) || projects[0];
+  const [form, setForm] = useState({ name: "", client: "", address: "", description: "", status: "en_cours", color: "#0f172a" });
+  const [editingId, setEditingId] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (projects[0]) {
-      setPhoto((p) => ({ ...p, project_id: projects[0].id }));
-      setDoc((d) => ({ ...d, project_id: projects[0].id }));
-    }
-  }, [projects]);
-
-  async function createProject(e: any) {
+  async function saveProject(e: any) {
     e.preventDefault();
-    if (!form.name) return;
-
-    const { error } = await supabase.from("projects").insert(form);
+    if (!form.name) return alert("Nom chantier obligatoire");
+    const query = editingId ? supabase.from("projects").update(form).eq("id", editingId) : supabase.from("projects").insert(form);
+    const { error } = await query;
     if (error) return alert(error.message);
-
-    setForm({ name: "", client: "", address: "", status: "En cours", progress: 0, manager: "" });
+    setForm({ name: "", client: "", address: "", description: "", status: "en_cours", color: "#0f172a" });
+    setEditingId(null);
     await refreshAll();
   }
 
-  async function createPhoto(e:any){
-  e.preventDefault()
-
-  const formEl = e.currentTarget
-
-  const file = formEl.photoFile.files[0]
-  if(!file || !photo.title) return alert("Photo et titre obligatoires")
-
-  setBusy(true)
-
-  try {
-    const file_url = await upload("photos", file)
-
-    const { error } = await supabase
-      .from("chantier_photos")
-      .insert({ ...photo, file_url })
-
-    if (error) throw error
-
-    // reset propre
-    formEl.reset()
-
-    setPhoto({
-      project_id: photo.project_id,
-      title: "",
-      phase: "Avant travaux",
-      note: ""
-    })
-
-    refreshAll()
-
-  } catch (err:any) {
-    alert(err.message)
-  } finally {
-    setBusy(false)
-  }
-}
-
-  async function createDoc(e: any) {
-    e.preventDefault();
-
-    const file = e.currentTarget?.documentFile?.files?.[0];
-    if (!file || !doc.name) return alert("Document et nom obligatoires");
-
-    setBusy(true);
-
-    try {
-      const file_url = await upload("documents", file);
-
-      const { error } = await supabase.from("chantier_documents").insert({
-        ...doc,
-        file_url
-      });
-
-      if (error) throw error;
-
-      setDoc({ ...doc, name: "" });
-      await refreshAll();
-      alert("Document envoyé avec succès");
-    } catch (err: any) {
-      alert(err.message);
-    } finally {
-      setBusy(false);
-    }
+  function editProject(p: any) {
+    setForm({ name: p.name || "", client: p.client || "", address: p.address || "", description: p.description || "", status: p.status || "en_cours", color: p.color || "#0f172a" });
+    setEditingId(p.id);
   }
 
   return (
     <div>
-      <Section title="Gestion chantiers" subtitle="Chantiers + photos réelles + documents PDF réels." />
-
+      <Section title="Gestion chantier" subtitle="Création, modification, galerie photos, documents lisibles et notes." />
       <Card>
-        <form onSubmit={createProject} className="grid gap-3 md:grid-cols-3">
-          <Field label="Nom chantier"><Input value={form.name} onChange={(e: any) => setForm({ ...form, name: e.target.value })} /></Field>
+        <form onSubmit={saveProject} className="grid gap-3 md:grid-cols-3">
+          <Field label="Nom"><Input value={form.name} onChange={(e: any) => setForm({ ...form, name: e.target.value })} /></Field>
           <Field label="Client"><Input value={form.client} onChange={(e: any) => setForm({ ...form, client: e.target.value })} /></Field>
           <Field label="Adresse"><Input value={form.address} onChange={(e: any) => setForm({ ...form, address: e.target.value })} /></Field>
-          <Field label="Statut"><Select value={form.status} onChange={(e: any) => setForm({ ...form, status: e.target.value })}><option>En cours</option><option>À planifier</option><option>Terminé</option></Select></Field>
-          <Field label="Avancement %"><Input type="number" value={form.progress} onChange={(e: any) => setForm({ ...form, progress: Number(e.target.value) })} /></Field>
-          <Field label="Responsable"><Input value={form.manager} onChange={(e: any) => setForm({ ...form, manager: e.target.value })} /></Field>
-          <Button className="md:col-span-3">Créer chantier</Button>
+          <Field label="Statut"><Select value={form.status} onChange={(e: any) => setForm({ ...form, status: e.target.value })}><option value="preparation">À préparer</option><option value="en_cours">En cours</option><option value="termine">Terminé</option><option value="archive">Archivé</option></Select></Field>
+          <Field label="Couleur"><Input type="color" value={form.color} onChange={(e: any) => setForm({ ...form, color: e.target.value })} /></Field>
+          <div className="md:col-span-3"><Field label="Description"><Textarea value={form.description} onChange={(e: any) => setForm({ ...form, description: e.target.value })} /></Field></div>
+          <Button className="md:col-span-3">{editingId ? "Modifier chantier" : "Créer chantier"}</Button>
         </form>
       </Card>
-
-      <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        <Card>
-          <h3 className="font-black">Ajouter photo chantier</h3>
-
-          <form onSubmit={createPhoto} className="mt-4 space-y-3">
-            <Field label="Chantier">
-              <Select value={photo.project_id} onChange={(e: any) => setPhoto({ ...photo, project_id: e.target.value })}>
-                {projects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </Select>
-            </Field>
-
-            <Field label="Titre"><Input value={photo.title} onChange={(e: any) => setPhoto({ ...photo, title: e.target.value })} /></Field>
-
-            <Field label="Étape">
-              <Select value={photo.phase} onChange={(e: any) => setPhoto({ ...photo, phase: e.target.value })}>
-                <option>Avant travaux</option>
-                <option>Pendant travaux</option>
-                <option>Après travaux</option>
-                <option>Réserve</option>
-                <option>Désordre</option>
-                <option>Sécurité</option>
-              </Select>
-            </Field>
-
-            <Field label="Fichier photo"><Input name="photoFile" type="file" accept="image/*" /></Field>
-            <Field label="Note"><Textarea value={photo.note} onChange={(e: any) => setPhoto({ ...photo, note: e.target.value })} /></Field>
-
-            <Button disabled={busy}>{busy ? "Envoi..." : "Envoyer photo"}</Button>
-          </form>
-        </Card>
-
-        <Card>
-          <h3 className="font-black">Ajouter document chantier</h3>
-
-          <form onSubmit={createDoc} className="mt-4 space-y-3">
-            <Field label="Chantier">
-              <Select value={doc.project_id} onChange={(e: any) => setDoc({ ...doc, project_id: e.target.value })}>
-                {projects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </Select>
-            </Field>
-
-            <Field label="Nom"><Input value={doc.name} onChange={(e: any) => setDoc({ ...doc, name: e.target.value })} /></Field>
-
-            <Field label="Type">
-              <Select value={doc.type} onChange={(e: any) => setDoc({ ...doc, type: e.target.value })}>
-                <option>Devis</option>
-                <option>Facture</option>
-                <option>Plan</option>
-                <option>PV réception</option>
-                <option>Attestation</option>
-              </Select>
-            </Field>
-
-            <Field label="Fichier PDF/doc"><Input name="documentFile" type="file" /></Field>
-
-            <Button disabled={busy}>{busy ? "Envoi..." : "Envoyer document"}</Button>
-          </form>
-        </Card>
-      </div>
-
-      <div className="mt-6 grid gap-4 md:grid-cols-2">
-        {projects.map((p: any) => (
-          <Card key={p.id}>
-            <h3 className="font-black">{p.name}</h3>
-            <p>{p.client}</p>
-            <p className="text-sm">Photos : {photos.filter((x: any) => x.project_id === p.id).length}</p>
-            <p className="text-sm">Documents : {documents.filter((x: any) => x.project_id === p.id).length}</p>
-          </Card>
-        ))}
+      <div className="mt-6 grid gap-6 lg:grid-cols-[380px_1fr]">
+        <div className="space-y-3">
+          {projects.map((p: any) => (
+            <Card key={p.id} className={`cursor-pointer border-l-8 ${current?.id === p.id ? "ring-2 ring-slate-900" : ""}`} style={{ borderLeftColor: p.color || "#0f172a" }} onClick={() => setSelectedId(p.id)}>
+              <div className="flex items-start justify-between gap-3">
+                <div><h3 className="font-black">{p.name}</h3><p className="text-sm text-slate-500">{p.address}</p></div>
+                <Badge tone={statusTone[p.status] || "slate"}>{statusLabels[p.status] || p.status}</Badge>
+              </div>
+              <Button className="mt-3" variant="secondary" onClick={(e: any) => { e.stopPropagation(); editProject(p); }}><Pencil size={14} className="mr-1" /> Modifier</Button>
+            </Card>
+          ))}
+        </div>
+        <ProjectDetail project={current} photos={photos} docs={docs} notes={notes} employees={employees} links={links} refreshAll={refreshAll} />
       </div>
     </div>
   );
 }
 
-function Payments({ projects, payments, refreshAll, projectName }: any) {
-  const [form, setForm] = useState({ project_id: "", label: "", amount: "", due_date: "", status: "À venir" });
+function ProjectDetail({ project, photos, docs, notes, employees, links, refreshAll }: any) {
+  const [photoTitle, setPhotoTitle] = useState("");
+  const [docName, setDocName] = useState("");
+  const [docType, setDocType] = useState("facture");
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    if (projects[0]) setForm((f) => ({ ...f, project_id: projects[0].id }));
-  }, [projects]);
+  if (!project) return <Card><p>Aucun chantier pour le moment.</p></Card>;
 
-  async function add(e: any) {
+  const projectPhotos = photos.filter((x: any) => x.project_id === project.id);
+  const projectDocs = docs.filter((x: any) => x.project_id === project.id);
+  const projectNotes = notes.filter((x: any) => x.project_id === project.id);
+
+  async function addPhoto(e: any) {
     e.preventDefault();
+    const file = e.currentTarget?.photo?.files?.[0];
+    if (!file) return alert("Ajoute une photo");
+    setBusy(true);
+    try {
+      const file_url = await uploadFile("photos", file);
+      const { error } = await supabase.from("chantier_photos").insert({ project_id: project.id, title: photoTitle || file.name, file_url, phase: "chantier" });
+      if (error) throw error;
+      setPhotoTitle("");
+      await refreshAll();
+    } catch (err: any) { alert(err.message); } finally { setBusy(false); }
+  }
 
-    let file_url = null;
-    const file = e.currentTarget?.paymentFile?.files?.[0];
+  async function addDoc(e: any) {
+    e.preventDefault();
+    const file = e.currentTarget?.doc?.files?.[0];
+    if (!file) return alert("Ajoute un document");
+    setBusy(true);
+    try {
+      const file_url = await uploadFile("documents", file);
+      const { error } = await supabase.from("chantier_documents").insert({ project_id: project.id, name: docName || file.name, type: docType, file_url });
+      if (error) throw error;
+      setDocName("");
+      await refreshAll();
+    } catch (err: any) { alert(err.message); } finally { setBusy(false); }
+  }
 
-    if (file) file_url = await upload("documents", file);
-
-    const { error } = await supabase.from("payments").insert({
-      ...form,
-      amount: Number(form.amount),
-      file_url
-    });
-
+  async function addNote(e: any) {
+    e.preventDefault();
+    if (!note) return;
+    const { error } = await supabase.from("chantier_notes").insert({ project_id: project.id, content: note });
     if (error) return alert(error.message);
-
-    setForm({ ...form, label: "", amount: "" });
+    setNote("");
     await refreshAll();
   }
 
   return (
-    <div>
-      <Section title="Paiements clients / échéanciers" subtitle="Échéances + documents liés." />
-
-      <Card>
-        <form onSubmit={add} className="grid gap-3 md:grid-cols-3">
-          <Field label="Chantier"><Select value={form.project_id} onChange={(e: any) => setForm({ ...form, project_id: e.target.value })}>{projects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field>
-          <Field label="Échéance"><Input value={form.label} onChange={(e: any) => setForm({ ...form, label: e.target.value })} /></Field>
-          <Field label="Montant"><Input type="number" value={form.amount} onChange={(e: any) => setForm({ ...form, amount: e.target.value })} /></Field>
-          <Field label="Date"><Input type="date" value={form.due_date} onChange={(e: any) => setForm({ ...form, due_date: e.target.value })} /></Field>
-          <Field label="Statut"><Select value={form.status} onChange={(e: any) => setForm({ ...form, status: e.target.value })}><option>À venir</option><option>À encaisser</option><option>Payé</option><option>En retard</option></Select></Field>
-          <Field label="Document lié"><Input name="paymentFile" type="file" /></Field>
-          <Button className="md:col-span-3">Ajouter échéance</Button>
-        </form>
+    <div className="space-y-6">
+      <Card className="border-l-8" style={{ borderLeftColor: project.color || "#0f172a" }}>
+        <div className="flex items-start justify-between gap-3">
+          <div><h2 className="text-2xl font-black">{project.name}</h2><p className="mt-1 text-sm text-slate-500">{project.client} · {project.address}</p></div>
+          <Badge tone={statusTone[project.status] || "slate"}>{statusLabels[project.status] || project.status}</Badge>
+        </div>
+        <p className="mt-4 text-sm text-slate-700">{project.description}</p>
       </Card>
-
-      <div className="mt-6 space-y-3">
-        {payments.map((p: any) => (
-          <Card key={p.id} className="flex justify-between">
-            <div><b>{projectName(p.project_id)}</b> · {p.label} · {money(p.amount)}<p>{p.due_date}</p></div>
-            <div>{p.file_url && <a href={p.file_url} target="_blank" className="underline">Document</a>} <Badge tone={p.status === "En retard" ? "red" : p.status === "Payé" ? "green" : "amber"}>{p.status}</Badge></div>
-          </Card>
-        ))}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <h3 className="mb-4 font-black"><Camera size={18} className="mr-2 inline" /> Photos chantier</h3>
+          <form onSubmit={addPhoto} className="mb-4 space-y-3">
+            <Field label="Titre"><Input value={photoTitle} onChange={(e: any) => setPhotoTitle(e.target.value)} /></Field>
+            <Field label="Photo"><Input name="photo" type="file" accept="image/*" /></Field>
+            <Button disabled={busy}>{busy ? "Envoi..." : "Ajouter photo"}</Button>
+          </form>
+          <div className="grid grid-cols-2 gap-3">
+            {projectPhotos.map((p: any) => <a key={p.id} href={p.file_url} target="_blank" className="block overflow-hidden rounded-2xl border bg-slate-50"><img src={p.file_url} alt={p.title} className="h-36 w-full object-cover" /><div className="p-2 text-xs font-bold">{p.title}</div></a>)}
+          </div>
+        </Card>
+        <Card>
+          <h3 className="mb-4 font-black"><FileText size={18} className="mr-2 inline" /> Documents chantier</h3>
+          <form onSubmit={addDoc} className="mb-4 space-y-3">
+            <Field label="Nom"><Input value={docName} onChange={(e: any) => setDocName(e.target.value)} /></Field>
+            <Field label="Type"><Select value={docType} onChange={(e: any) => setDocType(e.target.value)}><option value="facture">Facture achat</option><option value="bl">Bon de livraison</option><option value="devis">Devis</option><option value="plan">Plan</option><option value="autre">Autre</option></Select></Field>
+            <Field label="Fichier"><Input name="doc" type="file" /></Field>
+            <Button disabled={busy}>{busy ? "Envoi..." : "Ajouter document"}</Button>
+          </form>
+          <div className="space-y-2">{projectDocs.map((d: any) => <a key={d.id} href={d.file_url} target="_blank" className="flex items-center justify-between rounded-2xl border bg-slate-50 p-3 text-sm font-bold"><span>{d.name}</span><Badge>{d.type}</Badge></a>)}</div>
+        </Card>
       </div>
-    </div>
-  );
-}
-
-function Planning({ projects, planning, refreshAll, projectName }: any) {
-  const [form, setForm] = useState({ project_id: "", title: "", start_date: "", end_date: "", team: "", priority: "Normale" });
-
-  useEffect(() => {
-    if (projects[0]) setForm((f) => ({ ...f, project_id: projects[0].id }));
-  }, [projects]);
-
-  async function add(e: any) {
-    e.preventDefault();
-    const { error } = await supabase.from("planning").insert(form);
-    if (error) return alert(error.message);
-    setForm({ ...form, title: "" });
-    await refreshAll();
-  }
-
-  return (
-    <div>
-      <Section title="Planning" />
-
       <Card>
-        <form onSubmit={add} className="grid gap-3 md:grid-cols-3">
-          <Field label="Chantier"><Select value={form.project_id} onChange={(e: any) => setForm({ ...form, project_id: e.target.value })}>{projects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field>
-          <Field label="Tâche"><Input value={form.title} onChange={(e: any) => setForm({ ...form, title: e.target.value })} /></Field>
-          <Field label="Équipe"><Input value={form.team} onChange={(e: any) => setForm({ ...form, team: e.target.value })} /></Field>
-          <Field label="Début"><Input type="date" value={form.start_date} onChange={(e: any) => setForm({ ...form, start_date: e.target.value })} /></Field>
-          <Field label="Fin"><Input type="date" value={form.end_date} onChange={(e: any) => setForm({ ...form, end_date: e.target.value })} /></Field>
-          <Field label="Priorité"><Select value={form.priority} onChange={(e: any) => setForm({ ...form, priority: e.target.value })}><option>Basse</option><option>Normale</option><option>Haute</option></Select></Field>
+        <h3 className="mb-4 font-black">Notes chantier</h3>
+        <form onSubmit={addNote} className="grid gap-3 md:grid-cols-[1fr_120px]">
+          <Input value={note} onChange={(e: any) => setNote(e.target.value)} placeholder="Note chantier..." />
           <Button>Ajouter</Button>
         </form>
+        <div className="mt-4 space-y-2">{projectNotes.map((n: any) => <div key={n.id} className="rounded-2xl bg-slate-50 p-3 text-sm">{n.content}</div>)}</div>
       </Card>
-
-      <div className="mt-6 space-y-3">
-        {planning.map((x: any) => <Card key={x.id}><b>{projectName(x.project_id)}</b> · {x.title}<p>{x.start_date} → {x.end_date} · {x.team}</p></Card>)}
-      </div>
     </div>
   );
 }
 
-function TimeEntries({ projects, timeEntries, refreshAll, projectName }: any) {
-  const [form, setForm] = useState({ employee: "", project_id: "", work_date: new Date().toISOString().slice(0, 10), start_time: "08:00", end_time: "17:00", pause_minutes: 60 });
+function Employees({ employees, projects, refreshAll }: any) {
+  const [form, setForm] = useState({ firstname: "", lastname: "", position: "", role: "terrain", phone: "", email: "" });
+  const [employeeId, setEmployeeId] = useState("");
+  const [projectId, setProjectId] = useState("");
 
-  useEffect(() => {
-    if (projects[0]) setForm((f) => ({ ...f, project_id: projects[0].id }));
-  }, [projects]);
-
-  async function add(e: any) {
+  async function addEmployee(e: any) {
     e.preventDefault();
-    const { error } = await supabase.from("time_entries").insert(form);
+    if (!form.firstname || !form.lastname) return alert("Nom et prénom obligatoires");
+    const { error } = await supabase.from("employees").insert(form);
+    if (error) return alert(error.message);
+    setForm({ firstname: "", lastname: "", position: "", role: "terrain", phone: "", email: "" });
+    await refreshAll();
+  }
+
+  async function assign(e: any) {
+    e.preventDefault();
+    if (!employeeId || !projectId) return;
+    const { error } = await supabase.from("employee_projects").insert({ employee_id: employeeId, project_id: projectId });
     if (error) return alert(error.message);
     await refreshAll();
   }
 
   return (
     <div>
-      <Section title="Pointage personnel" />
-
-      <Card>
-        <form onSubmit={add} className="grid gap-3 md:grid-cols-3">
-          <Field label="Salarié"><Input value={form.employee} onChange={(e: any) => setForm({ ...form, employee: e.target.value })} /></Field>
-          <Field label="Chantier"><Select value={form.project_id} onChange={(e: any) => setForm({ ...form, project_id: e.target.value })}>{projects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field>
-          <Field label="Date"><Input type="date" value={form.work_date} onChange={(e: any) => setForm({ ...form, work_date: e.target.value })} /></Field>
-          <Field label="Arrivée"><Input type="time" value={form.start_time} onChange={(e: any) => setForm({ ...form, start_time: e.target.value })} /></Field>
-          <Field label="Départ"><Input type="time" value={form.end_time} onChange={(e: any) => setForm({ ...form, end_time: e.target.value })} /></Field>
-          <Field label="Pause min"><Input type="number" value={form.pause_minutes} onChange={(e: any) => setForm({ ...form, pause_minutes: Number(e.target.value) })} /></Field>
-          <div>Total : {calc(form.start_time, form.end_time, form.pause_minutes)}</div>
-          <Button>Ajouter pointage</Button>
-        </form>
-      </Card>
-
-      <div className="mt-6 space-y-3">
-        {timeEntries.map((x: any) => <Card key={x.id}><b>{x.employee}</b> · {projectName(x.project_id)}<p>{x.work_date} · {x.start_time} → {x.end_time} · {calc(x.start_time, x.end_time, x.pause_minutes)}</p></Card>)}
+      <Section title="Gestion salariés" subtitle="Création salarié et affectation aux chantiers." />
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card><h3 className="mb-4 font-black">Créer salarié</h3><form onSubmit={addEmployee} className="space-y-3"><Field label="Prénom"><Input value={form.firstname} onChange={(e: any) => setForm({ ...form, firstname: e.target.value })} /></Field><Field label="Nom"><Input value={form.lastname} onChange={(e: any) => setForm({ ...form, lastname: e.target.value })} /></Field><Field label="Poste"><Input value={form.position} onChange={(e: any) => setForm({ ...form, position: e.target.value })} /></Field><Field label="Rôle"><Select value={form.role} onChange={(e: any) => setForm({ ...form, role: e.target.value })}><option value="admin">Admin</option><option value="bureau">Bureau</option><option value="chef">Chef chantier</option><option value="terrain">Terrain</option></Select></Field><Button>Ajouter salarié</Button></form></Card>
+        <Card><h3 className="mb-4 font-black">Affecter à un chantier</h3><form onSubmit={assign} className="space-y-3"><Field label="Salarié"><Select value={employeeId} onChange={(e: any) => setEmployeeId(e.target.value)}><option value="">Choisir</option>{employees.map((e: any) => <option key={e.id} value={e.id}>{e.firstname} {e.lastname}</option>)}</Select></Field><Field label="Chantier"><Select value={projectId} onChange={(e: any) => setProjectId(e.target.value)}><option value="">Choisir</option>{projects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field><Button>Affecter</Button></form></Card>
       </div>
+      <div className="mt-6 grid gap-4 md:grid-cols-3">{employees.map((e: any) => <Card key={e.id}><h3 className="font-black">{e.firstname} {e.lastname}</h3><p className="text-sm text-slate-500">{e.position}</p><Badge>{e.role}</Badge></Card>)}</div>
     </div>
   );
 }
 
 function Vehicles({ vehicles, refreshAll }: any) {
-  const [form, setForm] = useState({ name: "", driver: "", km: "", status: "RAS", alert: "" });
-
-  async function add(e: any) {
+  const [form, setForm] = useState({ name: "", plate: "", driver: "", km: "", status: "ras", next_service: "", insurance_date: "", technical_control_date: "", notes: "" });
+  async function addVehicle(e: any) {
     e.preventDefault();
+    if (!form.name) return;
     const { error } = await supabase.from("vehicles").insert({ ...form, km: Number(form.km || 0) });
     if (error) return alert(error.message);
-    setForm({ name: "", driver: "", km: "", status: "RAS", alert: "" });
+    setForm({ name: "", plate: "", driver: "", km: "", status: "ras", next_service: "", insurance_date: "", technical_control_date: "", notes: "" });
     await refreshAll();
   }
-
-  return (
-    <div>
-      <Section title="Gestion véhicules" />
-
-      <Card>
-        <form onSubmit={add} className="grid gap-3 md:grid-cols-3">
-          <Field label="Véhicule"><Input value={form.name} onChange={(e: any) => setForm({ ...form, name: e.target.value })} /></Field>
-          <Field label="Conducteur"><Input value={form.driver} onChange={(e: any) => setForm({ ...form, driver: e.target.value })} /></Field>
-          <Field label="KM"><Input type="number" value={form.km} onChange={(e: any) => setForm({ ...form, km: e.target.value })} /></Field>
-          <Field label="Statut"><Select value={form.status} onChange={(e: any) => setForm({ ...form, status: e.target.value })}><option>RAS</option><option>Entretien</option><option>Problème</option></Select></Field>
-          <Field label="Alerte"><Input value={form.alert} onChange={(e: any) => setForm({ ...form, alert: e.target.value })} /></Field>
-          <Button>Ajouter véhicule</Button>
-        </form>
-      </Card>
-
-      <div className="mt-6 grid gap-4 md:grid-cols-2">
-        {vehicles.map((v: any) => <Card key={v.id}><b>{v.name}</b><p>{v.driver} · {v.km} km</p><p className="text-red-600">{v.alert}</p></Card>)}
-      </div>
-    </div>
-  );
+  return <div><Section title="Gestion véhicules" subtitle="Parc véhicules, conducteur, km, entretien, CT et assurance." /><Card><form onSubmit={addVehicle} className="grid gap-3 md:grid-cols-3"><Field label="Véhicule"><Input value={form.name} onChange={(e: any) => setForm({ ...form, name: e.target.value })} /></Field><Field label="Immatriculation"><Input value={form.plate} onChange={(e: any) => setForm({ ...form, plate: e.target.value })} /></Field><Field label="Conducteur"><Input value={form.driver} onChange={(e: any) => setForm({ ...form, driver: e.target.value })} /></Field><Field label="Kilométrage"><Input type="number" value={form.km} onChange={(e: any) => setForm({ ...form, km: e.target.value })} /></Field><Field label="Statut"><Select value={form.status} onChange={(e: any) => setForm({ ...form, status: e.target.value })}><option value="ras">RAS</option><option value="entretien">Entretien</option><option value="probleme">Problème</option></Select></Field><Field label="Prochain entretien"><Input type="date" value={form.next_service} onChange={(e: any) => setForm({ ...form, next_service: e.target.value })} /></Field><Button className="md:col-span-3">Ajouter véhicule</Button></form></Card><div className="mt-6 grid gap-4 md:grid-cols-3">{vehicles.map((v: any) => <Card key={v.id}><h3 className="font-black">{v.name}</h3><p className="text-sm text-slate-500">{v.plate}</p><p className="mt-2 text-sm">Conducteur : <b>{v.driver}</b></p><p className="text-sm">KM : <b>{v.km}</b></p><Badge tone={v.status === "probleme" ? "red" : v.status === "entretien" ? "amber" : "green"}>{v.status}</Badge></Card>)}</div></div>;
 }
 
-function MobileView() {
-  return (
-    <div>
-      <Section title="Application mobile terrain" subtitle="PWA installable depuis Chrome/Safari." />
-      <Card>
-        <p>Ouvre l'URL Vercel sur téléphone puis “Ajouter à l’écran d’accueil”.</p>
-        <ul className="mt-4 list-disc pl-6">
-          <li>Photos terrain</li>
-          <li>Pointage</li>
-          <li>Demandes internes</li>
-          <li>Documents chantier</li>
-        </ul>
-      </Card>
-    </div>
-  );
-}
-
-function Requests({ projects, requests, refreshAll, projectName }: any) {
-  const [form, setForm] = useState({ type: "Matériel", project_id: "", requester: "", message: "", status: "Ouverte" });
-
-  useEffect(() => {
-    if (projects[0]) setForm((f) => ({ ...f, project_id: projects[0].id }));
-  }, [projects]);
-
-  async function add(e: any) {
+function Requests({ requests, projects, refreshAll, projectName }: any) {
+  const [form, setForm] = useState({ project_id: "", type: "achat", requester: "", message: "", priority: "normale", status: "nouvelle" });
+  async function addRequest(e: any) {
     e.preventDefault();
+    if (!form.message) return;
     const { error } = await supabase.from("internal_requests").insert(form);
     if (error) return alert(error.message);
     setForm({ ...form, message: "" });
     await refreshAll();
   }
-
-  return (
-    <div>
-      <Section title="Demandes internes" />
-
-      <Card>
-        <form onSubmit={add} className="grid gap-3 md:grid-cols-2">
-          <Field label="Type"><Select value={form.type} onChange={(e: any) => setForm({ ...form, type: e.target.value })}><option>Matériel</option><option>Véhicule</option><option>Congé</option><option>Sécurité</option></Select></Field>
-          <Field label="Chantier"><Select value={form.project_id} onChange={(e: any) => setForm({ ...form, project_id: e.target.value })}>{projects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field>
-          <Field label="Demandeur"><Input value={form.requester} onChange={(e: any) => setForm({ ...form, requester: e.target.value })} /></Field>
-          <div className="md:col-span-2"><Field label="Message"><Textarea value={form.message} onChange={(e: any) => setForm({ ...form, message: e.target.value })} /></Field></div>
-          <Button>Créer demande</Button>
-        </form>
-      </Card>
-
-      <div className="mt-6 space-y-3">
-        {requests.map((r: any) => <Card key={r.id}><b>{r.type}</b> · {projectName(r.project_id)}<p>{r.message}</p></Card>)}
-      </div>
-    </div>
-  );
+  return <div><Section title="Demandes internes" subtitle="Demandes d'achat, matériel, messages chantier." /><Card><form onSubmit={addRequest} className="grid gap-3 md:grid-cols-3"><Field label="Chantier"><Select value={form.project_id} onChange={(e: any) => setForm({ ...form, project_id: e.target.value })}><option value="">Sans chantier</option>{projects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field><Field label="Type"><Select value={form.type} onChange={(e: any) => setForm({ ...form, type: e.target.value })}><option value="achat">Achat</option><option value="materiel">Matériel</option><option value="sav">SAV</option><option value="autre">Autre</option></Select></Field><Field label="Priorité"><Select value={form.priority} onChange={(e: any) => setForm({ ...form, priority: e.target.value })}><option value="basse">Basse</option><option value="normale">Normale</option><option value="haute">Haute</option></Select></Field><Field label="Demandeur"><Input value={form.requester} onChange={(e: any) => setForm({ ...form, requester: e.target.value })} /></Field><div className="md:col-span-2"><Field label="Message"><Textarea value={form.message} onChange={(e: any) => setForm({ ...form, message: e.target.value })} /></Field></div><Button className="md:col-span-3">Créer demande</Button></form></Card><div className="mt-6 space-y-3">{requests.map((r: any) => <Card key={r.id}><div className="flex justify-between gap-3"><div><h3 className="font-black">{r.type} · {projectName(r.project_id)}</h3><p className="text-sm text-slate-600">{r.message}</p></div><Badge tone={r.priority === "haute" ? "red" : "amber"}>{r.priority}</Badge></div></Card>)}</div></div>;
 }
 
-function SettingsPage() {
-  return (
-    <div>
-      <Section title="Personnalisation intranet" />
-      <Card>
-        <p>Prochaine évolution : écran admin complet pour gérer modules, rôles, utilisateurs, logo et couleurs.</p>
-      </Card>
-    </div>
-  );
+function Mobile({ projects, refreshAll }: any) {
+  const [projectId, setProjectId] = useState("");
+  const [note, setNote] = useState("");
+  async function quickPhoto(e: any) {
+    e.preventDefault();
+    const file = e.currentTarget?.mobilePhoto?.files?.[0];
+    if (!projectId || !file) return alert("Choisis un chantier et une photo");
+    try {
+      const file_url = await uploadFile("photos", file);
+      const { error } = await supabase.from("chantier_photos").insert({ project_id: projectId, title: file.name, file_url, phase: "mobile" });
+      if (error) throw error;
+      await refreshAll();
+      alert("Photo envoyée");
+    } catch (err: any) { alert(err.message); }
+  }
+  async function quickNote(e: any) {
+    e.preventDefault();
+    if (!projectId || !note) return;
+    const { error } = await supabase.from("chantier_notes").insert({ project_id: projectId, content: note });
+    if (error) return alert(error.message);
+    setNote("");
+    await refreshAll();
+  }
+  return <div><Section title="Mobile terrain" subtitle="Interface simplifiée pour téléphone." /><div className="mx-auto max-w-md space-y-4"><Card><Field label="Chantier"><Select value={projectId} onChange={(e: any) => setProjectId(e.target.value)}><option value="">Choisir chantier</option>{projects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field></Card><Card><h3 className="mb-3 font-black">Photo rapide</h3><form onSubmit={quickPhoto} className="space-y-3"><Input name="mobilePhoto" type="file" accept="image/*" capture="environment" /><Button className="w-full"><Camera size={16} className="mr-2" /> Envoyer photo</Button></form></Card><Card><h3 className="mb-3 font-black">Note rapide</h3><form onSubmit={quickNote} className="space-y-3"><Textarea value={note} onChange={(e: any) => setNote(e.target.value)} placeholder="Note chantier..." /><Button className="w-full">Ajouter note</Button></form></Card></div></div>;
 }
