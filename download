@@ -197,38 +197,3 @@ drop policy if exists "project_vigilance open" on public.project_vigilance;
 
 create policy "project_materials open" on public.project_materials for all to anon, authenticated using (true) with check (true);
 create policy "project_vigilance open" on public.project_vigilance for all to anon, authenticated using (true) with check (true);
-
-
--- V5 : fiches structurées matériel / vigilance
-alter table public.project_materials add column if not exists title text;
-alter table public.project_materials add column if not exists content text;
-
-alter table public.project_vigilance add column if not exists title text;
-alter table public.project_vigilance add column if not exists content text;
-
-update public.project_materials
-set title = coalesce(title, content, 'Matériel à prévoir'),
-    content = coalesce(content, '')
-where title is null;
-
-update public.project_vigilance
-set title = coalesce(title, content, 'Point de vigilance'),
-    content = coalesce(content, '')
-where title is null;
-
-grant all on public.project_materials to anon, authenticated;
-grant all on public.project_vigilance to anon, authenticated;
-
-
--- V6 : module terrassement autonome
-create table if not exists earthworks (id uuid primary key default gen_random_uuid(), name text not null, client text, address text, description text, status text default 'en_cours', color text default '#92400e', created_at timestamptz default now());
-create table if not exists earthwork_photos (id uuid primary key default gen_random_uuid(), earthwork_id uuid references earthworks(id) on delete cascade, title text, file_url text not null, created_at timestamptz default now());
-create table if not exists earthwork_documents (id uuid primary key default gen_random_uuid(), earthwork_id uuid references earthworks(id) on delete cascade, name text not null, type text default 'autre', file_url text not null, created_at timestamptz default now());
-create table if not exists earthwork_notes (id uuid primary key default gen_random_uuid(), earthwork_id uuid references earthworks(id) on delete cascade, content text not null, created_at timestamptz default now());
-create table if not exists earthwork_materials (id uuid primary key default gen_random_uuid(), earthwork_id uuid references earthworks(id) on delete cascade, title text, content text, created_at timestamptz default now());
-create table if not exists earthwork_vigilance (id uuid primary key default gen_random_uuid(), earthwork_id uuid references earthworks(id) on delete cascade, title text, content text, created_at timestamptz default now());
-create table if not exists earthwork_planning (id uuid primary key default gen_random_uuid(), earthwork_id uuid references earthworks(id) on delete cascade, title text not null, start_date date, end_date date, start_time time, end_time time, color text default '#92400e', notes text, created_at timestamptz default now());
-grant all on public.earthworks to anon, authenticated; grant all on public.earthwork_photos to anon, authenticated; grant all on public.earthwork_documents to anon, authenticated; grant all on public.earthwork_notes to anon, authenticated; grant all on public.earthwork_materials to anon, authenticated; grant all on public.earthwork_vigilance to anon, authenticated; grant all on public.earthwork_planning to anon, authenticated;
-alter table public.earthworks enable row level security; alter table public.earthwork_photos enable row level security; alter table public.earthwork_documents enable row level security; alter table public.earthwork_notes enable row level security; alter table public.earthwork_materials enable row level security; alter table public.earthwork_vigilance enable row level security; alter table public.earthwork_planning enable row level security;
-drop policy if exists "earthworks open" on public.earthworks; drop policy if exists "earthwork_photos open" on public.earthwork_photos; drop policy if exists "earthwork_documents open" on public.earthwork_documents; drop policy if exists "earthwork_notes open" on public.earthwork_notes; drop policy if exists "earthwork_materials open" on public.earthwork_materials; drop policy if exists "earthwork_vigilance open" on public.earthwork_vigilance; drop policy if exists "earthwork_planning open" on public.earthwork_planning;
-create policy "earthworks open" on public.earthworks for all to anon, authenticated using (true) with check (true); create policy "earthwork_photos open" on public.earthwork_photos for all to anon, authenticated using (true) with check (true); create policy "earthwork_documents open" on public.earthwork_documents for all to anon, authenticated using (true) with check (true); create policy "earthwork_notes open" on public.earthwork_notes for all to anon, authenticated using (true) with check (true); create policy "earthwork_materials open" on public.earthwork_materials for all to anon, authenticated using (true) with check (true); create policy "earthwork_vigilance open" on public.earthwork_vigilance for all to anon, authenticated using (true) with check (true); create policy "earthwork_planning open" on public.earthwork_planning for all to anon, authenticated using (true) with check (true);
