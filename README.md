@@ -1,5 +1,14 @@
-# ASB Intranet complet V6
+# ASB Intranet complet V7
 
-Lancer `supabase/schema-complet-v6.sql` dans Supabase.
+## Installation GitHub
+Remplace tous les fichiers du dépôt par le contenu de ce dossier.
 
-V6 : intervenants chantier, demandes modifiables/supprimables, planning modifiable, module terrassement séparé.
+## Supabase
+Dans Supabase > SQL Editor, lance :
+`supabase/schema-complet-v7.sql`
+
+## V7
+- Fiche chantier plus épurée façon tableau de bord
+- Cartes rapides : avancement, intervenants, interventions, masse salariale
+- Navigation par sections : photos, documents, matériel, vigilance, notes, planning
+- Meilleure lecture mobile

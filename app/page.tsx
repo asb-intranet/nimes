@@ -280,7 +280,7 @@ function Dashboard({ projects, photos, docs, requests, setActive }: any) {
 function Projects({ projects, photos, docs, notes, materials, vigilance, employees, links, planning, refreshAll }: any) {
   const [selectedId, setSelectedId] = useState("");
   const current = projects.find((p: any) => p.id === selectedId) || projects.find((p: any) => p.status !== "archive") || projects[0];
-  const [form, setForm] = useState({ name: "", client: "", address: "", description: "", status: "en_cours", color: "#0f172a" });
+  const [form, setForm] = useState({ name: "", client: "", address: "", description: "", status: "en_cours", color: "#0f172a", progress: 0 });
   const [editingId, setEditingId] = useState<string | null>(null);
 
   async function saveProject(e: any) {
@@ -289,13 +289,13 @@ function Projects({ projects, photos, docs, notes, materials, vigilance, employe
     const query = editingId ? supabase.from("projects").update(form).eq("id", editingId) : supabase.from("projects").insert(form);
     const { error } = await query;
     if (error) return alert(error.message);
-    setForm({ name: "", client: "", address: "", description: "", status: "en_cours", color: "#0f172a" });
+    setForm({ name: "", client: "", address: "", description: "", status: "en_cours", color: "#0f172a", progress: 0 });
     setEditingId(null);
     await refreshAll();
   }
 
   function editProject(p: any) {
-    setForm({ name: p.name || "", client: p.client || "", address: p.address || "", description: p.description || "", status: p.status || "en_cours", color: p.color || "#0f172a" });
+    setForm({ name: p.name || "", client: p.client || "", address: p.address || "", description: p.description || "", status: p.status || "en_cours", color: p.color || "#0f172a", progress: p.progress || 0 });
     setEditingId(p.id);
     setSelectedId(p.id);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -337,6 +337,7 @@ function Projects({ projects, photos, docs, notes, materials, vigilance, employe
           <Field label="Adresse"><Input value={form.address} onChange={(e: any) => setForm({ ...form, address: e.target.value })} /></Field>
           <Field label="Statut"><Select value={form.status} onChange={(e: any) => setForm({ ...form, status: e.target.value })}><option value="preparation">À préparer</option><option value="en_cours">En cours</option><option value="termine">Terminé</option><option value="archive">Archivé</option></Select></Field>
           <Field label="Couleur"><Input type="color" value={form.color} onChange={(e: any) => setForm({ ...form, color: e.target.value })} /></Field>
+          <Field label="Avancement %"><Input type="number" min="0" max="100" value={form.progress} onChange={(e: any) => setForm({ ...form, progress: Number(e.target.value) })} /></Field>
           <div className="md:col-span-3"><Field label="Description"><Textarea value={form.description} onChange={(e: any) => setForm({ ...form, description: e.target.value })} /></Field></div>
           <Button className="md:col-span-3">{editingId ? "Modifier chantier" : "Créer chantier"}</Button>
         </form>
@@ -409,6 +410,7 @@ function ProjectDetail({ project, photos, docs, notes, materials, vigilance, emp
   const [vigilanceContent, setVigilanceContent] = useState("");
   const [openMaterialId, setOpenMaterialId] = useState<string | null>(null);
   const [openVigilanceId, setOpenVigilanceId] = useState<string | null>(null);
+  const [chantierTab, setChantierTab] = useState("resume");
 
   async function addPhoto(e: any) {
     e.preventDefault();
@@ -558,21 +560,64 @@ function ProjectDetail({ project, photos, docs, notes, materials, vigilance, emp
 
   return (
     <div className="space-y-6">
-      <Card className="border-l-8" style={{ borderLeftColor: project.color || "#0f172a" }}>
-        <div className="flex items-start justify-between gap-3">
-          <div><h2 className="text-2xl font-black">{project.name}</h2><p className="mt-1 text-sm text-slate-500">{project.client || "Client non renseigné"}</p><p className="mt-1 text-sm text-slate-500">{project.address || "Adresse non renseignée"}</p></div>
-          <Badge tone={statusTone[project.status] || "slate"}>{statusLabels[project.status] || project.status}</Badge>
+      <Card className="overflow-hidden border-l-8 p-0" style={{ borderLeftColor: project.color || "#0f172a" }}>
+        <div className="bg-slate-900 p-5 text-white">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-3xl font-black">{project.name}</h2>
+              <p className="mt-1 text-sm text-slate-300">{project.client || "Client non renseigné"} · {project.address || "Adresse non renseignée"}</p>
+            </div>
+            <Badge tone={statusTone[project.status] || "slate"}>{statusLabels[project.status] || project.status}</Badge>
+          </div>
         </div>
-        {project.description && <p className="mt-4 rounded-2xl bg-slate-50 p-3 text-sm text-slate-700">{project.description}</p>}
-        <div className="mt-4 grid gap-3 md:grid-cols-3">
-          <div className="rounded-2xl bg-slate-50 p-3"><p className="text-xs font-bold uppercase text-slate-500">Photos</p><p className="text-2xl font-black">{projectPhotos.length}</p></div>
-          <div className="rounded-2xl bg-slate-50 p-3"><p className="text-xs font-bold uppercase text-slate-500">Documents</p><p className="text-2xl font-black">{projectDocs.length}</p></div>
-          <div className="rounded-2xl bg-slate-50 p-3"><p className="text-xs font-bold uppercase text-slate-500">Notes</p><p className="text-2xl font-black">{projectNotes.length}</p></div>
+
+        <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4">
+          <button type="button" onClick={() => setChantierTab("resume")} className="rounded-3xl bg-emerald-50 p-4 text-left">
+            <p className="text-xs font-bold uppercase text-emerald-700">Avancement</p>
+            <p className="mt-2 text-3xl font-black text-emerald-700">{project.progress || 0}%</p>
+          </button>
+          <button type="button" onClick={() => setChantierTab("intervenants")} className="rounded-3xl bg-blue-50 p-4 text-left">
+            <p className="text-xs font-bold uppercase text-blue-700">Intervenants</p>
+            <p className="mt-2 text-3xl font-black text-blue-700">{assignedEmployees.length}</p>
+          </button>
+          <button type="button" onClick={() => setChantierTab("planning")} className="rounded-3xl bg-purple-50 p-4 text-left">
+            <p className="text-xs font-bold uppercase text-purple-700">Interventions</p>
+            <p className="mt-2 text-3xl font-black text-purple-700">{projectInterventions.length}</p>
+          </button>
+          <button type="button" onClick={() => setChantierTab("intervenants")} className="rounded-3xl bg-amber-50 p-4 text-left">
+            <p className="text-xs font-bold uppercase text-amber-700">Masse salariale</p>
+            <p className="mt-2 text-3xl font-black text-amber-700">{projectInterventions.length} int.</p>
+          </button>
+        </div>
+
+        {project.description && <p className="mx-4 mb-4 rounded-2xl bg-slate-50 p-3 text-sm text-slate-700">{project.description}</p>}
+
+        <div className="grid gap-2 border-t border-slate-100 p-4 sm:grid-cols-2 lg:grid-cols-4">
+          {[
+            ["resume", "📌 Résumé", projectNotes.length],
+            ["photos", "📸 Photos", projectPhotos.length],
+            ["documents", "📄 Documents", projectDocs.length],
+            ["intervenants", "👷 Intervenants", assignedEmployees.length],
+            ["materiel", "📦 Matériel", projectMaterials.length],
+            ["vigilance", "⚠️ Vigilance", projectVigilance.length],
+            ["notes", "📝 Notes", projectNotes.length],
+            ["planning", "📅 Planning", projectInterventions.length]
+          ].map(([id, label, count]: any) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setChantierTab(id)}
+              className={`flex items-center justify-between rounded-2xl px-4 py-3 text-left text-sm font-black ${chantierTab === id ? "bg-slate-900 text-white" : "bg-slate-50 text-slate-700"}`}
+            >
+              <span>{label}</span>
+              <span className="rounded-full bg-white/20 px-2 py-1 text-xs">{count}</span>
+            </button>
+          ))}
         </div>
       </Card>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card className="border-l-8 border-amber-400 bg-amber-50">
+      <div className={`${chantierTab === "resume" || chantierTab === "materiel" || chantierTab === "vigilance" ? "grid" : "hidden"} gap-6 lg:grid-cols-2`}>
+        <Card className={chantierTab === "vigilance" ? "hidden" : "border-l-8 border-amber-400 bg-amber-50"}>
           <h3 className="mb-4 text-xl font-black text-amber-900">📦 Matériel à prévoir</h3>
 
           <form onSubmit={addMaterial} className="mb-4 space-y-3">
@@ -612,7 +657,7 @@ function ProjectDetail({ project, photos, docs, notes, materials, vigilance, emp
           </div>
         </Card>
 
-        <Card className="border-l-8 border-red-500 bg-red-50">
+        <Card className={chantierTab === "materiel" ? "hidden" : "border-l-8 border-red-500 bg-red-50"}>
           <h3 className="mb-4 text-xl font-black text-red-900">⚠️ À réaliser / points de vigilance</h3>
 
           <form onSubmit={addVigilance} className="mb-4 space-y-3">
@@ -653,7 +698,7 @@ function ProjectDetail({ project, photos, docs, notes, materials, vigilance, emp
         </Card>
       </div>
 
-      <Card className="border-l-8 border-blue-500 bg-blue-50">
+      <div className={chantierTab === "resume" || chantierTab === "intervenants" ? "block" : "hidden"}><Card className="border-l-8 border-blue-500 bg-blue-50">
         <h3 className="mb-4 text-xl font-black text-blue-950">👷 Intervenants chantier / masse salariale engagée</h3>
         <p className="mb-4 text-sm text-blue-900/70">Aperçu basé sur les salariés affectés et les lignes du planning liées à ce chantier.</p>
         <div className="grid gap-3 md:grid-cols-2">
@@ -674,18 +719,18 @@ function ProjectDetail({ project, photos, docs, notes, materials, vigilance, emp
           ))}
           {employeeInterventionSummary.length === 0 && <p className="text-sm text-blue-900/70">Aucun intervenant affecté.</p>}
         </div>
-      </Card>
+      </Card></div>
 
-      <Card>
+      <div className={chantierTab === "resume" || chantierTab === "intervenants" ? "block" : "hidden"}><Card>
         <h3 className="mb-4 font-black"><Users size={18} className="mr-2 inline" /> Salariés affectés au chantier</h3>
         <div className="flex flex-wrap gap-2">
           {assignedEmployees.map((e: any) => <span key={e.id} className="rounded-full bg-slate-100 px-3 py-2 text-sm font-bold">{e.firstname} {e.lastname} <span className="text-slate-500">· {e.position || e.role}</span></span>)}
           {assignedEmployees.length === 0 && <p className="text-sm text-slate-500">Aucun salarié affecté à ce chantier.</p>}
         </div>
-      </Card>
+      </Card></div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
+      <div className={`${chantierTab === "resume" || chantierTab === "photos" || chantierTab === "documents" ? "grid" : "hidden"} gap-6 lg:grid-cols-2`}>
+        <Card className={chantierTab === "documents" ? "hidden" : ""}>
           <h3 className="mb-4 font-black"><Camera size={18} className="mr-2 inline" /> Photos chantier</h3>
           <form onSubmit={addPhoto} className="mb-4 space-y-3">
             <Field label="Titre"><Input value={photoTitle} onChange={(e: any) => setPhotoTitle(e.target.value)} /></Field>
@@ -703,7 +748,7 @@ function ProjectDetail({ project, photos, docs, notes, materials, vigilance, emp
           </div>
         </Card>
 
-        <Card>
+        <Card className={chantierTab === "photos" ? "hidden" : ""}>
           <h3 className="mb-4 font-black"><FileText size={18} className="mr-2 inline" /> Documents chantier</h3>
           <form onSubmit={addDoc} className="mb-4 space-y-3">
             <Field label="Nom"><Input value={docName} onChange={(e: any) => setDocName(e.target.value)} /></Field>
@@ -722,7 +767,7 @@ function ProjectDetail({ project, photos, docs, notes, materials, vigilance, emp
         </Card>
       </div>
 
-      <Card>
+      <div className={chantierTab === "resume" || chantierTab === "notes" ? "block" : "hidden"}><Card>
         <h3 className="mb-4 font-black">Notes chantier</h3>
         <form onSubmit={addNote} className="grid gap-3 md:grid-cols-[1fr_120px]">
           <Input value={note} onChange={(e: any) => setNote(e.target.value)} placeholder="Note chantier..." />
@@ -739,7 +784,25 @@ function ProjectDetail({ project, photos, docs, notes, materials, vigilance, emp
             </div>
           ))}
         </div>
-      </Card>
+      </Card></div>
+
+      <div className={chantierTab === "planning" ? "block" : "hidden"}>
+        <Card>
+          <h3 className="mb-4 font-black">📅 Planning lié au chantier</h3>
+          <div className="space-y-2">
+            {projectInterventions.map((p: any) => {
+              const emp = employees.find((e: any) => e.id === p.employee_id);
+              return (
+                <div key={p.id} className="rounded-2xl p-3 text-white" style={{ background: p.color || project.color || "#0f172a" }}>
+                  <b>{p.title}</b>
+                  <p className="text-sm">{emp ? `${emp.firstname} ${emp.lastname}` : "Salarié non défini"} · {p.start_date}{p.end_date && p.end_date !== p.start_date ? ` → ${p.end_date}` : ""}</p>
+                </div>
+              );
+            })}
+            {projectInterventions.length === 0 && <p className="text-sm text-slate-500">Aucune intervention planifiée.</p>}
+          </div>
+        </Card>
+      </div>
     </div>
   );
 }
