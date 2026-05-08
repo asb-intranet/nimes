@@ -1,14 +1,9 @@
-# ASB Intranet complet V18
+# ASB Intranet V19
 
-## Modifications
-- Correction bug terrassement : invalid input syntax for type uuid: ""
-- linked_project vide est envoyé en null
-- Terrassement présenté comme Chantiers :
-  - liste terrassements
-  - bouton Accéder
-  - fiche terrassement en pleine page
-  - bouton Retour liste terrassements
-- Champ Chantier lié dans création/modification terrassement
+- Terrassement lié uniquement à un autre terrassement
+- Module Location engin dans fiche terrassement
+- Location : type engin, dates, prix, notes, modifier, supprimer
+- Bouton pour afficher création matériel dans Magasinier
+- Bouton pour afficher création chantier dans Chantiers
 
-## Supabase
-Lancer : supabase/schema-complet-v18.sql
+SQL : supabase/schema-complet-v19.sql
