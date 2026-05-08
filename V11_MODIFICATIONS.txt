@@ -1,0 +1,35 @@
+ASB INTRANET V11
+
+Modifications prévues/intégrées :
+- Dashboard :
+  Chantiers / A préparer / Demandes internes
+
+- Magasinier :
+  Edition plein écran intégrée
+  Suppression popup
+  Priorité sans couleur chantier
+  Ajout photos/documents par matériel
+  Nouveau module Retour marchandise
+
+- Terrassement :
+  Correction invalid input syntax for type time: ""
+  Attribution chantier terrassement
+  Planning stabilisé
+
+- Gestion :
+  Modification / suppression complète
+  Bouton génération rapport chantier
+
+SQL à lancer :
+ALTER TABLE public.project_materials
+ADD COLUMN IF NOT EXISTS attachment_url text;
+
+CREATE TABLE IF NOT EXISTS merchandise_returns (
+ id uuid primary key default gen_random_uuid(),
+ project_id uuid,
+ supplier text,
+ amount numeric default 0,
+ return_date date,
+ notes text,
+ created_at timestamptz default now()
+);
