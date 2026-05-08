@@ -1258,7 +1258,7 @@ function Requests({ requests, projects, refreshAll, projectName }: any) {
 function Earthworks({ earthworks, photos, docs, notes, materials, vigilance, planning, refreshAll }: any) {
   const [selectedId, setSelectedId] = useState("");
   const current = earthworks.find((e: any) => e.id === selectedId) || earthworks[0];
-  const [form, setForm] = useState({ name: "", client: "", address: "", description: "", status: "en_cours", color: "#92400e", linked_project: "" });
+  const [form, setForm] = useState<any>({ name: "", client: "", address: "", description: "", status: "en_cours", color: "#92400e", linked_project: "" });
   const [editingId, setEditingId] = useState<string | null>(null);
 
   async function saveEarthwork(e: any) {
@@ -1271,7 +1271,7 @@ function Earthworks({ earthworks, photos, docs, notes, materials, vigilance, pla
     setEditingId(null);
     await refreshAll();
   }
-  function editEarthwork(item: any) { setEditingId(item.id); setSelectedId(item.id); setForm({ name: item.name || "", client: item.client || "", address: item.address || "", description: item.description || "", status: item.status || "en_cours", color: item.color || "#92400e" }); window.scrollTo({ top: 0, behavior: "smooth" }); }
+  function editEarthwork(item: any) { setEditingId(item.id); setSelectedId(item.id); setForm({ name: item.name || "", client: item.client || "", address: item.address || "", description: item.description || "", status: item.status || "en_cours", color: item.color || "#92400e", linked_project: item.linked_project || "" }); window.scrollTo({ top: 0, behavior: "smooth" }); }
   async function deleteEarthwork(item: any) { if (!confirm(`Supprimer le terrassement "${item.name}" ?`)) return; const { error } = await supabase.from("earthworks").delete().eq("id", item.id); if (error) return alert(error.message); await refreshAll(); }
 
   return <div><Section title="Terrassement" subtitle="Module complètement séparé des chantiers classiques, avec planning autonome." />
