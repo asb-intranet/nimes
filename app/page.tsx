@@ -1298,9 +1298,43 @@ function EarthworkDetail({ item, photos, docs, notes, materials, vigilance, plan
 function Storekeeper({ projects, materials, returns = [], refreshAll }: any) {
   const [editingItem, setEditingItem] = useState<any>(null);
   const [form, setForm] = useState({ title: "", content: "" });
+  const [createForm, setCreateForm] = useState({ project_id: "", title: "", content: "", priority: "normale" });
+  const [createFile, setCreateFile] = useState<any>(null);
 
   function projectNameLocal(id: string) {
     return projects.find((p: any) => p.id === id)?.name || "Chantier inconnu";
+  }
+
+  async function createMaterial(e: any) {
+    e.preventDefault();
+
+    if (!createForm.project_id) return alert("Choisis un chantier");
+    if (!createForm.title && !createForm.content) return alert("Ajoute un titre ou un détail");
+
+    let attachment_url = null;
+    let attachment_type = null;
+
+    if (createFile) {
+      const bucket = createFile.type?.startsWith("image/") ? "photos" : "documents";
+      attachment_url = await uploadFile(bucket, createFile);
+      attachment_type = createFile.type?.startsWith("image/") ? "photo" : "document";
+    }
+
+    const { error } = await supabase.from("project_materials").insert({
+      project_id: createForm.project_id,
+      title: createForm.title || "Matériel à prévoir",
+      content: createForm.content || "",
+      priority: createForm.priority || "normale",
+      ready: false,
+      attachment_url,
+      attachment_type
+    });
+
+    if (error) return alert(error.message);
+
+    setCreateForm({ project_id: createForm.project_id, title: "", content: "", priority: "normale" });
+    setCreateFile(null);
+    await refreshAll();
   }
 
   async function setReady(item: any, ready: boolean) {
@@ -1379,6 +1413,44 @@ function Storekeeper({ projects, materials, returns = [], refreshAll }: any) {
   return (
     <div>
       <Section title="Magasinier" subtitle="Gestion globale du matériel à prévoir pour les chantiers." />
+
+      <Card className="mb-6 border-l-8 border-slate-900">
+        <h3 className="mb-4 text-2xl font-black">Créer matériel à prévoir</h3>
+
+        <form onSubmit={createMaterial} className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-3">
+            <Field label="Chantier">
+              <Select value={createForm.project_id} onChange={(e: any) => setCreateForm({ ...createForm, project_id: e.target.value })}>
+                <option value="">Choisir chantier</option>
+                {projects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </Select>
+            </Field>
+
+            <Field label="Titre">
+              <Input value={createForm.title} onChange={(e: any) => setCreateForm({ ...createForm, title: e.target.value })} />
+            </Field>
+
+            <Field label="Priorité">
+              <Select value={createForm.priority} onChange={(e: any) => setCreateForm({ ...createForm, priority: e.target.value })}>
+                <option value="basse">Basse</option>
+                <option value="normale">Normale</option>
+                <option value="haute">Haute</option>
+                <option value="urgente">Urgente</option>
+              </Select>
+            </Field>
+          </div>
+
+          <Field label="Détail matériel">
+            <Textarea value={createForm.content} onChange={(e: any) => setCreateForm({ ...createForm, content: e.target.value })} className="min-h-48" />
+          </Field>
+
+          <Field label="Photo ou document">
+            <Input type="file" onChange={(e: any) => setCreateFile(e.target.files?.[0] || null)} />
+          </Field>
+
+          <Button>Créer matériel</Button>
+        </form>
+      </Card>
 
       {editingItem && (
         <Card className="mb-8 border-l-8 border-blue-500 bg-blue-50">
