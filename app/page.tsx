@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { Card, Button, Field, Input, Select, Textarea, Section, Badge } from "@/components/Ui";
 import {
@@ -9,7 +9,6 @@ import {
 } from "lucide-react";
 
 const menu = [
-  { id: "home", title: "Accueil", icon: LayoutDashboard },
   { id: "dashboard", title: "Tableau de bord", icon: LayoutDashboard },
   { id: "projects", title: "Chantiers", icon: Building2 },
   { id: "storekeeper", title: "Magasinier", icon: Package },
@@ -77,7 +76,7 @@ export default function Page() {
   const [session, setSession] = useState<any>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [active, setActive] = useState("home");
+  const [active, setActive] = useState("dashboard");
   const [loading, setLoading] = useState(true);
 
   const [projects, setProjects] = useState<any[]>([]);
@@ -184,7 +183,7 @@ export default function Page() {
   }
 
   useEffect(() => {
-    if (userRole !== "admin" && !["home", "projects", "planning", "earthworks"].includes(active)) {
+    if (userRole !== "admin" && !["projects", "planning", "earthworks"].includes(active)) {
       setActive("projects");
     }
   }, [userRole, active]);
@@ -218,7 +217,7 @@ export default function Page() {
         </div>
 
         <nav className="space-y-2">
-          {menu.filter((m) => userRole === "admin" || ["home", "projects", "planning", "earthworks"].includes(m.id)).map((m) => {
+          {menu.filter((m) => userRole === "admin" || ["projects", "planning", "earthworks"].includes(m.id)).map((m) => {
             const Icon = m.icon;
             return (
               <button key={m.id} onClick={() => setActive(m.id)} className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-bold ${active === m.id ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"}`}>
@@ -238,7 +237,7 @@ export default function Page() {
           <div className="text-sm text-slate-500">Connecté : {session.user.email}</div>
           <h1 className="text-3xl font-black">{menu.find((m) => m.id === active)?.title}</h1>
           <div className="mt-3 flex flex-wrap gap-2 lg:hidden">
-            {menu.filter((m) => userRole === "admin" || ["home", "projects", "planning", "earthworks"].includes(m.id)).map((m) => <Button key={m.id} variant={active === m.id ? "primary" : "secondary"} onClick={() => setActive(m.id)}>{m.title}</Button>)}
+            {menu.filter((m) => userRole === "admin" || ["projects", "planning", "earthworks"].includes(m.id)).map((m) => <Button key={m.id} variant={active === m.id ? "primary" : "secondary"} onClick={() => setActive(m.id)}>{m.title}</Button>)}
           </div>
         </header>
 
@@ -260,82 +259,6 @@ export default function Page() {
   );
 }
 
-
-
-function HomeAccess({ projects, materials = [], requests = [], photos = [], planning = [], employees = [], setActive, userRole }: any) {
-  const materialTodo = materials.filter((m: any) => !m.ready).length;
-  const openRequests = requests.filter((r: any) => r.status !== "terminee" && r.status !== "fermée").length;
-  const activeProjects = projects.filter((p: any) => p.status === "en_cours").length;
-
-  const tiles = [
-    { id: "projects", icon: "🏗️", title: "Chantiers", subtitle: "Ouvrir et suivre les chantiers", count: activeProjects, admin: false },
-    { id: "storekeeper", icon: "📦", title: "Magasinier", subtitle: "Matériel à préparer", count: materialTodo, admin: true },
-    { id: "management", icon: "💰", title: "Gestion", subtitle: "Rentabilité et facturation", count: "", admin: true },
-    { id: "earthworks", icon: "🚜", title: "Terrassement", subtitle: "Module terrassement séparé", count: "", admin: false },
-    { id: "mobile", icon: "📸", title: "Photos Express", subtitle: "Ajouter une photo rapidement", count: photos.length, admin: true },
-    { id: "requests", icon: "📝", title: "Demandes internes", subtitle: "Achats, matériel, suivi", count: openRequests, admin: true },
-    { id: "planning", icon: "📅", title: "Planning", subtitle: "Planning chantiers et salariés", count: planning.length, admin: false },
-    { id: "employees", icon: "👷", title: "Salariés", subtitle: "Affectations et coûts journée", count: employees.length, admin: true },
-    { id: "vehicles", icon: "🚐", title: "Véhicules", subtitle: "Parc et entretien", count: "", admin: true },
-    { id: "dashboard", icon: "📊", title: "Tableau de bord", subtitle: "Vue synthèse entreprise", count: "", admin: true }
-  ].filter((t) => userRole === "admin" || !t.admin);
-
-  return (
-    <div className="pb-24 lg:pb-0">
-      <div className="mb-6 rounded-3xl bg-slate-900 p-6 text-white">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h2 className="text-3xl font-black">Accueil ASB Intranet</h2>
-            <p className="mt-2 text-slate-300">Accès rapide aux modules principaux.</p>
-          </div>
-          <button onClick={() => setActive("mobile")} className="rounded-3xl bg-white px-5 py-4 text-lg font-black text-slate-900 shadow">
-            📸 Photo Express
-          </button>
-        </div>
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {tiles.map((tile) => (
-          <button
-            key={tile.id}
-            onClick={() => setActive(tile.id)}
-            className="group rounded-3xl border border-slate-100 bg-white p-5 text-left shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div className="text-4xl">{tile.icon}</div>
-              {tile.count !== "" && (
-                <div className="rounded-full bg-slate-900 px-3 py-1 text-sm font-black text-white">{tile.count}</div>
-              )}
-            </div>
-            <h3 className="mt-4 text-2xl font-black text-slate-900">{tile.title}</h3>
-            <p className="mt-1 text-sm text-slate-500">{tile.subtitle}</p>
-            <div className="mt-4 text-sm font-black text-slate-900 group-hover:underline">Ouvrir →</div>
-          </button>
-        ))}
-      </div>
-
-      <div className="mt-8 grid gap-4 lg:grid-cols-3">
-        <Card className="border-l-8 border-amber-400 bg-amber-50">
-          <p className="text-sm font-bold text-amber-800">Matériel à préparer</p>
-          <p className="text-4xl font-black text-amber-700">{materialTodo}</p>
-          <Button className="mt-4" variant="amber" onClick={() => setActive("storekeeper")}>Ouvrir magasinier</Button>
-        </Card>
-
-        <Card className="border-l-8 border-emerald-500 bg-emerald-50">
-          <p className="text-sm font-bold text-emerald-800">Chantiers en cours</p>
-          <p className="text-4xl font-black text-emerald-700">{activeProjects}</p>
-          <Button className="mt-4" variant="green" onClick={() => setActive("projects")}>Ouvrir chantiers</Button>
-        </Card>
-
-        <Card className="border-l-8 border-blue-500 bg-blue-50">
-          <p className="text-sm font-bold text-blue-800">Demandes ouvertes</p>
-          <p className="text-4xl font-black text-blue-700">{openRequests}</p>
-          {userRole === "admin" && <Button className="mt-4" variant="secondary" onClick={() => setActive("requests")}>Voir demandes</Button>}
-        </Card>
-      </div>
-    </div>
-  );
-}
 
 
 function Dashboard({ projects, photos, docs, requests, materials = [], invoices = [], setActive }: any) {
@@ -370,6 +293,14 @@ function Dashboard({ projects, photos, docs, requests, materials = [], invoices 
 function Projects({ projects, photos, docs, notes, materials, vigilance, invoices, employees, links, planning, refreshAll }: any) {
   const [selectedId, setSelectedId] = useState("");
   const current = projects.find((p: any) => p.id === selectedId) || projects.find((p: any) => p.status !== "archive") || projects[0];
+  const detailRef = useRef<HTMLDivElement | null>(null);
+
+  function openProject(id: string) {
+    setSelectedId(id);
+    setTimeout(() => {
+      detailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 80);
+  }
   const [form, setForm] = useState({ name: "", client: "", address: "", description: "", status: "en_cours", color: "#0f172a", progress: 0 });
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -418,7 +349,7 @@ function Projects({ projects, photos, docs, notes, materials, vigilance, invoice
 
   return (
     <div>
-      <Section title="Gestion chantier" subtitle="Chaque chantier possède sa fiche avec photos, documents, notes et salariés affectés." />
+      <Section title="Gestion chantier" subtitle="Clique sur Accéder : la fiche chantier s’ouvre directement plus bas." />
 
       <Card>
         <form onSubmit={saveProject} className="grid gap-3 md:grid-cols-3">
@@ -448,7 +379,7 @@ function Projects({ projects, photos, docs, notes, materials, vigilance, invoice
                 Photos : <b>{photos.filter((x: any) => x.project_id === p.id).length}</b> · Documents : <b>{docs.filter((x: any) => x.project_id === p.id).length}</b> · Notes : <b>{notes.filter((x: any) => x.project_id === p.id).length}</b>
               </p>
               <div className="mt-3 grid grid-cols-2 gap-2">
-                <Button onClick={() => setSelectedId(p.id)}>Accéder</Button>
+                <Button onClick={() => openProject(p.id)}>Accéder</Button>
                 <Button variant="secondary" onClick={() => editProject(p)}>Modifier</Button>
                 <Button variant="amber" onClick={() => archiveProject(p)}>Archiver</Button>
                 <Button variant="danger" onClick={() => deleteProject(p)}>Supprimer</Button>
@@ -463,7 +394,7 @@ function Projects({ projects, photos, docs, notes, materials, vigilance, invoice
             <Card key={p.id} className="border-l-8 opacity-75" style={{ borderLeftColor: p.color || "#0f172a" }}>
               <div className="flex items-start justify-between gap-3"><div><h3 className="font-black">{p.name}</h3><p className="text-sm text-slate-500">{p.client}</p></div><Badge>Archivé</Badge></div>
               <div className="mt-3 grid grid-cols-2 gap-2">
-                <Button variant="secondary" onClick={() => setSelectedId(p.id)}>Consulter</Button>
+                <Button variant="secondary" onClick={() => openProject(p.id)}>Consulter</Button>
                 <Button variant="green" onClick={() => restoreProject(p)}>Réactiver</Button>
                 <Button variant="danger" className="col-span-2" onClick={() => deleteProject(p)}>Supprimer définitivement</Button>
               </div>
@@ -472,7 +403,7 @@ function Projects({ projects, photos, docs, notes, materials, vigilance, invoice
           {archivedProjects.length === 0 && <Card><p className="text-sm text-slate-500">Aucun chantier archivé.</p></Card>}
         </div>
 
-        <ProjectDetail project={current} photos={photos} docs={docs} notes={notes} materials={materials} vigilance={vigilance} invoices={invoices} employees={employees} links={links} planning={planning} refreshAll={refreshAll} />
+        <div ref={detailRef}><ProjectDetail project={current} photos={photos} docs={docs} notes={notes} materials={materials} vigilance={vigilance} invoices={invoices} employees={employees} links={links} planning={planning} refreshAll={refreshAll} /></div>
       </div>
     </div>
   );

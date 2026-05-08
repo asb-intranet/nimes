@@ -1,12 +1,11 @@
-# ASB Intranet complet V15
+# ASB Intranet complet V16
 
-## Nouveauté visuelle
-- Nouvel accueil par grosses tuiles
-- Accès rapide aux modules
-- Barre basse mobile : Accueil / Chantiers / Photos / Magasinier / Planning
-- Bouton Photo Express en haut de l'accueil
-- Meilleure navigation téléphone
+## Modifications
+- Suppression du module Accueil
+- Retour au tableau de bord comme écran de départ
+- Dans Chantiers : bouton Accéder/Consulter ouvre directement la fiche chantier plus bas sans devoir défiler manuellement
+- Pas de SQL obligatoire
 
 ## Supabase
-Pas de nouvelle table obligatoire.
-Tu peux lancer `supabase/schema-complet-v15.sql` si tu veux conserver une base à jour.
+Pas de nouvelle table.
+Tu peux lancer `supabase/schema-complet-v16.sql` uniquement si tu veux garder l’historique à jour.
