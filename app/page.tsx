@@ -249,7 +249,7 @@ export default function Page() {
           {active === "dashboard" && userRole === "admin" && <Dashboard projects={projects} photos={photos} docs={docs} requests={requests} materials={materials} invoices={invoices} setActive={setActive} />}
           {active === "storekeeper" && userRole === "admin" && <Storekeeper projects={projects} materials={materials} returns={returns} refreshAll={refreshAll} />}
           {active === "projects" && <Projects projects={projects} photos={photos} docs={docs} notes={notes} materials={materials} vigilance={vigilance} invoices={invoices} employees={employees} links={links} planning={planning} refreshAll={refreshAll} />}
-          {active === "earthworks" && <Earthworks earthworks={earthworks} photos={earthworkPhotos} docs={earthworkDocs} notes={earthworkNotes} materials={earthworkMaterials} vigilance={earthworkVigilance} planning={earthworkPlanning} refreshAll={refreshAll} />}
+          {active === "earthworks" && <Earthworks projects={projects} earthworks={earthworks} photos={earthworkPhotos} docs={earthworkDocs} notes={earthworkNotes} materials={earthworkMaterials} vigilance={earthworkVigilance} planning={earthworkPlanning} refreshAll={refreshAll} />}
           {active === "planning" && <Planning projects={projects} employees={employees} links={links} planning={planning} refreshAll={refreshAll} />}
           {active === "employees" && userRole === "admin" && <Employees employees={employees} projects={projects} refreshAll={refreshAll} />}
           {active === "vehicles" && userRole === "admin" && <Vehicles vehicles={vehicles} refreshAll={refreshAll} />}
@@ -1288,16 +1288,24 @@ function Requests({ requests, projects, refreshAll, projectName }: any) {
 }
 
 
-function Earthworks({ earthworks, photos, docs, notes, materials, vigilance, planning, refreshAll }: any) {
+function Earthworks({ projects = [], earthworks, photos, docs, notes, materials, vigilance, planning, refreshAll }: any) {
   const [selectedId, setSelectedId] = useState("");
   const current = earthworks.find((e: any) => e.id === selectedId) || earthworks[0];
+  const [earthworkDetailMode, setEarthworkDetailMode] = useState(false);
+
+  function openEarthwork(id: string) {
+    setSelectedId(id);
+    setEarthworkDetailMode(true);
+    setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 50);
+  }
   const [form, setForm] = useState<any>({ name: "", client: "", address: "", description: "", status: "en_cours", color: "#92400e", linked_project: "" });
   const [editingId, setEditingId] = useState<string | null>(null);
 
   async function saveEarthwork(e: any) {
     e.preventDefault();
     if (!form.name) return alert("Nom obligatoire");
-    const query = editingId ? supabase.from("earthworks").update(form).eq("id", editingId) : supabase.from("earthworks").insert(form);
+    const payload = { ...form, linked_project: form.linked_project || null };
+    const query = editingId ? supabase.from("earthworks").update(payload).eq("id", editingId) : supabase.from("earthworks").insert(payload);
     const { error } = await query;
     if (error) return alert(error.message);
     setForm({ name: "", client: "", address: "", description: "", status: "en_cours", color: "#92400e", linked_project: "" });
@@ -1307,9 +1315,35 @@ function Earthworks({ earthworks, photos, docs, notes, materials, vigilance, pla
   function editEarthwork(item: any) { setEditingId(item.id); setSelectedId(item.id); setForm({ name: item.name || "", client: item.client || "", address: item.address || "", description: item.description || "", status: item.status || "en_cours", color: item.color || "#92400e", linked_project: item.linked_project || "" }); window.scrollTo({ top: 0, behavior: "smooth" }); }
   async function deleteEarthwork(item: any) { if (!confirm(`Supprimer le terrassement "${item.name}" ?`)) return; const { error } = await supabase.from("earthworks").delete().eq("id", item.id); if (error) return alert(error.message); await refreshAll(); }
 
-  return <div><Section title="Terrassement" subtitle="Module complètement séparé des chantiers classiques, avec planning autonome." />
-    <Card><form onSubmit={saveEarthwork} className="grid gap-3 md:grid-cols-3"><Field label="Nom terrassement"><Input value={form.name} onChange={(e: any) => setForm({ ...form, name: e.target.value })} /></Field><Field label="Client"><Input value={form.client} onChange={(e: any) => setForm({ ...form, client: e.target.value })} /></Field><Field label="Adresse"><Input value={form.address} onChange={(e: any) => setForm({ ...form, address: e.target.value })} /></Field><Field label="Statut"><Select value={form.status} onChange={(e: any) => setForm({ ...form, status: e.target.value })}><option value="en_cours">En cours</option><option value="termine">Terminé</option><option value="archive">Archivé</option></Select></Field><Field label="Couleur"><Input type="color" value={form.color} onChange={(e: any) => setForm({ ...form, color: e.target.value })} /></Field><div className="md:col-span-3"><Field label="Description"><Textarea value={form.description} onChange={(e: any) => setForm({ ...form, description: e.target.value })} /></Field></div><Button className="md:col-span-3">{editingId ? "Modifier terrassement" : "Créer terrassement"}</Button></form></Card>
-    <div className="mt-6 grid gap-6 lg:grid-cols-[380px_1fr]"><div className="space-y-3">{earthworks.map((e: any) => <Card key={e.id} className={`border-l-8 ${current?.id === e.id ? "ring-2 ring-slate-900" : ""}`} style={{ borderLeftColor: e.color || "#92400e" }}><h3 className="font-black">{e.name}</h3><p className="text-sm text-slate-500">{e.address}</p><div className="mt-3 grid grid-cols-2 gap-2"><Button onClick={() => setSelectedId(e.id)}>Ouvrir</Button><Button variant="secondary" onClick={() => editEarthwork(e)}>Modifier</Button><Button variant="danger" className="col-span-2" onClick={() => deleteEarthwork(e)}>Supprimer</Button></div></Card>)}{earthworks.length === 0 && <Card><p className="text-sm text-slate-500">Aucun terrassement.</p></Card>}</div><EarthworkDetail item={current} photos={photos} docs={docs} notes={notes} materials={materials} vigilance={vigilance} planning={planning} refreshAll={refreshAll} /></div></div>;
+  if (earthworkDetailMode && current) {
+    return (
+      <div className="pb-24">
+        <div className="sticky top-0 z-30 mb-4 rounded-3xl border bg-white/95 p-4 shadow-sm backdrop-blur">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold uppercase text-slate-500">Fiche terrassement</p>
+              <h2 className="text-2xl font-black">{current.name}</h2>
+            </div>
+            <Button variant="secondary" onClick={() => { setEarthworkDetailMode(false); window.scrollTo({ top: 0, behavior: "smooth" }); }}>
+              ← Retour liste terrassements
+            </Button>
+          </div>
+        </div>
+
+        <Card><h3 className="text-xl font-black">Sélection terrassement</h3><p className="mt-2 text-sm text-slate-500">Clique sur “Accéder” pour ouvrir la fiche terrassement en pleine page.</p></Card>
+      </div>
+    );
+  }
+
+  return <div><Section title="Terrassement" subtitle="Clique sur Accéder : la fiche terrassement s’ouvre directement en pleine page." />
+    <Card><form onSubmit={saveEarthwork} className="grid gap-3 md:grid-cols-3"><Field label="Nom terrassement"><Input value={form.name} onChange={(e: any) => setForm({ ...form, name: e.target.value })} /></Field><Field label="Client"><Input value={form.client} onChange={(e: any) => setForm({ ...form, client: e.target.value })} /></Field><Field label="Adresse"><Input value={form.address} onChange={(e: any) => setForm({ ...form, address: e.target.value })} /></Field><Field label="Statut"><Select value={form.status} onChange={(e: any) => setForm({ ...form, status: e.target.value })}><option value="en_cours">En cours</option><option value="termine">Terminé</option><option value="archive">Archivé</option></Select></Field><Field label="Couleur"><Input type="color" value={form.color} onChange={(e: any) => setForm({ ...form, color: e.target.value })} /></Field>
+          <Field label="Chantier lié">
+            <Select value={form.linked_project || ""} onChange={(e: any) => setForm({ ...form, linked_project: e.target.value })}>
+              <option value="">Aucun chantier lié</option>
+              {projects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </Select>
+          </Field><div className="md:col-span-3"><Field label="Description"><Textarea value={form.description} onChange={(e: any) => setForm({ ...form, description: e.target.value })} /></Field></div><Button className="md:col-span-3">{editingId ? "Modifier terrassement" : "Créer terrassement"}</Button></form></Card>
+    <div className="mt-6 grid gap-6 lg:grid-cols-[380px_1fr]"><div className="space-y-3">{earthworks.map((e: any) => <Card key={e.id} className={`border-l-8 ${current?.id === e.id ? "ring-2 ring-slate-900" : ""}`} style={{ borderLeftColor: e.color || "#92400e" }}><h3 className="font-black">{e.name}</h3><p className="text-sm text-slate-500">{e.address}</p><div className="mt-3 grid grid-cols-2 gap-2"><Button onClick={() => openEarthwork(e.id)}>Accéder</Button><Button variant="secondary" onClick={() => editEarthwork(e)}>Modifier</Button><Button variant="danger" className="col-span-2" onClick={() => deleteEarthwork(e)}>Supprimer</Button></div></Card>)}{earthworks.length === 0 && <Card><p className="text-sm text-slate-500">Aucun terrassement.</p></Card>}</div><EarthworkDetail item={current} photos={photos} docs={docs} notes={notes} materials={materials} vigilance={vigilance} planning={planning} refreshAll={refreshAll} /></div></div>;
 }
 
 function EarthworkDetail({ item, photos, docs, notes, materials, vigilance, planning, refreshAll }: any) {

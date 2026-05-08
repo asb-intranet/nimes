@@ -1,12 +1,14 @@
-# ASB Intranet complet V17
+# ASB Intranet complet V18
 
 ## Modifications
-- Ouverture des modules avec retour automatique en haut de page
-- Chantiers : bouton Accéder ouvre la fiche chantier en pleine page
-- Bouton Retour liste chantiers
-- Plus besoin de défiler pour atteindre la fiche chantier
-- Matériel reste dans Magasinier
+- Correction bug terrassement : invalid input syntax for type uuid: ""
+- linked_project vide est envoyé en null
+- Terrassement présenté comme Chantiers :
+  - liste terrassements
+  - bouton Accéder
+  - fiche terrassement en pleine page
+  - bouton Retour liste terrassements
+- Champ Chantier lié dans création/modification terrassement
 
 ## Supabase
-Pas de SQL obligatoire.
-Optionnel : `supabase/schema-complet-v17.sql`
+Lancer : supabase/schema-complet-v18.sql
