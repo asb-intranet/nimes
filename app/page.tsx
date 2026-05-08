@@ -1488,11 +1488,10 @@ function Storekeeper({ projects, materials, returns = [], refreshAll }: any) {
   }
 
 
-
-
   async function saveRental(e: any) {
     e.preventDefault();
     if (!rentalForm.machine_type) return alert("Type d'engin obligatoire");
+
     const payload = {
       earthwork_id: item.id,
       machine_type: rentalForm.machine_type,
@@ -1501,11 +1500,14 @@ function Storekeeper({ projects, materials, returns = [], refreshAll }: any) {
       rental_price: Number(rentalForm.rental_price || 0),
       notes: rentalForm.notes
     };
+
     const query = editingRentalId
       ? supabase.from("earthwork_machine_rentals").update(payload).eq("id", editingRentalId)
       : supabase.from("earthwork_machine_rentals").insert(payload);
+
     const { error } = await query;
     if (error) return alert(error.message);
+
     setEditingRentalId(null);
     setRentalForm({ machine_type: "", start_date: "", end_date: "", rental_price: "", notes: "" });
     await refreshAll();
