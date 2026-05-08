@@ -92,6 +92,7 @@ export default function Page() {
   const [vigilance, setVigilance] = useState<any[]>([]);
   const [invoices, setInvoices] = useState<any[]>([]);
   const [revenues, setRevenues] = useState<any[]>([]);
+  const [returns, setReturns] = useState<any[]>([]);
   const [userRole, setUserRole] = useState("admin");
   const [earthworks, setEarthworks] = useState<any[]>([]);
   const [earthworkPhotos, setEarthworkPhotos] = useState<any[]>([]);
@@ -133,6 +134,7 @@ export default function Page() {
       supabase.from("project_vigilance").select("*").order("created_at", { ascending: false }),
       supabase.from("project_invoices").select("*").order("invoice_date", { ascending: false }),
       supabase.from("project_revenues").select("*").order("billing_date", { ascending: false }),
+      supabase.from("merchandise_returns").select("*").order("return_date", { ascending: false }),
       supabase.from("earthworks").select("*").order("created_at", { ascending: false }),
       supabase.from("earthwork_photos").select("*").order("created_at", { ascending: false }),
       supabase.from("earthwork_documents").select("*").order("created_at", { ascending: false }),
@@ -155,6 +157,7 @@ export default function Page() {
     setVigilance(vig.data || []);
     setInvoices(inv.data || []);
     setRevenues(rev.data || []);
+    setReturns(ret.data || []);
     setEarthworks(ew.data || []);
     setEarthworkPhotos(ewph.data || []);
     setEarthworkDocs(ewd.data || []);
@@ -240,7 +243,7 @@ export default function Page() {
 
         <section className="p-5 lg:p-8">
           {active === "dashboard" && userRole === "admin" && <Dashboard projects={projects} photos={photos} docs={docs} requests={requests} materials={materials} invoices={invoices} setActive={setActive} />}
-          {active === "storekeeper" && userRole === "admin" && <Storekeeper projects={projects} materials={materials} refreshAll={refreshAll} />}
+          {active === "storekeeper" && userRole === "admin" && <Storekeeper projects={projects} materials={materials} returns={returns} refreshAll={refreshAll} />}
           {active === "projects" && <Projects projects={projects} photos={photos} docs={docs} notes={notes} materials={materials} vigilance={vigilance} invoices={invoices} employees={employees} links={links} planning={planning} refreshAll={refreshAll} />}
           {active === "earthworks" && <Earthworks earthworks={earthworks} photos={earthworkPhotos} docs={earthworkDocs} notes={earthworkNotes} materials={earthworkMaterials} vigilance={earthworkVigilance} planning={earthworkPlanning} refreshAll={refreshAll} />}
           {active === "planning" && <Planning projects={projects} employees={employees} links={links} planning={planning} refreshAll={refreshAll} />}
@@ -345,6 +348,7 @@ function Projects({ projects, photos, docs, notes, materials, vigilance, invoice
           <Field label="Adresse"><Input value={form.address} onChange={(e: any) => setForm({ ...form, address: e.target.value })} /></Field>
           <Field label="Statut"><Select value={form.status} onChange={(e: any) => setForm({ ...form, status: e.target.value })}><option value="preparation">À préparer</option><option value="en_cours">En cours</option><option value="termine">Terminé</option><option value="archive">Archivé</option></Select></Field>
           <Field label="Couleur"><Input type="color" value={form.color} onChange={(e: any) => setForm({ ...form, color: e.target.value })} /></Field>
+          <Field label="Chantier lié"><Select value={form.linked_project} onChange={(e: any) => setForm({ ...form, linked_project: e.target.value })}><option value="">Aucun</option>{projects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field>
           <Field label="Avancement %"><Input type="number" min="0" max="100" value={form.progress} onChange={(e: any) => setForm({ ...form, progress: Number(e.target.value) })} /></Field>
           <div className="md:col-span-3"><Field label="Description"><Textarea value={form.description} onChange={(e: any) => setForm({ ...form, description: e.target.value })} /></Field></div>
           <Button className="md:col-span-3">{editingId ? "Modifier chantier" : "Créer chantier"}</Button>
@@ -1254,7 +1258,7 @@ function Requests({ requests, projects, refreshAll, projectName }: any) {
 function Earthworks({ earthworks, photos, docs, notes, materials, vigilance, planning, refreshAll }: any) {
   const [selectedId, setSelectedId] = useState("");
   const current = earthworks.find((e: any) => e.id === selectedId) || earthworks[0];
-  const [form, setForm] = useState({ name: "", client: "", address: "", description: "", status: "en_cours", color: "#92400e" });
+  const [form, setForm] = useState({ name: "", client: "", address: "", description: "", status: "en_cours", color: "#92400e", linked_project: "" });
   const [editingId, setEditingId] = useState<string | null>(null);
 
   async function saveEarthwork(e: any) {
@@ -1263,7 +1267,7 @@ function Earthworks({ earthworks, photos, docs, notes, materials, vigilance, pla
     const query = editingId ? supabase.from("earthworks").update(form).eq("id", editingId) : supabase.from("earthworks").insert(form);
     const { error } = await query;
     if (error) return alert(error.message);
-    setForm({ name: "", client: "", address: "", description: "", status: "en_cours", color: "#92400e" });
+    setForm({ name: "", client: "", address: "", description: "", status: "en_cours", color: "#92400e", linked_project: "" });
     setEditingId(null);
     await refreshAll();
   }
@@ -1285,13 +1289,13 @@ function EarthworkDetail({ item, photos, docs, notes, materials, vigilance, plan
   async function addNote(e: any) { e.preventDefault(); if (!note) return; const { error } = await supabase.from("earthwork_notes").insert({ earthwork_id: item.id, content: note }); if (error) return alert(error.message); setNote(""); await refreshAll(); }
   async function addMaterial(e: any) { e.preventDefault(); if (!matTitle && !matContent) return; const { error } = await supabase.from("earthwork_materials").insert({ earthwork_id: item.id, title: matTitle || "Matériel", content: matContent }); if (error) return alert(error.message); setMatTitle(""); setMatContent(""); await refreshAll(); }
   async function addVigilance(e: any) { e.preventDefault(); if (!vigTitle && !vigContent) return; const { error } = await supabase.from("earthwork_vigilance").insert({ earthwork_id: item.id, title: vigTitle || "Point de vigilance", content: vigContent }); if (error) return alert(error.message); setVigTitle(""); setVigContent(""); await refreshAll(); }
-  async function addPlanning(e: any) { e.preventDefault(); if (!plan.title || !plan.start_date) return alert("Titre et date obligatoires"); const { error } = await supabase.from("earthwork_planning").insert({ earthwork_id: item.id, ...plan, end_date: plan.end_date || plan.start_date }); if (error) return alert(error.message); setPlan({ title: "", start_date: "", end_date: "", start_time: "", end_time: "", color: item.color || "#92400e", notes: "" }); await refreshAll(); }
+  async function addPlanning(e: any) { e.preventDefault(); if (!plan.title || !plan.start_date) return alert("Titre et date obligatoires"); const { error } = await supabase.from("earthwork_planning").insert({ earthwork_id: item.id, ...plan, start_time: plan.start_time || null, end_time: plan.end_time || null, end_date: plan.end_date || plan.start_date }); if (error) return alert(error.message); setPlan({ title: "", start_date: "", end_date: "", start_time: "", end_time: "", color: item.color || "#92400e", notes: "" }); await refreshAll(); }
   async function updatePlanning(p: any) { const title = prompt("Titre :", p.title || ""); if (title === null) return; const start_date = prompt("Date début :", p.start_date || ""); if (start_date === null) return; const { error } = await supabase.from("earthwork_planning").update({ title, start_date }).eq("id", p.id); if (error) return alert(error.message); await refreshAll(); }
   return <div className="space-y-6"><Card className="border-l-8" style={{ borderLeftColor: item.color || "#92400e" }}><h2 className="text-2xl font-black">{item.name}</h2><p className="text-sm text-slate-500">{item.client} · {item.address}</p>{item.description && <p className="mt-3 rounded-2xl bg-slate-50 p-3 text-sm">{item.description}</p>}</Card><div className="grid gap-6 lg:grid-cols-2"><Card className="bg-amber-50 border-l-8 border-amber-400"><h3 className="mb-3 text-xl font-black text-amber-950">📦 Matériel terrassement</h3><form onSubmit={addMaterial} className="space-y-3"><Field label="Titre"><Input value={matTitle} onChange={(e: any) => setMatTitle(e.target.value)} /></Field><Field label="Détail"><Textarea value={matContent} onChange={(e: any) => setMatContent(e.target.value)} /></Field><Button variant="amber">Ajouter</Button></form><div className="mt-4 space-y-2">{myMaterials.map((m: any) => <div key={m.id} className="rounded-2xl bg-white p-3"><b>{m.title}</b><pre className="mt-2 whitespace-pre-wrap text-sm">{m.content}</pre><Button variant="danger" className="mt-2" onClick={() => deleteRow("earthwork_materials", m.id)}>Supprimer</Button></div>)}</div></Card><Card className="bg-red-50 border-l-8 border-red-500"><h3 className="mb-3 text-xl font-black text-red-950">⚠️ Vigilance terrassement</h3><form onSubmit={addVigilance} className="space-y-3"><Field label="Titre"><Input value={vigTitle} onChange={(e: any) => setVigTitle(e.target.value)} /></Field><Field label="Détail"><Textarea value={vigContent} onChange={(e: any) => setVigContent(e.target.value)} /></Field><Button variant="danger">Ajouter</Button></form><div className="mt-4 space-y-2">{myVigilance.map((v: any) => <div key={v.id} className="rounded-2xl bg-white p-3"><b>{v.title}</b><pre className="mt-2 whitespace-pre-wrap text-sm">{v.content}</pre><Button variant="danger" className="mt-2" onClick={() => deleteRow("earthwork_vigilance", v.id)}>Supprimer</Button></div>)}</div></Card></div><Card><h3 className="mb-3 font-black">Planning terrassement autonome</h3><form onSubmit={addPlanning} className="grid gap-3 md:grid-cols-3"><Field label="Tâche"><Input value={plan.title} onChange={(e: any) => setPlan({ ...plan, title: e.target.value })} /></Field><Field label="Début"><Input type="date" value={plan.start_date} onChange={(e: any) => setPlan({ ...plan, start_date: e.target.value })} /></Field><Field label="Fin"><Input type="date" value={plan.end_date} onChange={(e: any) => setPlan({ ...plan, end_date: e.target.value })} /></Field><Button>Ajouter au planning</Button></form><div className="mt-4 space-y-2">{myPlanning.map((p: any) => <div key={p.id} className="rounded-2xl p-3 text-white" style={{ background: p.color || item.color || "#92400e" }}><b>{p.title}</b><br />{p.start_date} → {p.end_date}<div className="mt-2 flex gap-2"><button onClick={() => updatePlanning(p)} className="rounded-xl bg-white/20 px-3 py-1 text-xs">Modifier</button><button onClick={() => deleteRow("earthwork_planning", p.id)} className="rounded-xl bg-white/20 px-3 py-1 text-xs">Supprimer</button></div></div>)}</div></Card><div className="grid gap-6 lg:grid-cols-2"><Card><h3 className="mb-3 font-black">Photos terrassement</h3><form onSubmit={addPhoto} className="space-y-3"><Field label="Titre"><Input value={photoTitle} onChange={(e: any) => setPhotoTitle(e.target.value)} /></Field><Input name="photo" type="file" accept="image/*" /><Button>Ajouter photo</Button></form><div className="mt-4 grid grid-cols-2 gap-3">{myPhotos.map((p: any) => <div key={p.id}><img src={p.file_url} className="h-32 w-full rounded-2xl object-cover" /><Button variant="danger" className="mt-2" onClick={() => deleteRow("earthwork_photos", p.id)}>Supprimer</Button></div>)}</div></Card><Card><h3 className="mb-3 font-black">Documents terrassement</h3><form onSubmit={addDoc} className="space-y-3"><Field label="Nom"><Input value={docName} onChange={(e: any) => setDocName(e.target.value)} /></Field><Input name="doc" type="file" /><Button>Ajouter document</Button></form><div className="mt-4 space-y-2">{myDocs.map((d: any) => <div key={d.id} className="flex justify-between rounded-2xl bg-slate-50 p-3"><a href={d.file_url} target="_blank" className="font-bold underline">{d.name}</a><button onClick={() => deleteRow("earthwork_documents", d.id)} className="text-red-600 font-bold">Supprimer</button></div>)}</div></Card></div><Card><h3 className="mb-3 font-black">Notes terrassement</h3><form onSubmit={addNote} className="grid gap-3 md:grid-cols-[1fr_120px]"><Input value={note} onChange={(e: any) => setNote(e.target.value)} /><Button>Ajouter</Button></form><div className="mt-4 space-y-2">{myNotes.map((n: any) => <div key={n.id} className="flex justify-between rounded-2xl bg-slate-50 p-3"><span>{n.content}</span><button onClick={() => deleteRow("earthwork_notes", n.id)} className="text-red-600 font-bold">Supprimer</button></div>)}</div></Card></div>;
 }
 
 
-function Storekeeper({ projects, materials, refreshAll }: any) {
+function Storekeeper({ projects, materials, returns = [], refreshAll }: any) {
   const [editingItem, setEditingItem] = useState<any>(null);
   const [form, setForm] = useState({ title: "", content: "" });
 
@@ -1327,22 +1331,90 @@ function Storekeeper({ projects, materials, refreshAll }: any) {
     await refreshAll();
   }
 
+
+  async function uploadMaterialAttachment(item: any, e: any) {
+    const file = e.currentTarget?.files?.[0];
+    if (!file) return;
+    try {
+      const bucket = file.type?.startsWith("image/") ? "photos" : "documents";
+      const attachment_url = await uploadFile(bucket, file);
+      const attachment_type = file.type?.startsWith("image/") ? "photo" : "document";
+      const { error } = await supabase.from("project_materials").update({ attachment_url, attachment_type }).eq("id", item.id);
+      if (error) throw error;
+      await refreshAll();
+    } catch (err: any) {
+      alert(err.message);
+    }
+  }
+
   const todo = materials.filter((m: any) => !m.ready);
   const ready = materials.filter((m: any) => m.ready);
+
+  const [returnForm, setReturnForm] = useState({ project_id: "", supplier: "", amount: "", return_date: "", notes: "" });
+
+  async function addReturn(e: any) {
+    e.preventDefault();
+    if (!returnForm.supplier || !returnForm.amount) return alert("Fournisseur et montant obligatoires");
+    const { error } = await supabase.from("merchandise_returns").insert({
+      project_id: returnForm.project_id || null,
+      supplier: returnForm.supplier,
+      amount: Number(returnForm.amount || 0),
+      return_date: returnForm.return_date || null,
+      notes: returnForm.notes
+    });
+    if (error) return alert(error.message);
+    setReturnForm({ project_id: "", supplier: "", amount: "", return_date: "", notes: "" });
+    await refreshAll();
+  }
+
+  async function deleteReturn(item: any) {
+    if (!confirm("Supprimer ce retour marchandise ?")) return;
+    const { error } = await supabase.from("merchandise_returns").delete().eq("id", item.id);
+    if (error) return alert(error.message);
+    await refreshAll();
+  }
+
+
 
   return (
     <div>
       <Section title="Magasinier" subtitle="Gestion globale du matériel à prévoir pour les chantiers." />
 
       {editingItem && (
-        <Card className="mb-6 border-l-8 border-blue-500">
-          <h3 className="mb-4 text-xl font-black">Modifier matériel</h3>
-          <form onSubmit={saveEdit} className="space-y-3">
-            <Field label="Titre"><Input value={form.title} onChange={(e: any) => setForm({ ...form, title: e.target.value })} /></Field>
-            <Field label="Détail"><Textarea value={form.content} onChange={(e: any) => setForm({ ...form, content: e.target.value })} className="min-h-40" /></Field>
-            <div className="flex gap-2">
+        <Card className="mb-8 border-l-8 border-blue-500 bg-blue-50">
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-2xl font-black">Modifier matériel</h3>
+              <p className="mt-1 text-sm text-slate-600">Zone étendue pour copier/coller une liste complète de matériel.</p>
+            </div>
+            <Badge tone={editingItem.ready ? "green" : "amber"}>{editingItem.ready ? "Prêt" : "À préparer"}</Badge>
+          </div>
+
+          <form onSubmit={saveEdit} className="space-y-5">
+            <div>
+              <label className="text-xs font-bold uppercase text-slate-500">Titre</label>
+              <input
+                className="mt-1 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base font-bold focus:border-slate-500"
+                value={form.title}
+                onChange={(e: any) => setForm({ ...form, title: e.target.value })}
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-bold uppercase text-slate-500">Détail matériel</label>
+              <textarea
+                className="mt-1 min-h-[420px] w-full resize-y rounded-2xl border border-slate-200 bg-white px-4 py-4 text-base leading-7 focus:border-slate-500"
+                value={form.content}
+                onChange={(e: any) => setForm({ ...form, content: e.target.value })}
+              />
+              <p className="mt-2 text-xs text-slate-500">Tu peux coller ici une commande complète, plusieurs références, commentaires fournisseur, quantités, etc.</p>
+            </div>
+
+            <div className="sticky bottom-4 flex flex-wrap gap-2 rounded-2xl bg-white/90 p-3 shadow">
               <Button>Enregistrer</Button>
               <Button type="button" variant="secondary" onClick={() => setEditingItem(null)}>Annuler</Button>
+              {!editingItem.ready && <Button type="button" variant="green" onClick={() => setReady(editingItem, true)}>OK prêt !</Button>}
+              {editingItem.ready && <Button type="button" variant="amber" onClick={() => setReady(editingItem, false)}>Remettre à préparer</Button>}
             </div>
           </form>
         </Card>
@@ -1365,6 +1437,10 @@ function Storekeeper({ projects, materials, refreshAll }: any) {
               <Button variant="green" onClick={() => setReady(m, true)}>OK prêt !</Button>
               <Button variant="secondary" onClick={() => startEdit(m)}>Modifier</Button>
               <Button variant="danger" onClick={() => deleteItem(m)}>Supprimer</Button>
+              <label className="cursor-pointer rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold">Photo/doc<input className="hidden" type="file" onChange={(e: any) => uploadMaterialAttachment(m, e)} /></label>
+              {m.attachment_url && <a href={m.attachment_url} target="_blank" className="rounded-2xl bg-blue-600 px-4 py-2 text-sm font-bold text-white">Voir pièce jointe</a>}
+              <label className="cursor-pointer rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold">Photo/doc<input className="hidden" type="file" onChange={(e: any) => uploadMaterialAttachment(m, e)} /></label>
+              {m.attachment_url && <a href={m.attachment_url} target="_blank" className="rounded-2xl bg-blue-600 px-4 py-2 text-sm font-bold text-white">Voir pièce jointe</a>}
             </div>
           </Card>
         ))}
@@ -1386,6 +1462,32 @@ function Storekeeper({ projects, materials, refreshAll }: any) {
           </Card>
         ))}
       </div>
+
+      <Card className="mt-8 border-l-8 border-purple-500 bg-purple-50">
+        <h3 className="mb-4 text-xl font-black text-purple-950">↩️ Retour marchandise</h3>
+        <form onSubmit={addReturn} className="grid gap-3 md:grid-cols-5">
+          <Field label="Chantier">
+            <Select value={returnForm.project_id} onChange={(e: any) => setReturnForm({ ...returnForm, project_id: e.target.value })}>
+              <option value="">Sans chantier</option>
+              {projects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </Select>
+          </Field>
+          <Field label="Fournisseur"><Input value={returnForm.supplier} onChange={(e: any) => setReturnForm({ ...returnForm, supplier: e.target.value })} /></Field>
+          <Field label="Montant €"><Input type="number" value={returnForm.amount} onChange={(e: any) => setReturnForm({ ...returnForm, amount: e.target.value })} /></Field>
+          <Field label="Date"><Input type="date" value={returnForm.return_date} onChange={(e: any) => setReturnForm({ ...returnForm, return_date: e.target.value })} /></Field>
+          <Field label="Notes"><Input value={returnForm.notes} onChange={(e: any) => setReturnForm({ ...returnForm, notes: e.target.value })} /></Field>
+          <Button className="md:col-span-5">Ajouter retour marchandise</Button>
+        </form>
+        <div className="mt-4 space-y-2">
+          {returns.map((r: any) => (
+            <div key={r.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-white p-3">
+              <span><b>{r.supplier}</b> · {new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(Number(r.amount || 0))} · {r.return_date || "date non renseignée"} · {projectNameLocal(r.project_id)}</span>
+              <Button variant="danger" onClick={() => deleteReturn(r)}>Supprimer</Button>
+            </div>
+          ))}
+        </div>
+      </Card>
+
     </div>
   );
 }
@@ -1393,15 +1495,57 @@ function Storekeeper({ projects, materials, refreshAll }: any) {
 
 function Management({ projects, employees, planning, invoices, revenues, refreshAll }: any) {
   const [form, setForm] = useState({ project_id: "", label: "", amount: "", billing_date: "", notes: "" });
+  const [editingRevenueId, setEditingRevenueId] = useState<string | null>(null);
   function daysBetween(start: string, end: string) { if (!start) return 0; const s = new Date(start); const e = new Date(end || start); return Math.max(0, Math.round((e.getTime() - s.getTime()) / 86400000)) + 1; }
   function employeeCost(employeeId: string) { const e = employees.find((x: any) => x.id === employeeId); return Number(e?.daily_cost || 0); }
   function money(v: number) { return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(v || 0); }
   function projectStats(projectId: string) { const supplierTotal = invoices.filter((i: any) => i.project_id === projectId).reduce((s: number, i: any) => s + Number(i.amount || 0), 0); const revenueTotal = revenues.filter((r: any) => r.project_id === projectId).reduce((s: number, r: any) => s + Number(r.amount || 0), 0); const laborTotal = planning.filter((p: any) => p.project_id === projectId).reduce((s: number, p: any) => s + daysBetween(p.start_date, p.end_date) * employeeCost(p.employee_id), 0); const totalCosts = supplierTotal + laborTotal; const margin = revenueTotal - totalCosts; const marginRate = revenueTotal > 0 ? Math.round((margin / revenueTotal) * 100) : 0; return { supplierTotal, revenueTotal, laborTotal, totalCosts, margin, marginRate }; }
   async function addRevenue(e: any) { e.preventDefault(); if (!form.project_id || !form.amount) return alert("Chantier et montant obligatoires"); const { error } = await supabase.from("project_revenues").insert({ project_id: form.project_id, label: form.label || "Facturation client", amount: Number(form.amount || 0), billing_date: form.billing_date || null, notes: form.notes }); if (error) return alert(error.message); setForm({ project_id: form.project_id, label: "", amount: "", billing_date: "", notes: "" }); await refreshAll(); }
+  function editRevenue(item: any) {
+    setEditingRevenueId(item.id);
+    setForm({
+      project_id: item.project_id || "",
+      label: item.label || "",
+      amount: String(item.amount || ""),
+      billing_date: item.billing_date || "",
+      notes: item.notes || ""
+    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function generateProjectReport(project: any) {
+    const s = projectStats(project.id);
+    const html = `
+      <html>
+        <head><title>Rapport chantier - ${project.name}</title></head>
+        <body style="font-family: Arial; padding: 30px;">
+          <h1>Rapport résultat chantier</h1>
+          <h2>${project.name}</h2>
+          <p><b>Client :</b> ${project.client || ""}</p>
+          <p><b>Adresse :</b> ${project.address || ""}</p>
+          <hr/>
+          <h3>Résultat financier</h3>
+          <p><b>Facturé client :</b> ${money(s.revenueTotal)}</p>
+          <p><b>Factures fournisseurs :</b> ${money(s.supplierTotal)}</p>
+          <p><b>Coût salariés :</b> ${money(s.laborTotal)}</p>
+          <p><b>Coûts totaux :</b> ${money(s.totalCosts)}</p>
+          <p><b>Marge estimée :</b> ${money(s.margin)} (${s.marginRate}%)</p>
+          <hr/>
+          <p>Généré depuis ASB Intranet.</p>
+        </body>
+      </html>`;
+    const w = window.open("", "_blank");
+    if (!w) return alert("Popup bloquée. Autorise les popups pour générer le rapport.");
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    w.print();
+  }
+
   async function deleteRevenue(item: any) { if (!confirm("Supprimer cette facturation client ?")) return; const { error } = await supabase.from("project_revenues").delete().eq("id", item.id); if (error) return alert(error.message); await refreshAll(); }
   return <div><Section title="Gestion" subtitle="Rentabilité chantier : factures fournisseurs + coût salariés + facturation client." />
-    <Card><h3 className="mb-4 text-xl font-black">Ajouter ce qu'on a facturé au client</h3><form onSubmit={addRevenue} className="grid gap-3 md:grid-cols-5"><Field label="Chantier"><Select value={form.project_id} onChange={(e: any) => setForm({ ...form, project_id: e.target.value })}><option value="">Choisir chantier</option>{projects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field><Field label="Libellé"><Input value={form.label} onChange={(e: any) => setForm({ ...form, label: e.target.value })} /></Field><Field label="Montant €"><Input type="number" value={form.amount} onChange={(e: any) => setForm({ ...form, amount: e.target.value })} /></Field><Field label="Date"><Input type="date" value={form.billing_date} onChange={(e: any) => setForm({ ...form, billing_date: e.target.value })} /></Field><Field label="Notes"><Input value={form.notes} onChange={(e: any) => setForm({ ...form, notes: e.target.value })} /></Field><Button className="md:col-span-5" variant="green">Ajouter facturation client</Button></form></Card>
-    <div className="mt-6 grid gap-4 xl:grid-cols-2">{projects.map((p: any) => { const s = projectStats(p.id); return <Card key={p.id} className="border-l-8" style={{ borderLeftColor: s.margin >= 0 ? "#10b981" : "#ef4444" }}><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-xl font-black">{p.name}</h3><p className="text-sm text-slate-500">{p.client}</p></div><Badge tone={s.margin >= 0 ? "green" : "red"}>{s.margin >= 0 ? "Rentable" : "À surveiller"}</Badge></div><div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><div className="rounded-2xl bg-emerald-50 p-3"><p className="text-xs font-bold uppercase text-emerald-700">Facturé client</p><p className="text-xl font-black text-emerald-700">{money(s.revenueTotal)}</p></div><div className="rounded-2xl bg-red-50 p-3"><p className="text-xs font-bold uppercase text-red-700">Factures fournisseurs</p><p className="text-xl font-black text-red-700">{money(s.supplierTotal)}</p></div><div className="rounded-2xl bg-amber-50 p-3"><p className="text-xs font-bold uppercase text-amber-700">Coût salariés</p><p className="text-xl font-black text-amber-700">{money(s.laborTotal)}</p></div><div className={s.margin >= 0 ? "rounded-2xl bg-blue-50 p-3" : "rounded-2xl bg-red-100 p-3"}><p className="text-xs font-bold uppercase">Marge estimée</p><p className="text-xl font-black">{money(s.margin)} · {s.marginRate}%</p></div></div><div className="mt-4 space-y-2">{revenues.filter((r: any) => r.project_id === p.id).map((r: any) => <div key={r.id} className="flex items-center justify-between gap-3 rounded-2xl bg-slate-50 p-3 text-sm"><span><b>{r.label}</b> · {money(Number(r.amount || 0))} · {r.billing_date || "date non renseignée"}</span><Button variant="danger" onClick={() => deleteRevenue(r)}>Supprimer</Button></div>)}</div></Card>; })}</div>
+    <Card><h3 className="mb-4 text-xl font-black">Ajouter ce qu'on a facturé au client</h3><form onSubmit={addRevenue} className="grid gap-3 md:grid-cols-5"><Field label="Chantier"><Select value={form.project_id} onChange={(e: any) => setForm({ ...form, project_id: e.target.value })}><option value="">Choisir chantier</option>{projects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field><Field label="Libellé"><Input value={form.label} onChange={(e: any) => setForm({ ...form, label: e.target.value })} /></Field><Field label="Montant €"><Input type="number" value={form.amount} onChange={(e: any) => setForm({ ...form, amount: e.target.value })} /></Field><Field label="Date"><Input type="date" value={form.billing_date} onChange={(e: any) => setForm({ ...form, billing_date: e.target.value })} /></Field><Field label="Notes"><Input value={form.notes} onChange={(e: any) => setForm({ ...form, notes: e.target.value })} /></Field><div className="flex gap-2 md:col-span-5"><Button variant="green">{editingRevenueId ? "Enregistrer modification" : "Ajouter facturation client"}</Button>{editingRevenueId && <Button type="button" variant="secondary" onClick={() => { setEditingRevenueId(null); setForm({ project_id: "", label: "", amount: "", billing_date: "", notes: "" }); }}>Annuler</Button>}</div></form></Card>
+    <div className="mt-6 grid gap-4 xl:grid-cols-2">{projects.map((p: any) => { const s = projectStats(p.id); return <Card key={p.id} className="border-l-8" style={{ borderLeftColor: s.margin >= 0 ? "#10b981" : "#ef4444" }}><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-xl font-black">{p.name}</h3><p className="text-sm text-slate-500">{p.client}</p></div><div className="flex flex-wrap gap-2"><Badge tone={s.margin >= 0 ? "green" : "red"}>{s.margin >= 0 ? "Rentable" : "À surveiller"}</Badge><Button variant="secondary" onClick={() => generateProjectReport(p)}>Rapport PDF</Button></div></div><div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><div className="rounded-2xl bg-emerald-50 p-3"><p className="text-xs font-bold uppercase text-emerald-700">Facturé client</p><p className="text-xl font-black text-emerald-700">{money(s.revenueTotal)}</p></div><div className="rounded-2xl bg-red-50 p-3"><p className="text-xs font-bold uppercase text-red-700">Factures fournisseurs</p><p className="text-xl font-black text-red-700">{money(s.supplierTotal)}</p></div><div className="rounded-2xl bg-amber-50 p-3"><p className="text-xs font-bold uppercase text-amber-700">Coût salariés</p><p className="text-xl font-black text-amber-700">{money(s.laborTotal)}</p></div><div className={s.margin >= 0 ? "rounded-2xl bg-blue-50 p-3" : "rounded-2xl bg-red-100 p-3"}><p className="text-xs font-bold uppercase">Marge estimée</p><p className="text-xl font-black">{money(s.margin)} · {s.marginRate}%</p></div></div><div className="mt-4 space-y-2">{revenues.filter((r: any) => r.project_id === p.id).map((r: any) => <div key={r.id} className="flex items-center justify-between gap-3 rounded-2xl bg-slate-50 p-3 text-sm"><span><b>{r.label}</b> · {money(Number(r.amount || 0))} · {r.billing_date || "date non renseignée"}</span><div className="flex gap-2"><Button variant="secondary" onClick={() => editRevenue(r)}>Modifier</Button><Button variant="danger" onClick={() => deleteRevenue(r)}>Supprimer</Button></div></div>)}</div></Card>; })}</div>
   </div>;
 }
 

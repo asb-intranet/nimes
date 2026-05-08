@@ -1,16 +1,16 @@
-# ASB Intranet complet V10
+# ASB Intranet complet V13
 
 ## Installation GitHub
 Remplace tous les fichiers du dépôt par le contenu de ce dossier.
 
 ## Supabase
 Dans Supabase > SQL Editor, lance :
-`supabase/schema-complet-v10.sql`
+`supabase/schema-complet-v13.sql`
 
-## V10
-- Nouveau module Magasinier
-- Matériel retiré du tableau de bord et de la fiche chantier
-- Magasinier : modifier / supprimer / OK prêt / remettre à préparer
-- Correction demandes internes priority/status/schema cache
-- Salariés : coût journée
-- Gestion rentabilité conservée
+## V13
+- Magasinier : ajout photo/document sur listes matériel
+- Magasinier : module retour marchandise
+- Terrassement : correction start_time/end_time vides
+- Terrassement : attribution à un chantier lié
+- Gestion : modification/suppression des facturations client
+- Gestion : bouton rapport PDF par chantier via impression navigateur
