@@ -1,9 +1,9 @@
-# ASB Intranet V19 stable
+# ASB Intranet V20
 
-## Correctif
-- Suppression temporaire du bloc Location engin qui bloquait le build Vercel
-- Terrassement reste utilisable
-- On réintégrera Location engin proprement dans une V20 séparée
+- Bouton + Créer un nouveau terrassement
+- Création terrassement masquée par défaut
+- Archiver terrassement
+- Location engin dans fiche terrassement
+- Type engin, dates, prix, notes, modifier, supprimer
 
-## Supabase
-Pas de nouveau SQL nécessaire.
+SQL : supabase/schema-complet-v20.sql
