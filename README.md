@@ -1,23 +1,17 @@
-{
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start"
-  },
-  "dependencies": {
-    "@supabase/supabase-js": "^2.48.1",
-    "lucide-react": "^0.468.0",
-    "next": "14.2.23",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1"
-  },
-  "devDependencies": {
-    "@types/node": "^22.10.2",
-    "@types/react": "^18.3.12",
-    "@types/react-dom": "^18.3.1",
-    "autoprefixer": "^10.4.20",
-    "postcss": "^8.4.49",
-    "tailwindcss": "^3.4.17",
-    "typescript": "^5.6.3"
-  }
-}
+# ASB Intranet complet V9
+
+## Installation GitHub
+Remplace tous les fichiers du dépôt par le contenu de ce dossier.
+
+## Supabase
+Dans Supabase > SQL Editor, lance :
+`supabase/schema-complet-v9.sql`
+
+## V9
+- Tableau de bord recentré sur : Chantiers + En cours + Matériel à prévoir
+- Suppression visuelle des compteurs Terminés / Archivés sur dashboard
+- Matériel à prévoir fortement mis en avant
+- Salariés : coût journée
+- Nouveau module Gestion sous Photos Express
+- Calcul rentabilité : factures fournisseurs + coût salariés + montant facturé client + marge
+- Terrassement préparé avec progress + matériel prêt
