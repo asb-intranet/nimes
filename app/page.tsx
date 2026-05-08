@@ -242,7 +242,6 @@ export default function Page() {
         </header>
 
         <section className="p-5 pb-28 lg:p-8">
-          {active === "home" && <HomeAccess projects={projects} materials={materials} requests={requests} photos={photos} planning={planning} employees={employees} setActive={setActive} userRole={userRole} />}
           {active === "dashboard" && userRole === "admin" && <Dashboard projects={projects} photos={photos} docs={docs} requests={requests} materials={materials} invoices={invoices} setActive={setActive} />}
           {active === "storekeeper" && userRole === "admin" && <Storekeeper projects={projects} materials={materials} returns={returns} refreshAll={refreshAll} />}
           {active === "projects" && <Projects projects={projects} photos={photos} docs={docs} notes={notes} materials={materials} vigilance={vigilance} invoices={invoices} employees={employees} links={links} planning={planning} refreshAll={refreshAll} />}
