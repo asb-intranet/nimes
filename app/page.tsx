@@ -5,12 +5,13 @@ import { supabase } from "@/lib/supabase";
 import { Card, Button, Field, Input, Select, Textarea, Section, Badge } from "@/components/Ui";
 import {
   Building2, Camera, FileText, Users, Truck, MessageSquare, Smartphone,
-  LayoutDashboard, LogOut, Pencil, Trash2, CalendarDays, HardHat, Euro
+  LayoutDashboard, LogOut, Pencil, Trash2, CalendarDays, Package, HardHat, Euro
 } from "lucide-react";
 
 const menu = [
   { id: "dashboard", title: "Tableau de bord", icon: LayoutDashboard },
   { id: "projects", title: "Chantiers", icon: Building2 },
+  { id: "storekeeper", title: "Magasinier", icon: Package },
   { id: "earthworks", title: "Terrassement", icon: HardHat },
   { id: "planning", title: "Planning", icon: CalendarDays },
   { id: "employees", title: "Salariés", icon: Users },
@@ -239,6 +240,7 @@ export default function Page() {
 
         <section className="p-5 lg:p-8">
           {active === "dashboard" && userRole === "admin" && <Dashboard projects={projects} photos={photos} docs={docs} requests={requests} materials={materials} invoices={invoices} setActive={setActive} />}
+          {active === "storekeeper" && userRole === "admin" && <Storekeeper projects={projects} materials={materials} refreshAll={refreshAll} />}
           {active === "projects" && <Projects projects={projects} photos={photos} docs={docs} notes={notes} materials={materials} vigilance={vigilance} invoices={invoices} employees={employees} links={links} planning={planning} refreshAll={refreshAll} />}
           {active === "earthworks" && <Earthworks earthworks={earthworks} photos={earthworkPhotos} docs={earthworkDocs} notes={earthworkNotes} materials={earthworkMaterials} vigilance={earthworkVigilance} planning={earthworkPlanning} refreshAll={refreshAll} />}
           {active === "planning" && <Planning projects={projects} employees={employees} links={links} planning={planning} refreshAll={refreshAll} />}
@@ -253,41 +255,29 @@ export default function Page() {
   );
 }
 
+
 function Dashboard({ projects, photos, docs, requests, materials = [], invoices = [], setActive }: any) {
   const enCours = projects.filter((p: any) => p.status === "en_cours");
-  const toPrepare = materials.filter((m: any) => !m.ready);
-  const ready = materials.filter((m: any) => m.ready);
 
   return (
     <div>
-      <Section title="Tableau de bord" subtitle="Vue rapide : chantiers en cours et matériel à préparer." />
+      <Section title="Tableau de bord" subtitle="Vue rapide des chantiers en cours." />
 
       <div className="grid gap-4 md:grid-cols-3">
         <Card><p className="text-sm text-slate-500">Chantiers</p><p className="text-4xl font-black">{projects.length}</p></Card>
         <Card><p className="text-sm text-slate-500">Chantiers en cours</p><p className="text-4xl font-black text-emerald-600">{enCours.length}</p></Card>
-        <Card className="border-l-8 border-amber-400 bg-amber-50"><p className="text-sm font-bold text-amber-800">Matériel à préparer</p><p className="text-4xl font-black text-amber-700">{toPrepare.length}</p></Card>
+        <Card><p className="text-sm text-slate-500">Demandes internes</p><p className="text-4xl font-black text-amber-600">{requests.length}</p></Card>
       </div>
-
-      <Card className="mt-6 border-l-8 border-amber-400 bg-amber-50">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div><h3 className="text-2xl font-black text-amber-950">📦 Matériel à prévoir</h3><p className="text-sm text-amber-900/70">Visu rapide de ce qui reste à préparer.</p></div>
-          <Badge tone="amber">{ready.length} prêt(s)</Badge>
-        </div>
-        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {toPrepare.slice(0, 12).map((m: any) => {
-            const p = projects.find((x: any) => x.id === m.project_id);
-            return <div key={m.id} className="rounded-3xl bg-white p-4 shadow-sm"><div className="text-xs font-bold uppercase text-amber-700">{p?.name || "Chantier"}</div><div className="mt-1 text-lg font-black">{m.title || m.content || "Matériel"}</div>{m.content && <pre className="mt-2 max-h-24 overflow-auto whitespace-pre-wrap rounded-2xl bg-amber-50 p-2 text-xs">{m.content}</pre>}<div className="mt-3 rounded-full bg-amber-100 px-3 py-1 text-center text-xs font-black text-amber-900">À préparer</div></div>;
-          })}
-          {toPrepare.length === 0 && <div className="rounded-3xl bg-white p-4 text-sm font-bold text-emerald-700">✅ Tout le matériel est prêt.</div>}
-        </div>
-      </Card>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-3">
         {enCours.map((p: any) => (
           <Card key={p.id} className="border-l-8" style={{ borderLeftColor: p.color || "#0f172a" }}>
-            <div className="flex items-start justify-between gap-3"><div><h3 className="font-black">{p.name}</h3><p className="mt-1 text-sm text-slate-500">{p.address}</p></div><Badge tone="green">En cours</Badge></div>
+            <div className="flex items-start justify-between gap-3">
+              <div><h3 className="font-black">{p.name}</h3><p className="mt-1 text-sm text-slate-500">{p.address}</p></div>
+              <Badge tone="green">En cours</Badge>
+            </div>
             <p className="mt-3 text-sm">Photos : <b>{photos.filter((x: any) => x.project_id === p.id).length}</b> · Documents : <b>{docs.filter((x: any) => x.project_id === p.id).length}</b></p>
-            <Button className="mt-4" onClick={() => setActive("projects")}>Ouvrir</Button>
+            <Button className="mt-4" onClick={() => setActive("projects")}>Ouvrir chantier</Button>
           </Card>
         ))}
       </div>
@@ -665,7 +655,6 @@ function ProjectDetail({ project, photos, docs, notes, materials, vigilance, inv
             ["photos", "📸 Photos", projectPhotos.length],
             ["documents", "📄 Documents", projectDocs.length],
             ["intervenants", "👷 Intervenants", assignedEmployees.length],
-            ["materiel", "📦 Matériel", projectMaterials.length],
             ["vigilance", "⚠️ Vigilance", projectVigilance.length],
             ["notes", "📝 Notes", projectNotes.length],
             ["planning", "📅 Planning", projectInterventions.length]
@@ -710,8 +699,8 @@ function ProjectDetail({ project, photos, docs, notes, materials, vigilance, inv
         </Card>
       </div>
 
-      <div className={`${chantierTab === "materiel" || chantierTab === "vigilance" ? "grid" : "hidden"} gap-6 lg:grid-cols-2`}>
-        <Card className={chantierTab === "vigilance" ? "hidden" : "border-l-8 border-amber-400 bg-amber-50"}>
+      <div className={`${chantierTab === "vigilance" ? "grid" : "hidden"} gap-6 lg:grid-cols-2`}>
+        <Card className="hidden">
           <h3 className="mb-4 text-xl font-black text-amber-900">📦 Matériel à prévoir</h3>
 
           <form onSubmit={addMaterial} className="mb-4 space-y-3">
@@ -753,7 +742,7 @@ function ProjectDetail({ project, photos, docs, notes, materials, vigilance, inv
           </div>
         </Card>
 
-        <Card className={chantierTab === "materiel" ? "hidden" : "border-l-8 border-red-500 bg-red-50"}>
+        <Card className={"border-l-8 border-red-500 bg-red-50"}>
           <h3 className="mb-4 text-xl font-black text-red-900">⚠️ À réaliser / points de vigilance</h3>
 
           <form onSubmit={addVigilance} className="mb-4 space-y-3">
@@ -1300,6 +1289,107 @@ function EarthworkDetail({ item, photos, docs, notes, materials, vigilance, plan
   async function updatePlanning(p: any) { const title = prompt("Titre :", p.title || ""); if (title === null) return; const start_date = prompt("Date début :", p.start_date || ""); if (start_date === null) return; const { error } = await supabase.from("earthwork_planning").update({ title, start_date }).eq("id", p.id); if (error) return alert(error.message); await refreshAll(); }
   return <div className="space-y-6"><Card className="border-l-8" style={{ borderLeftColor: item.color || "#92400e" }}><h2 className="text-2xl font-black">{item.name}</h2><p className="text-sm text-slate-500">{item.client} · {item.address}</p>{item.description && <p className="mt-3 rounded-2xl bg-slate-50 p-3 text-sm">{item.description}</p>}</Card><div className="grid gap-6 lg:grid-cols-2"><Card className="bg-amber-50 border-l-8 border-amber-400"><h3 className="mb-3 text-xl font-black text-amber-950">📦 Matériel terrassement</h3><form onSubmit={addMaterial} className="space-y-3"><Field label="Titre"><Input value={matTitle} onChange={(e: any) => setMatTitle(e.target.value)} /></Field><Field label="Détail"><Textarea value={matContent} onChange={(e: any) => setMatContent(e.target.value)} /></Field><Button variant="amber">Ajouter</Button></form><div className="mt-4 space-y-2">{myMaterials.map((m: any) => <div key={m.id} className="rounded-2xl bg-white p-3"><b>{m.title}</b><pre className="mt-2 whitespace-pre-wrap text-sm">{m.content}</pre><Button variant="danger" className="mt-2" onClick={() => deleteRow("earthwork_materials", m.id)}>Supprimer</Button></div>)}</div></Card><Card className="bg-red-50 border-l-8 border-red-500"><h3 className="mb-3 text-xl font-black text-red-950">⚠️ Vigilance terrassement</h3><form onSubmit={addVigilance} className="space-y-3"><Field label="Titre"><Input value={vigTitle} onChange={(e: any) => setVigTitle(e.target.value)} /></Field><Field label="Détail"><Textarea value={vigContent} onChange={(e: any) => setVigContent(e.target.value)} /></Field><Button variant="danger">Ajouter</Button></form><div className="mt-4 space-y-2">{myVigilance.map((v: any) => <div key={v.id} className="rounded-2xl bg-white p-3"><b>{v.title}</b><pre className="mt-2 whitespace-pre-wrap text-sm">{v.content}</pre><Button variant="danger" className="mt-2" onClick={() => deleteRow("earthwork_vigilance", v.id)}>Supprimer</Button></div>)}</div></Card></div><Card><h3 className="mb-3 font-black">Planning terrassement autonome</h3><form onSubmit={addPlanning} className="grid gap-3 md:grid-cols-3"><Field label="Tâche"><Input value={plan.title} onChange={(e: any) => setPlan({ ...plan, title: e.target.value })} /></Field><Field label="Début"><Input type="date" value={plan.start_date} onChange={(e: any) => setPlan({ ...plan, start_date: e.target.value })} /></Field><Field label="Fin"><Input type="date" value={plan.end_date} onChange={(e: any) => setPlan({ ...plan, end_date: e.target.value })} /></Field><Button>Ajouter au planning</Button></form><div className="mt-4 space-y-2">{myPlanning.map((p: any) => <div key={p.id} className="rounded-2xl p-3 text-white" style={{ background: p.color || item.color || "#92400e" }}><b>{p.title}</b><br />{p.start_date} → {p.end_date}<div className="mt-2 flex gap-2"><button onClick={() => updatePlanning(p)} className="rounded-xl bg-white/20 px-3 py-1 text-xs">Modifier</button><button onClick={() => deleteRow("earthwork_planning", p.id)} className="rounded-xl bg-white/20 px-3 py-1 text-xs">Supprimer</button></div></div>)}</div></Card><div className="grid gap-6 lg:grid-cols-2"><Card><h3 className="mb-3 font-black">Photos terrassement</h3><form onSubmit={addPhoto} className="space-y-3"><Field label="Titre"><Input value={photoTitle} onChange={(e: any) => setPhotoTitle(e.target.value)} /></Field><Input name="photo" type="file" accept="image/*" /><Button>Ajouter photo</Button></form><div className="mt-4 grid grid-cols-2 gap-3">{myPhotos.map((p: any) => <div key={p.id}><img src={p.file_url} className="h-32 w-full rounded-2xl object-cover" /><Button variant="danger" className="mt-2" onClick={() => deleteRow("earthwork_photos", p.id)}>Supprimer</Button></div>)}</div></Card><Card><h3 className="mb-3 font-black">Documents terrassement</h3><form onSubmit={addDoc} className="space-y-3"><Field label="Nom"><Input value={docName} onChange={(e: any) => setDocName(e.target.value)} /></Field><Input name="doc" type="file" /><Button>Ajouter document</Button></form><div className="mt-4 space-y-2">{myDocs.map((d: any) => <div key={d.id} className="flex justify-between rounded-2xl bg-slate-50 p-3"><a href={d.file_url} target="_blank" className="font-bold underline">{d.name}</a><button onClick={() => deleteRow("earthwork_documents", d.id)} className="text-red-600 font-bold">Supprimer</button></div>)}</div></Card></div><Card><h3 className="mb-3 font-black">Notes terrassement</h3><form onSubmit={addNote} className="grid gap-3 md:grid-cols-[1fr_120px]"><Input value={note} onChange={(e: any) => setNote(e.target.value)} /><Button>Ajouter</Button></form><div className="mt-4 space-y-2">{myNotes.map((n: any) => <div key={n.id} className="flex justify-between rounded-2xl bg-slate-50 p-3"><span>{n.content}</span><button onClick={() => deleteRow("earthwork_notes", n.id)} className="text-red-600 font-bold">Supprimer</button></div>)}</div></Card></div>;
 }
+
+
+function Storekeeper({ projects, materials, refreshAll }: any) {
+  const [editingItem, setEditingItem] = useState<any>(null);
+  const [form, setForm] = useState({ title: "", content: "" });
+
+  function projectNameLocal(id: string) {
+    return projects.find((p: any) => p.id === id)?.name || "Chantier inconnu";
+  }
+
+  async function setReady(item: any, ready: boolean) {
+    const { error } = await supabase.from("project_materials").update({ ready }).eq("id", item.id);
+    if (error) return alert(error.message);
+    await refreshAll();
+  }
+
+  function startEdit(item: any) {
+    setEditingItem(item);
+    setForm({ title: item.title || "", content: item.content || "" });
+  }
+
+  async function saveEdit(e: any) {
+    e.preventDefault();
+    if (!editingItem) return;
+    const { error } = await supabase.from("project_materials").update({ title: form.title, content: form.content }).eq("id", editingItem.id);
+    if (error) return alert(error.message);
+    setEditingItem(null);
+    setForm({ title: "", content: "" });
+    await refreshAll();
+  }
+
+  async function deleteItem(item: any) {
+    if (!confirm(`Supprimer "${item.title || item.content}" ?`)) return;
+    const { error } = await supabase.from("project_materials").delete().eq("id", item.id);
+    if (error) return alert(error.message);
+    await refreshAll();
+  }
+
+  const todo = materials.filter((m: any) => !m.ready);
+  const ready = materials.filter((m: any) => m.ready);
+
+  return (
+    <div>
+      <Section title="Magasinier" subtitle="Gestion globale du matériel à prévoir pour les chantiers." />
+
+      {editingItem && (
+        <Card className="mb-6 border-l-8 border-blue-500">
+          <h3 className="mb-4 text-xl font-black">Modifier matériel</h3>
+          <form onSubmit={saveEdit} className="space-y-3">
+            <Field label="Titre"><Input value={form.title} onChange={(e: any) => setForm({ ...form, title: e.target.value })} /></Field>
+            <Field label="Détail"><Textarea value={form.content} onChange={(e: any) => setForm({ ...form, content: e.target.value })} className="min-h-40" /></Field>
+            <div className="flex gap-2">
+              <Button>Enregistrer</Button>
+              <Button type="button" variant="secondary" onClick={() => setEditingItem(null)}>Annuler</Button>
+            </div>
+          </form>
+        </Card>
+      )}
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card className="border-l-8 border-amber-400 bg-amber-50"><p className="text-sm font-bold text-amber-800">À préparer</p><p className="text-4xl font-black text-amber-700">{todo.length}</p></Card>
+        <Card className="border-l-8 border-emerald-500 bg-emerald-50"><p className="text-sm font-bold text-emerald-800">Prêt</p><p className="text-4xl font-black text-emerald-700">{ready.length}</p></Card>
+        <Card><p className="text-sm text-slate-500">Total fiches matériel</p><p className="text-4xl font-black">{materials.length}</p></Card>
+      </div>
+
+      <h3 className="mt-8 mb-3 text-xl font-black">📦 À préparer</h3>
+      <div className="grid gap-4 lg:grid-cols-2">
+        {todo.map((m: any) => (
+          <Card key={m.id} className="border-l-8 border-amber-400 bg-amber-50">
+            <div className="text-xs font-bold uppercase text-amber-700">{projectNameLocal(m.project_id)}</div>
+            <h3 className="mt-1 text-xl font-black">{m.title || "Matériel à prévoir"}</h3>
+            {m.content && <pre className="mt-3 whitespace-pre-wrap rounded-2xl bg-white p-3 text-sm">{m.content}</pre>}
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button variant="green" onClick={() => setReady(m, true)}>OK prêt !</Button>
+              <Button variant="secondary" onClick={() => startEdit(m)}>Modifier</Button>
+              <Button variant="danger" onClick={() => deleteItem(m)}>Supprimer</Button>
+            </div>
+          </Card>
+        ))}
+        {todo.length === 0 && <Card><p className="text-sm text-slate-500">Aucun matériel à préparer.</p></Card>}
+      </div>
+
+      <h3 className="mt-8 mb-3 text-xl font-black">✅ Matériel prêt</h3>
+      <div className="grid gap-4 lg:grid-cols-2">
+        {ready.map((m: any) => (
+          <Card key={m.id} className="border-l-8 border-emerald-500 bg-emerald-50">
+            <div className="text-xs font-bold uppercase text-emerald-700">{projectNameLocal(m.project_id)}</div>
+            <h3 className="mt-1 text-xl font-black">✅ {m.title || "Matériel prêt"}</h3>
+            {m.content && <pre className="mt-3 whitespace-pre-wrap rounded-2xl bg-white p-3 text-sm">{m.content}</pre>}
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button variant="amber" onClick={() => setReady(m, false)}>Remettre à préparer</Button>
+              <Button variant="secondary" onClick={() => startEdit(m)}>Modifier</Button>
+              <Button variant="danger" onClick={() => deleteItem(m)}>Supprimer</Button>
+            </div>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 
 function Management({ projects, employees, planning, invoices, revenues, refreshAll }: any) {
   const [form, setForm] = useState({ project_id: "", label: "", amount: "", billing_date: "", notes: "" });
