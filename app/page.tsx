@@ -348,7 +348,7 @@ function Projects({ projects, photos, docs, notes, materials, vigilance, invoice
           <Field label="Adresse"><Input value={form.address} onChange={(e: any) => setForm({ ...form, address: e.target.value })} /></Field>
           <Field label="Statut"><Select value={form.status} onChange={(e: any) => setForm({ ...form, status: e.target.value })}><option value="preparation">À préparer</option><option value="en_cours">En cours</option><option value="termine">Terminé</option><option value="archive">Archivé</option></Select></Field>
           <Field label="Couleur"><Input type="color" value={form.color} onChange={(e: any) => setForm({ ...form, color: e.target.value })} /></Field>
-          <Field label="Chantier lié"><Select value={form.linked_project} onChange={(e: any) => setForm({ ...form, linked_project: e.target.value })}><option value="">Aucun</option>{projects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field>
+          
           <Field label="Avancement %"><Input type="number" min="0" max="100" value={form.progress} onChange={(e: any) => setForm({ ...form, progress: Number(e.target.value) })} /></Field>
           <div className="md:col-span-3"><Field label="Description"><Textarea value={form.description} onChange={(e: any) => setForm({ ...form, description: e.target.value })} /></Field></div>
           <Button className="md:col-span-3">{editingId ? "Modifier chantier" : "Créer chantier"}</Button>
