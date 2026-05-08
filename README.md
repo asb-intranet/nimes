@@ -1,9 +1,9 @@
-# ASB Intranet V19
+# ASB Intranet V19 stable
 
-- Terrassement lié uniquement à un autre terrassement
-- Module Location engin dans fiche terrassement
-- Location : type engin, dates, prix, notes, modifier, supprimer
-- Bouton pour afficher création matériel dans Magasinier
-- Bouton pour afficher création chantier dans Chantiers
+## Correctif
+- Suppression temporaire du bloc Location engin qui bloquait le build Vercel
+- Terrassement reste utilisable
+- On réintégrera Location engin proprement dans une V20 séparée
 
-SQL : supabase/schema-complet-v19.sql
+## Supabase
+Pas de nouveau SQL nécessaire.
