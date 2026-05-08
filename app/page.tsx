@@ -183,6 +183,10 @@ export default function Page() {
   }
 
   useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [active]);
+
+  useEffect(() => {
     if (userRole !== "admin" && !["projects", "planning", "earthworks"].includes(active)) {
       setActive("projects");
     }
@@ -293,12 +297,12 @@ function Projects({ projects, photos, docs, notes, materials, vigilance, invoice
   const [selectedId, setSelectedId] = useState("");
   const current = projects.find((p: any) => p.id === selectedId) || projects.find((p: any) => p.status !== "archive") || projects[0];
   const detailRef = useRef<HTMLDivElement | null>(null);
+  const [detailMode, setDetailMode] = useState(false);
 
   function openProject(id: string) {
     setSelectedId(id);
-    setTimeout(() => {
-      detailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 80);
+    setDetailMode(true);
+    setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 50);
   }
   const [form, setForm] = useState({ name: "", client: "", address: "", description: "", status: "en_cours", color: "#0f172a", progress: 0 });
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -346,9 +350,29 @@ function Projects({ projects, photos, docs, notes, materials, vigilance, invoice
   const activeProjects = projects.filter((p: any) => p.status !== "archive");
   const archivedProjects = projects.filter((p: any) => p.status === "archive");
 
+  if (detailMode && current) {
+    return (
+      <div className="pb-24">
+        <div className="sticky top-0 z-30 mb-4 rounded-3xl border bg-white/95 p-4 shadow-sm backdrop-blur">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold uppercase text-slate-500">Fiche chantier</p>
+              <h2 className="text-2xl font-black">{current.name}</h2>
+            </div>
+            <Button variant="secondary" onClick={() => { setDetailMode(false); window.scrollTo({ top: 0, behavior: "smooth" }); }}>
+              ← Retour liste chantiers
+            </Button>
+          </div>
+        </div>
+
+        <ProjectDetail project={current} photos={photos} docs={docs} notes={notes} materials={materials} vigilance={vigilance} invoices={invoices} employees={employees} links={links} planning={planning} refreshAll={refreshAll} />
+      </div>
+    );
+  }
+
   return (
     <div>
-      <Section title="Gestion chantier" subtitle="Clique sur Accéder : la fiche chantier s’ouvre directement plus bas." />
+      <Section title="Gestion chantier" subtitle="Clique sur Accéder : la fiche chantier s’ouvre directement en pleine page." />
 
       <Card>
         <form onSubmit={saveProject} className="grid gap-3 md:grid-cols-3">
@@ -402,7 +426,7 @@ function Projects({ projects, photos, docs, notes, materials, vigilance, invoice
           {archivedProjects.length === 0 && <Card><p className="text-sm text-slate-500">Aucun chantier archivé.</p></Card>}
         </div>
 
-        <div ref={detailRef}><ProjectDetail project={current} photos={photos} docs={docs} notes={notes} materials={materials} vigilance={vigilance} invoices={invoices} employees={employees} links={links} planning={planning} refreshAll={refreshAll} /></div>
+        <Card><h3 className="text-xl font-black">Sélection chantier</h3><p className="mt-2 text-sm text-slate-500">Clique sur “Accéder” pour ouvrir la fiche chantier en pleine page.</p></Card>
       </div>
     </div>
   );

@@ -1,11 +1,12 @@
-# ASB Intranet complet V16
+# ASB Intranet complet V17
 
 ## Modifications
-- Suppression du module Accueil
-- Retour au tableau de bord comme écran de départ
-- Dans Chantiers : bouton Accéder/Consulter ouvre directement la fiche chantier plus bas sans devoir défiler manuellement
-- Pas de SQL obligatoire
+- Ouverture des modules avec retour automatique en haut de page
+- Chantiers : bouton Accéder ouvre la fiche chantier en pleine page
+- Bouton Retour liste chantiers
+- Plus besoin de défiler pour atteindre la fiche chantier
+- Matériel reste dans Magasinier
 
 ## Supabase
-Pas de nouvelle table.
-Tu peux lancer `supabase/schema-complet-v16.sql` uniquement si tu veux garder l’historique à jour.
+Pas de SQL obligatoire.
+Optionnel : `supabase/schema-complet-v17.sql`
