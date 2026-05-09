@@ -1924,6 +1924,7 @@ function Storekeeper({ projects, materials, invoices = [], returns = [], refresh
     await refreshAll();
   }
 
+  const [showReturnForm, setShowReturnForm] = useState(false);
   const [returnForm, setReturnForm] = useState({ project_id: "", supplier: "", amount: "", return_date: "", notes: "" });
 
   async function addReturn(e: any) {
@@ -1952,9 +1953,10 @@ function Storekeeper({ projects, materials, invoices = [], returns = [], refresh
     <div>
       <Section title="Magasinier" subtitle="Matériel et création rapide de factures/retours. Les factures détaillées restent dans les fiches chantier." />
       <div className="mb-4 flex flex-wrap gap-2">
-        <Button onClick={() => { setShowCreateMaterial(!showCreateMaterial); setShowInvoiceForm(false); setEditingItem(null); }}>{showCreateMaterial ? "Fermer création matériel" : "+ Créer matériel à prévoir"}</Button>
-        <Button variant="green" onClick={() => { setShowInvoiceForm(!showInvoiceForm); setShowCreateMaterial(false); setEditingItem(null); }}>{showInvoiceForm ? "Fermer création facture" : "+ Créer facture"}</Button>
-        {(showCreateMaterial || showInvoiceForm || editingItem) && <Button variant="secondary" onClick={() => { setShowCreateMaterial(false); setShowInvoiceForm(false); setEditingItem(null); }}>← Retour</Button>}
+        <Button onClick={() => { setShowCreateMaterial(!showCreateMaterial); setShowInvoiceForm(false); setShowReturnForm(false); setEditingItem(null); }}>{showCreateMaterial ? "Fermer création matériel" : "+ Créer matériel à prévoir"}</Button>
+        <Button variant="green" onClick={() => { setShowInvoiceForm(!showInvoiceForm); setShowCreateMaterial(false); setShowReturnForm(false); setEditingItem(null); }}>{showInvoiceForm ? "Fermer création facture" : "+ Créer facture"}</Button>
+        <Button variant="amber" onClick={() => { setShowReturnForm(!showReturnForm); setShowCreateMaterial(false); setShowInvoiceForm(false); setEditingItem(null); }}>{showReturnForm ? "Fermer création retour" : "+ Créer retour"}</Button>
+        {(showCreateMaterial || showInvoiceForm || showReturnForm || editingItem) && <Button variant="secondary" onClick={() => { setShowCreateMaterial(false); setShowInvoiceForm(false); setShowReturnForm(false); setEditingItem(null); }}>← Retour</Button>}
       </div>
 
       {showCreateMaterial && <Card className="mb-6 border-l-8 border-slate-900">
@@ -2101,13 +2103,19 @@ function Storekeeper({ projects, materials, invoices = [], returns = [], refresh
             <h3 className="text-xl font-black text-blue-950">🧾 Factures fournisseurs chantier</h3>
             <p className="mt-1 text-sm text-blue-900/70">Liste masquée ici pour alléger : les factures se consultent directement dans chaque fiche chantier.</p>
           </div>
-          <Button variant="green" onClick={() => { setShowInvoiceForm(true); setShowCreateMaterial(false); window.scrollTo({ top: 0, behavior: "smooth" }); }}>+ Créer facture</Button>
+          <Button variant="green" onClick={() => { setShowInvoiceForm(true); setShowCreateMaterial(false); setShowReturnForm(false); window.scrollTo({ top: 0, behavior: "smooth" }); }}>+ Créer facture</Button>
         </div>
       </Card>
 
       <Card className="mt-8 border-l-8 border-purple-500 bg-purple-50">
-        <h3 className="mb-4 text-xl font-black text-purple-950">↩️ Retour marchandise</h3>
-        <form onSubmit={addReturn} className="grid gap-3 md:grid-cols-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="text-xl font-black text-purple-950">↩️ Retours marchandise</h3>
+            <p className="mt-1 text-sm text-purple-900/70">Formulaire masqué pour alléger la page. Clique sur + Créer retour pour l’afficher.</p>
+          </div>
+          <Button variant="amber" onClick={() => { setShowReturnForm(!showReturnForm); setShowCreateMaterial(false); setShowInvoiceForm(false); window.scrollTo({ top: 0, behavior: "smooth" }); }}>{showReturnForm ? "Fermer création retour" : "+ Créer retour"}</Button>
+        </div>
+        {showReturnForm && <form onSubmit={addReturn} className="mt-4 grid gap-3 md:grid-cols-5">
           <Field label="Chantier">
             <Select value={returnForm.project_id} onChange={(e: any) => setReturnForm({ ...returnForm, project_id: e.target.value })}>
               <option value="">Sans chantier</option>
@@ -2118,8 +2126,8 @@ function Storekeeper({ projects, materials, invoices = [], returns = [], refresh
           <Field label="Montant €"><Input type="number" value={returnForm.amount} onChange={(e: any) => setReturnForm({ ...returnForm, amount: e.target.value })} /></Field>
           <Field label="Date"><Input type="date" value={returnForm.return_date} onChange={(e: any) => setReturnForm({ ...returnForm, return_date: e.target.value })} /></Field>
           <Field label="Notes"><Input value={returnForm.notes} onChange={(e: any) => setReturnForm({ ...returnForm, notes: e.target.value })} /></Field>
-          <Button className="md:col-span-5">Ajouter retour marchandise</Button>
-        </form>
+          <div className="flex flex-wrap gap-2 md:col-span-5"><Button>Ajouter retour marchandise</Button><Button type="button" variant="secondary" onClick={() => setShowReturnForm(false)}>Retour</Button></div>
+        </form>}
         <div className="mt-4 space-y-2">
           {returns.map((r: any) => (
             <div key={r.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-white p-3">

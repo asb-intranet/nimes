@@ -1,0 +1,10 @@
+V25 - Ajustement Magasinier
+
+- Ajout du bouton + Créer retour à côté de :
+  - + Créer matériel à prévoir
+  - + Créer facture
+- Le formulaire de retour marchandise est masqué par défaut.
+- Le formulaire retour peut être ouvert/fermé avec + Créer retour.
+- Ajout d'un bouton Retour pour refermer le formulaire retour.
+- Les boutons création matériel / facture / retour ferment automatiquement les autres formulaires pour alléger visuellement la page.
+- Aucun changement SQL.
