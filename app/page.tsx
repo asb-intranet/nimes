@@ -21,40 +21,6 @@ const menu = [
   { id: "management", title: "Gestion", icon: Euro }
 ];
 
-function normalizeRole(role: string) {
-  return (role || "salarie")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/\s+/g, "_");
-}
-
-function canAccessMenu(role: string, menuId: string) {
-  const cleanRole = normalizeRole(role);
-
-  if (cleanRole === "admin") return true;
-
-  // Règle V29 : un salarié voit tout sauf Gestion, Salariés et Terrassement.
-  if (cleanRole === "salarie") {
-    return !["management", "employees", "earthworks"].includes(menuId);
-  }
-
-  // Sécurité par défaut pour les autres profils en attendant le réglage fin par rôle.
-  if (cleanRole === "chef_chantier" || cleanRole === "chef" || cleanRole === "terrain") {
-    return ["dashboard", "projects", "storekeeper", "planning", "vehicles", "requests", "mobile"].includes(menuId);
-  }
-
-  if (cleanRole === "magasinier") {
-    return ["dashboard", "projects", "storekeeper", "planning", "vehicles", "requests", "mobile"].includes(menuId);
-  }
-
-  if (cleanRole === "bureau") {
-    return ["dashboard", "projects", "storekeeper", "planning", "vehicles", "requests", "mobile", "management"].includes(menuId);
-  }
-
-  return ["dashboard", "projects", "planning", "requests", "mobile"].includes(menuId);
-}
-
 const statusLabels: any = { preparation: "À préparer", en_cours: "En cours", termine: "Terminé", archive: "Archivé" };
 const statusTone: any = { preparation: "amber", en_cours: "green", termine: "blue", archive: "slate" };
 
@@ -145,50 +111,21 @@ export default function Page() {
   const [earthworkRentals, setEarthworkRentals] = useState<any[]>([]);
   
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data }) => {
+    supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
-      if (data.session) {
-        await loadUserRole(data.session.user);
-        refreshAll();
-      } else {
-        setUserRole("salarie");
-      }
+      setUserRole(data.session?.user?.user_metadata?.role || "admin");
+      if (data.session) refreshAll();
       setLoading(false);
     });
 
-    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, currentSession) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, currentSession) => {
       setSession(currentSession);
-      if (currentSession) {
-        await loadUserRole(currentSession.user);
-        refreshAll();
-      } else {
-        setUserRole("salarie");
-      }
+      setUserRole(currentSession?.user?.user_metadata?.role || "admin");
+      if (currentSession) refreshAll();
     });
 
     return () => listener.subscription.unsubscribe();
   }, []);
-
-  async function loadUserRole(user: any) {
-    const fallbackRole = user?.user_metadata?.role || "salarie";
-
-    try {
-      const { data, error } = await supabase
-        .from("profils")
-        .select("role")
-        .eq("id", user.id)
-        .maybeSingle();
-
-      if (!error && data?.role) {
-        setUserRole(data.role);
-        return;
-      }
-    } catch (_error) {
-      // Si la table profils ou la colonne role n'est pas disponible, on garde le rôle Auth.
-    }
-
-    setUserRole(fallbackRole);
-  }
 
   async function refreshAll() {
     const [p, ph, d, e, l, n, v, r, pl, mat, vig, inv, rev, ret, ew, ewph, ewd, ewn, ewm, ewv, ewp, ewr] = await Promise.all([
@@ -260,8 +197,8 @@ export default function Page() {
   }, [active]);
 
   useEffect(() => {
-    if (!canAccessMenu(userRole, active)) {
-      setActive("dashboard");
+    if (userRole !== "admin" && !["projects", "planning", "earthworks"].includes(active)) {
+      setActive("projects");
     }
   }, [userRole, active]);
 
@@ -294,7 +231,7 @@ export default function Page() {
         </div>
 
         <nav className="space-y-2">
-          {menu.filter((m) => canAccessMenu(userRole, m.id)).map((m) => {
+          {menu.filter((m) => userRole === "admin" || ["projects", "planning", "earthworks"].includes(m.id)).map((m) => {
             const Icon = m.icon;
             return (
               <button key={m.id} onClick={() => setActive(m.id)} className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-bold ${active === m.id ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"}`}>
@@ -319,7 +256,7 @@ export default function Page() {
             </Button>
             {mobileMenuOpen && (
               <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
-                {menu.filter((m) => canAccessMenu(userRole, m.id)).map((m) => {
+                {menu.filter((m) => userRole === "admin" || ["projects", "planning", "earthworks"].includes(m.id)).map((m) => {
                   const Icon = m.icon;
                   return (
                     <Button key={m.id} variant={active === m.id ? "primary" : "secondary"} onClick={() => { setActive(m.id); setMobileMenuOpen(false); }}>
@@ -333,16 +270,16 @@ export default function Page() {
         </header>
 
         <section className="p-5 pb-28 lg:p-8">
-          {active === "dashboard" && canAccessMenu(userRole, "dashboard") && <Dashboard projects={projects} photos={photos} docs={docs} requests={requests} materials={materials} invoices={invoices} setActive={setActive} />}
-          {active === "storekeeper" && canAccessMenu(userRole, "storekeeper") && <Storekeeper projects={projects} materials={materials} invoices={invoices} returns={returns} refreshAll={refreshAll} />}
-          {active === "projects" && canAccessMenu(userRole, "projects") && <Projects projects={projects} photos={photos} docs={docs} notes={notes} materials={materials} vigilance={vigilance} invoices={invoices} employees={employees} links={links} planning={planning} refreshAll={refreshAll} />}
-          {active === "earthworks" && canAccessMenu(userRole, "earthworks") && <Earthworks earthworks={earthworks} photos={earthworkPhotos} docs={earthworkDocs} notes={earthworkNotes} materials={earthworkMaterials} vigilance={earthworkVigilance} planning={earthworkPlanning} rentals={earthworkRentals} refreshAll={refreshAll} />}
-          {active === "planning" && canAccessMenu(userRole, "planning") && <Planning projects={projects} employees={employees} links={links} planning={planning} refreshAll={refreshAll} />}
-          {active === "employees" && canAccessMenu(userRole, "employees") && <Employees employees={employees} projects={projects} refreshAll={refreshAll} />}
-          {active === "vehicles" && canAccessMenu(userRole, "vehicles") && <Vehicles vehicles={vehicles} refreshAll={refreshAll} />}
-          {active === "requests" && canAccessMenu(userRole, "requests") && <Requests requests={requests} projects={projects} employees={employees} refreshAll={refreshAll} projectName={projectName} />}
-          {active === "mobile" && canAccessMenu(userRole, "mobile") && <Mobile projects={projects} refreshAll={refreshAll} />}
-          {active === "management" && canAccessMenu(userRole, "management") && <Management projects={projects} employees={employees} planning={planning} invoices={invoices} revenues={revenues} refreshAll={refreshAll} />}
+          {active === "dashboard" && userRole === "admin" && <Dashboard projects={projects} photos={photos} docs={docs} requests={requests} materials={materials} invoices={invoices} setActive={setActive} />}
+          {active === "storekeeper" && userRole === "admin" && <Storekeeper projects={projects} materials={materials} invoices={invoices} returns={returns} refreshAll={refreshAll} />}
+          {active === "projects" && <Projects projects={projects} photos={photos} docs={docs} notes={notes} materials={materials} vigilance={vigilance} invoices={invoices} employees={employees} links={links} planning={planning} refreshAll={refreshAll} />}
+          {active === "earthworks" && <Earthworks earthworks={earthworks} photos={earthworkPhotos} docs={earthworkDocs} notes={earthworkNotes} materials={earthworkMaterials} vigilance={earthworkVigilance} planning={earthworkPlanning} rentals={earthworkRentals} refreshAll={refreshAll} />}
+          {active === "planning" && <Planning projects={projects} employees={employees} links={links} planning={planning} refreshAll={refreshAll} />}
+          {active === "employees" && userRole === "admin" && <Employees employees={employees} projects={projects} refreshAll={refreshAll} />}
+          {active === "vehicles" && userRole === "admin" && <Vehicles vehicles={vehicles} refreshAll={refreshAll} />}
+          {active === "requests" && userRole === "admin" && <Requests requests={requests} projects={projects} employees={employees} refreshAll={refreshAll} projectName={projectName} />}
+          {active === "mobile" && userRole === "admin" && <Mobile projects={projects} refreshAll={refreshAll} />}
+          {active === "management" && userRole === "admin" && <Management projects={projects} employees={employees} planning={planning} invoices={invoices} revenues={revenues} refreshAll={refreshAll} />}
         </section>
       </main>
     </div>
