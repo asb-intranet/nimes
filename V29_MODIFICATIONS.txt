@@ -1,14 +1,21 @@
-V29 - Accès par rôle salarié
+V29 - Modifications ASB Intranet
 
-Objectif : adapter le menu affiché selon le rôle utilisateur Supabase.
+Terrassements :
+- Ajout du planning terrassement dans le menu général Terrassement.
+- Ajout d'un champ facturation client prévue sur la fiche terrassement.
+- Ajout des factures terrassement après création du chantier terrassement.
+- Ajout d'un rapport PDF terrassement : facturation client, factures, locations d'engins, solde/marge estimée.
+- Modification du planning terrassement directement dans la fiche, sans popup navigateur.
+- Matériel terrassement : ajout, modification, suppression, pièce jointe photo/document.
+- Points de vigilance terrassement : ajout, modification, suppression, pièce jointe photo/document.
 
-Modifications :
-- lecture du rôle utilisateur depuis la table public.profils, colonne role
-- fallback sur user_metadata.role si le profil n'est pas trouvé
-- rôle salarie : accès à tout sauf Gestion, Salariés et Terrassement
-- admin : accès complet à tous les modules
-- menu desktop et menu mobile filtrés selon le rôle
-- pages protégées côté interface selon le rôle
-- normalisation du rôle pour accepter salarie / salarié
+Magasinier / Gestion :
+- Les retours marchandise sont déduits des dépenses chantier dans la partie Gestion.
+- Les retours apparaissent dans le rapport PDF de gestion chantier.
 
-Aucun changement SQL obligatoire si la table profils contient déjà id + role.
+Affectations :
+- Les affectations de salariés sont allégées : les chantiers archivés ne sont plus affichés dans la sélection et dans les affectations visibles.
+- Les données d'affectation restent en base pour historique, mais elles ne polluent plus l'affichage courant.
+
+Base Supabase :
+- Nouveau fichier SQL schema-complet-v29.sql à exécuter dans Supabase.

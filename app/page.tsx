@@ -109,6 +109,7 @@ export default function Page() {
   const [earthworkVigilance, setEarthworkVigilance] = useState<any[]>([]);
   const [earthworkPlanning, setEarthworkPlanning] = useState<any[]>([]);
   const [earthworkRentals, setEarthworkRentals] = useState<any[]>([]);
+  const [earthworkInvoices, setEarthworkInvoices] = useState<any[]>([]);
   
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -128,7 +129,7 @@ export default function Page() {
   }, []);
 
   async function refreshAll() {
-    const [p, ph, d, e, l, n, v, r, pl, mat, vig, inv, rev, ret, ew, ewph, ewd, ewn, ewm, ewv, ewp, ewr] = await Promise.all([
+    const [p, ph, d, e, l, n, v, r, pl, mat, vig, inv, rev, ret, ew, ewph, ewd, ewn, ewm, ewv, ewp, ewr, ewi] = await Promise.all([
       supabase.from("projects").select("*").order("created_at", { ascending: false }),
       supabase.from("chantier_photos").select("*").order("created_at", { ascending: false }),
       supabase.from("chantier_documents").select("*").order("created_at", { ascending: false }),
@@ -150,7 +151,8 @@ export default function Page() {
       supabase.from("earthwork_materials").select("*").order("created_at", { ascending: false }),
       supabase.from("earthwork_vigilance").select("*").order("created_at", { ascending: false }),
       supabase.from("earthwork_planning").select("*").order("start_date", { ascending: true }),
-      supabase.from("earthwork_machine_rentals").select("*").order("start_date", { ascending: true })
+      supabase.from("earthwork_machine_rentals").select("*").order("start_date", { ascending: true }),
+      supabase.from("earthwork_invoices").select("*").order("invoice_date", { ascending: false })
     ]);
 
     setProjects(p.data || []);
@@ -175,6 +177,7 @@ export default function Page() {
     setEarthworkVigilance(ewv.data || []);
     setEarthworkPlanning(ewp.data || []);
     setEarthworkRentals(ewr.data || []);
+    setEarthworkInvoices(ewi.data || []);
   }
 
   async function signIn(e: any) {
@@ -273,13 +276,13 @@ export default function Page() {
           {active === "dashboard" && userRole === "admin" && <Dashboard projects={projects} photos={photos} docs={docs} requests={requests} materials={materials} invoices={invoices} setActive={setActive} />}
           {active === "storekeeper" && userRole === "admin" && <Storekeeper projects={projects} materials={materials} invoices={invoices} returns={returns} refreshAll={refreshAll} />}
           {active === "projects" && <Projects projects={projects} photos={photos} docs={docs} notes={notes} materials={materials} vigilance={vigilance} invoices={invoices} employees={employees} links={links} planning={planning} refreshAll={refreshAll} />}
-          {active === "earthworks" && <Earthworks earthworks={earthworks} photos={earthworkPhotos} docs={earthworkDocs} notes={earthworkNotes} materials={earthworkMaterials} vigilance={earthworkVigilance} planning={earthworkPlanning} rentals={earthworkRentals} refreshAll={refreshAll} />}
+          {active === "earthworks" && <Earthworks earthworks={earthworks} photos={earthworkPhotos} docs={earthworkDocs} notes={earthworkNotes} materials={earthworkMaterials} vigilance={earthworkVigilance} planning={earthworkPlanning} rentals={earthworkRentals} earthworkInvoices={earthworkInvoices} refreshAll={refreshAll} />}
           {active === "planning" && <Planning projects={projects} employees={employees} links={links} planning={planning} refreshAll={refreshAll} />}
           {active === "employees" && userRole === "admin" && <Employees employees={employees} projects={projects} refreshAll={refreshAll} />}
           {active === "vehicles" && userRole === "admin" && <Vehicles vehicles={vehicles} refreshAll={refreshAll} />}
           {active === "requests" && userRole === "admin" && <Requests requests={requests} projects={projects} employees={employees} refreshAll={refreshAll} projectName={projectName} />}
           {active === "mobile" && userRole === "admin" && <Mobile projects={projects} refreshAll={refreshAll} />}
-          {active === "management" && userRole === "admin" && <Management projects={projects} employees={employees} planning={planning} invoices={invoices} revenues={revenues} refreshAll={refreshAll} />}
+          {active === "management" && userRole === "admin" && <Management projects={projects} employees={employees} planning={planning} invoices={invoices} revenues={revenues} returns={returns} refreshAll={refreshAll} />}
         </section>
       </main>
     </div>
@@ -1063,6 +1066,7 @@ function Planning({ projects, employees, links, planning, refreshAll }: any) {
   });
 
   function projectNameLocal(id: string) { return projects.find((p: any) => p.id === id)?.name || "Chantier inconnu"; }
+  const activeProjects = projects.filter((p: any) => p.status !== "archive");
   function employeeName(id: string) { const e = employees.find((x: any) => x.id === id); return e ? `${e.firstname} ${e.lastname}` : "Salarié inconnu"; }
   function projectColor(id: string) { return projects.find((p: any) => p.id === id)?.color || "#0f172a"; }
 
@@ -1172,7 +1176,7 @@ function Planning({ projects, employees, links, planning, refreshAll }: any) {
             <Field label="Chantier"><Select value={form.project_id} onChange={(e: any) => {
               const project = projects.find((p: any) => p.id === e.target.value);
               setForm({ ...form, project_id: e.target.value, employee_ids: [], color: project?.color || form.color });
-            }}><option value="">Choisir chantier</option>{projects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field>
+            }}><option value="">Choisir chantier</option>{activeProjects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field>
             <Field label="Tâche"><Input value={form.title} onChange={(e: any) => setForm({ ...form, title: e.target.value })} placeholder="Ex : Pose isolation, RDV client..." /></Field>
             <Field label="Date début"><Input type="date" value={form.start_date} onChange={(e: any) => setForm({ ...form, start_date: e.target.value })} /></Field>
             <Field label="Date fin"><Input type="date" value={form.end_date} onChange={(e: any) => setForm({ ...form, end_date: e.target.value })} /></Field>
@@ -1291,6 +1295,8 @@ function Employees({ employees, projects, refreshAll }: any) {
   async function removeAssignment(assignment: any) { if (!confirm("Retirer cette affectation ?")) return; const { error } = await supabase.from("employee_projects").delete().eq("id", assignment.id); if (error) return alert(error.message); await refreshEmployeesAll(); }
   function employeeName(id: string) { const e = employees.find((x: any) => x.id === id); return e ? `${e.firstname} ${e.lastname}` : "Salarié inconnu"; }
   function projectNameLocal(id: string) { return projects.find((p: any) => p.id === id)?.name || "Chantier inconnu"; }
+  const activeProjects = projects.filter((p: any) => p.status !== "archive");
+  const activeAssignments = assignments.filter((a: any) => activeProjects.find((p: any) => p.id === a.project_id));
   return (
     <div>
       <Section title="Gestion salariés" subtitle="Création, modification, coût journée et affectation aux chantiers." />
@@ -1310,7 +1316,7 @@ function Employees({ employees, projects, refreshAll }: any) {
         </form></Card>}
         <Card><h3 className="mb-4 font-black">Affecter un salarié à un chantier</h3><form onSubmit={assign} className="space-y-3"><Field label="Salarié"><Select value={employeeId} onChange={(e: any) => setEmployeeId(e.target.value)}><option value="">Choisir salarié</option>{employees.map((e: any) => <option key={e.id} value={e.id}>{e.firstname} {e.lastname} — {e.position || e.role}</option>)}</Select></Field><Field label="Chantier"><Select value={projectId} onChange={(e: any) => setProjectId(e.target.value)}><option value="">Choisir chantier</option>{projects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field><Button>Affecter au chantier</Button><p className="text-xs text-slate-500">Les affectations détaillées restent visibles dans chaque fiche chantier pour garder cette page légère.</p></form></Card>
       </div>
-      <div className="mt-6 grid gap-4 md:grid-cols-3">{employees.map((e: any) => { const employeeAssignments = assignments.filter((a: any) => a.employee_id === e.id); return <Card key={e.id}><div className="flex items-start justify-between gap-3"><div><h3 className="font-black">{e.firstname} {e.lastname}</h3><p className="text-sm text-slate-500">{e.position}</p><p className="text-sm font-bold text-slate-700">{e.daily_cost ? `${e.daily_cost} €/jour` : "Coût journée non renseigné"}</p></div><Badge>{e.role}</Badge></div><div className="mt-4 space-y-1"><p className="text-xs font-bold uppercase text-slate-500">Chantiers affectés</p>{employeeAssignments.map((a: any) => <div key={a.id} className="rounded-xl bg-slate-50 px-3 py-2 text-xs font-bold">{projectNameLocal(a.project_id)}</div>)}</div><div className="mt-4 grid grid-cols-2 gap-2"><Button variant="secondary" onClick={() => editEmployee(e)}>Modifier</Button><Button variant="danger" onClick={() => deleteEmployee(e)}>Supprimer</Button></div></Card>; })}</div>
+      <div className="mt-6 grid gap-4 md:grid-cols-3">{employees.map((e: any) => { const employeeAssignments = activeAssignments.filter((a: any) => a.employee_id === e.id); return <Card key={e.id}><div className="flex items-start justify-between gap-3"><div><h3 className="font-black">{e.firstname} {e.lastname}</h3><p className="text-sm text-slate-500">{e.position}</p><p className="text-sm font-bold text-slate-700">{e.daily_cost ? `${e.daily_cost} €/jour` : "Coût journée non renseigné"}</p></div><Badge>{e.role}</Badge></div><div className="mt-4 space-y-1"><p className="text-xs font-bold uppercase text-slate-500">Chantiers affectés</p>{employeeAssignments.map((a: any) => <div key={a.id} className="rounded-xl bg-slate-50 px-3 py-2 text-xs font-bold">{projectNameLocal(a.project_id)}</div>)}</div><div className="mt-4 grid grid-cols-2 gap-2"><Button variant="secondary" onClick={() => editEmployee(e)}>Modifier</Button><Button variant="danger" onClick={() => deleteEmployee(e)}>Supprimer</Button></div></Card>; })}</div>
     </div>
   );
 }
@@ -1514,7 +1520,8 @@ function Requests({ requests, projects, employees = [], refreshAll, projectName 
       <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-4">
         <Card><p className="text-xs font-bold uppercase text-slate-500">Demandes</p><p className="text-4xl font-black">{requests.length}</p></Card>
         <Card className="border-l-8 border-blue-500 bg-blue-50"><p className="text-xs font-bold uppercase text-blue-700">Ouvertes</p><p className="text-4xl font-black text-blue-700">{openRequests.length}</p></Card>
-        <Card className="border-l-8 border-orange-500 bg-orange-50"><p className="text-xs font-bold uppercase text-orange-700">Haute/Urgente</p><p className="text-4xl font-black text-orange-700">{requests.filter((r: any) => ["haute", "urgente"].includes(String(r.priority).toLowerCase())).length}</p></Card>
+  
+      <Card className="border-l-8 border-orange-500 bg-orange-50"><p className="text-xs font-bold uppercase text-orange-700">Haute/Urgente</p><p className="text-4xl font-black text-orange-700">{requests.filter((r: any) => ["haute", "urgente"].includes(String(r.priority).toLowerCase())).length}</p></Card>
         <Card className="border-l-8 border-emerald-500 bg-emerald-50"><p className="text-xs font-bold uppercase text-emerald-700">Planifiées</p><p className="text-4xl font-black text-emerald-700">{requests.filter((r: any) => r.planned_date).length}</p></Card>
       </div>
 
@@ -1548,7 +1555,7 @@ function Requests({ requests, projects, employees = [], refreshAll, projectName 
 }
 
 
-function Earthworks({ earthworks, photos, docs, notes, materials, vigilance, planning, rentals = [], refreshAll }: any) {
+function Earthworks({ earthworks, photos, docs, notes, materials, vigilance, planning, rentals = [], earthworkInvoices = [], refreshAll }: any) {
   const [selectedId, setSelectedId] = useState("");
   const [detailMode, setDetailMode] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
@@ -1560,20 +1567,21 @@ function Earthworks({ earthworks, photos, docs, notes, materials, vigilance, pla
     description: "",
     status: "en_cours",
     color: "#92400e",
-    linked_project: ""
+    linked_project: "",
+    client_billing: ""
   });
 
   const current = earthworks.find((e: any) => e.id === selectedId) || earthworks[0];
 
   function resetForm() {
     setEditingId(null);
-    setForm({ name: "", client: "", address: "", description: "", status: "en_cours", color: "#92400e", linked_project: "" });
+    setForm({ name: "", client: "", address: "", description: "", status: "en_cours", color: "#92400e", linked_project: "", client_billing: "" });
   }
 
   async function saveEarthwork(e: any) {
     e.preventDefault();
     if (!form.name) return alert("Nom terrassement obligatoire");
-    const payload = { ...form, linked_project: form.linked_project || null };
+    const payload = { ...form, linked_project: form.linked_project || null, client_billing: Number(form.client_billing || 0) };
     const query = editingId
       ? supabase.from("earthworks").update(payload).eq("id", editingId)
       : supabase.from("earthworks").insert(payload);
@@ -1594,7 +1602,8 @@ function Earthworks({ earthworks, photos, docs, notes, materials, vigilance, pla
       description: item.description || "",
       status: item.status || "en_cours",
       color: item.color || "#92400e",
-      linked_project: item.linked_project || ""
+      linked_project: item.linked_project || "",
+      client_billing: String(item.client_billing || "")
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -1630,7 +1639,7 @@ function Earthworks({ earthworks, photos, docs, notes, materials, vigilance, pla
             <Button variant="secondary" onClick={() => { setDetailMode(false); window.scrollTo({ top: 0, behavior: "smooth" }); }}>← Retour liste terrassements</Button>
           </div>
         </div>
-        <EarthworkDetail item={current} photos={photos} docs={docs} notes={notes} materials={materials} vigilance={vigilance} planning={planning} rentals={rentals} refreshAll={refreshAll} />
+        <EarthworkDetail item={current} photos={photos} docs={docs} notes={notes} materials={materials} vigilance={vigilance} planning={planning} rentals={rentals} invoices={earthworkInvoices} refreshAll={refreshAll} />
       </div>
     );
   }
@@ -1642,6 +1651,17 @@ function Earthworks({ earthworks, photos, docs, notes, materials, vigilance, pla
         {showCreate ? "Fermer création terrassement" : "+ Créer un nouveau terrassement"}
       </Button>
 
+      <Card className="mb-6 border-l-8 border-orange-500 bg-orange-50">
+        <h3 className="mb-3 text-xl font-black text-orange-950">Planning terrassement général</h3>
+        <div className="grid gap-3 md:grid-cols-3">
+          {planning.slice(0, 9).map((p: any) => {
+            const ew = earthworks.find((e: any) => e.id === p.earthwork_id);
+            return <div key={p.id} className="rounded-2xl bg-white p-3 text-sm"><b>{p.title}</b><br /><span className="text-slate-500">{ew?.name || "Terrassement"} · {p.start_date || ""} → {p.end_date || ""}</span></div>;
+          })}
+          {planning.length === 0 && <p className="text-sm text-orange-900">Aucune tâche terrassement planifiée.</p>}
+        </div>
+      </Card>
+
       {showCreate && (
         <Card className="mb-6 border-l-8 border-orange-700">
           <form onSubmit={saveEarthwork} className="grid gap-3 md:grid-cols-3">
@@ -1650,6 +1670,7 @@ function Earthworks({ earthworks, photos, docs, notes, materials, vigilance, pla
             <Field label="Adresse"><Input value={form.address} onChange={(e: any) => setForm({ ...form, address: e.target.value })} /></Field>
             <Field label="Statut"><Select value={form.status} onChange={(e: any) => setForm({ ...form, status: e.target.value })}><option value="en_cours">En cours</option><option value="termine">Terminé</option><option value="archive">Archivé</option></Select></Field>
             <Field label="Couleur"><Input type="color" value={form.color} onChange={(e: any) => setForm({ ...form, color: e.target.value })} /></Field>
+            <Field label="Facturation client prévue €"><Input type="number" value={form.client_billing || ""} onChange={(e: any) => setForm({ ...form, client_billing: e.target.value })} /></Field>
             <Field label="Terrassement lié"><Select value={form.linked_project || ""} onChange={(e: any) => setForm({ ...form, linked_project: e.target.value })}><option value="">Aucun terrassement lié</option>{earthworks.filter((x: any) => x.id !== editingId).map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field>
             <div className="md:col-span-3"><Field label="Description"><Textarea value={form.description} onChange={(e: any) => setForm({ ...form, description: e.target.value })} /></Field></div>
             <div className="flex gap-2 md:col-span-3"><Button>{editingId ? "Modifier terrassement" : "Créer terrassement"}</Button>{editingId && <Button type="button" variant="secondary" onClick={resetForm}>Annuler</Button>}</div>
@@ -1676,7 +1697,7 @@ function Earthworks({ earthworks, photos, docs, notes, materials, vigilance, pla
   );
 }
 
-function EarthworkDetail({ item, photos, docs, notes, materials, vigilance, planning, rentals = [], refreshAll }: any) {
+function EarthworkDetail({ item, photos, docs, notes, materials, vigilance, planning, rentals = [], invoices = [], refreshAll }: any) {
   const [photoTitle, setPhotoTitle] = useState("");
   const [docName, setDocName] = useState("");
   const [note, setNote] = useState("");
@@ -1687,6 +1708,13 @@ function EarthworkDetail({ item, photos, docs, notes, materials, vigilance, plan
   const [plan, setPlan] = useState({ title: "", start_date: "", end_date: "", start_time: "", end_time: "", color: "#92400e", notes: "" });
   const [rentalForm, setRentalForm] = useState({ machine_type: "", start_date: "", end_date: "", rental_price: "", notes: "" });
   const [editingRentalId, setEditingRentalId] = useState<string | null>(null);
+  const [invoiceForm, setInvoiceForm] = useState({ supplier: "", amount: "", invoice_date: "", notes: "" });
+  const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(null);
+  const [editingPlanningId, setEditingPlanningId] = useState<string | null>(null);
+  const [editingMaterialId, setEditingMaterialId] = useState<string | null>(null);
+  const [editingVigilanceId, setEditingVigilanceId] = useState<string | null>(null);
+  const [materialFile, setMaterialFile] = useState<any>(null);
+  const [vigilanceFile, setVigilanceFile] = useState<any>(null);
 
   if (!item) return <Card><p>Sélectionne ou crée un terrassement.</p></Card>;
 
@@ -1697,6 +1725,10 @@ function EarthworkDetail({ item, photos, docs, notes, materials, vigilance, plan
   const myVigilance = vigilance.filter((x: any) => x.earthwork_id === item.id);
   const myPlanning = planning.filter((x: any) => x.earthwork_id === item.id);
   const myRentals = rentals.filter((x: any) => x.earthwork_id === item.id);
+  const myInvoices = invoices.filter((x: any) => x.earthwork_id === item.id);
+  const money = (v: number) => new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(v || 0);
+  const invoicesTotal = myInvoices.reduce((s: number, i: any) => s + Number(i.amount || 0), 0);
+  const rentalsTotal = myRentals.reduce((s: number, r: any) => s + Number(r.rental_price || 0), 0);
 
   async function deleteRow(table: string, id: string) {
     if (!confirm("Supprimer ?")) return;
@@ -1738,20 +1770,52 @@ function EarthworkDetail({ item, photos, docs, notes, materials, vigilance, plan
 
   async function addMaterial(e: any) {
     e.preventDefault();
-    if (!matTitle && !matContent) return;
-    const { error } = await supabase.from("earthwork_materials").insert({ earthwork_id: item.id, title: matTitle || "Matériel", content: matContent });
+    if (!matTitle && !matContent && !materialFile) return;
+    let attachment_url = null;
+    let attachment_type = null;
+    if (materialFile) {
+      const bucket = materialFile.type?.startsWith("image/") ? "photos" : "documents";
+      attachment_url = await uploadFile(bucket, materialFile);
+      attachment_type = materialFile.type?.startsWith("image/") ? "photo" : "document";
+    }
+    const payload = { earthwork_id: item.id, title: matTitle || "Matériel", content: matContent, attachment_url, attachment_type };
+    const query = editingMaterialId ? supabase.from("earthwork_materials").update(payload).eq("id", editingMaterialId) : supabase.from("earthwork_materials").insert(payload);
+    const { error } = await query;
     if (error) return alert(error.message);
-    setMatTitle(""); setMatContent("");
+    setEditingMaterialId(null); setMatTitle(""); setMatContent(""); setMaterialFile(null);
     await refreshAll();
+  }
+
+  function editMaterial(m: any) {
+    setEditingMaterialId(m.id);
+    setMatTitle(m.title || "");
+    setMatContent(m.content || "");
+    setMaterialFile(null);
   }
 
   async function addVigilance(e: any) {
     e.preventDefault();
-    if (!vigTitle && !vigContent) return;
-    const { error } = await supabase.from("earthwork_vigilance").insert({ earthwork_id: item.id, title: vigTitle || "Point de vigilance", content: vigContent });
+    if (!vigTitle && !vigContent && !vigilanceFile) return;
+    let attachment_url = null;
+    let attachment_type = null;
+    if (vigilanceFile) {
+      const bucket = vigilanceFile.type?.startsWith("image/") ? "photos" : "documents";
+      attachment_url = await uploadFile(bucket, vigilanceFile);
+      attachment_type = vigilanceFile.type?.startsWith("image/") ? "photo" : "document";
+    }
+    const payload = { earthwork_id: item.id, title: vigTitle || "Point de vigilance", content: vigContent, attachment_url, attachment_type };
+    const query = editingVigilanceId ? supabase.from("earthwork_vigilance").update(payload).eq("id", editingVigilanceId) : supabase.from("earthwork_vigilance").insert(payload);
+    const { error } = await query;
     if (error) return alert(error.message);
-    setVigTitle(""); setVigContent("");
+    setEditingVigilanceId(null); setVigTitle(""); setVigContent(""); setVigilanceFile(null);
     await refreshAll();
+  }
+
+  function editVigilance(v: any) {
+    setEditingVigilanceId(v.id);
+    setVigTitle(v.title || "");
+    setVigContent(v.content || "");
+    setVigilanceFile(null);
   }
 
   async function addPlanning(e: any) {
@@ -1787,22 +1851,89 @@ function EarthworkDetail({ item, photos, docs, notes, materials, vigilance, plan
     await refreshAll();
   }
 
-  async function updatePlanning(p: any) {
-    const title = prompt("Titre :", p.title || "");
-    if (title === null) return;
-    const start_date = prompt("Date début :", p.start_date || "");
-    if (start_date === null) return;
-    const { error } = await supabase.from("earthwork_planning").update({ title, start_date }).eq("id", p.id);
+  function editPlanning(p: any) {
+    setEditingPlanningId(p.id);
+    setPlan({ title: p.title || "", start_date: p.start_date || "", end_date: p.end_date || "", start_time: p.start_time || "", end_time: p.end_time || "", color: p.color || item.color || "#92400e", notes: p.notes || "" });
+  }
+
+  async function savePlanning(e: any) {
+    e.preventDefault();
+    if (!plan.title || !plan.start_date) return alert("Titre et date obligatoires");
+    const payload = { earthwork_id: item.id, ...plan, start_time: plan.start_time || null, end_time: plan.end_time || null, end_date: plan.end_date || plan.start_date };
+    const query = editingPlanningId ? supabase.from("earthwork_planning").update(payload).eq("id", editingPlanningId) : supabase.from("earthwork_planning").insert(payload);
+    const { error } = await query;
+    if (error) return alert(error.message);
+    setEditingPlanningId(null);
+    setPlan({ title: "", start_date: "", end_date: "", start_time: "", end_time: "", color: item.color || "#92400e", notes: "" });
+    await refreshAll();
+  }
+
+  async function saveInvoice(e: any) {
+    e.preventDefault();
+    if (!invoiceForm.supplier || !invoiceForm.amount) return alert("Fournisseur et montant obligatoires");
+    const payload = { earthwork_id: item.id, supplier: invoiceForm.supplier, amount: Number(invoiceForm.amount || 0), invoice_date: invoiceForm.invoice_date || null, notes: invoiceForm.notes };
+    const query = editingInvoiceId ? supabase.from("earthwork_invoices").update(payload).eq("id", editingInvoiceId) : supabase.from("earthwork_invoices").insert(payload);
+    const { error } = await query;
+    if (error) return alert(error.message);
+    setEditingInvoiceId(null);
+    setInvoiceForm({ supplier: "", amount: "", invoice_date: "", notes: "" });
+    await refreshAll();
+  }
+
+  function editInvoice(i: any) {
+    setEditingInvoiceId(i.id);
+    setInvoiceForm({ supplier: i.supplier || "", amount: String(i.amount || ""), invoice_date: i.invoice_date || "", notes: i.notes || "" });
+  }
+
+  async function deleteInvoice(i: any) {
+    if (!confirm("Supprimer cette facture terrassement ?")) return;
+    const { error } = await supabase.from("earthwork_invoices").delete().eq("id", i.id);
     if (error) return alert(error.message);
     await refreshAll();
+  }
+
+  function generateEarthworkReport() {
+    const clientBilling = Number(item.client_billing || 0);
+    const totalCosts = invoicesTotal + rentalsTotal;
+    const margin = clientBilling - totalCosts;
+    const marginRate = clientBilling > 0 ? Math.round((margin / clientBilling) * 100) : 0;
+    const html = `<html><head><title>Rapport terrassement - ${item.name}</title><style>@page{size:A4;margin:14mm}body{font-family:Arial,sans-serif;background:#f1f5f9;color:#0f172a}.page{max-width:980px;margin:auto;background:white;padding:28px}.header{border-bottom:4px solid #92400e;padding-bottom:16px}.logo{height:70px}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:20px}.card{border-radius:20px;padding:14px;background:#f8fafc;border:1px solid #e2e8f0}.value{font-size:24px;font-weight:900}.section{margin-top:24px}table{width:100%;border-collapse:collapse;font-size:13px}th{background:#0f172a;color:white;text-align:left;padding:10px}td{padding:10px;border-bottom:1px solid #e2e8f0}.summary{margin-top:22px;border-radius:24px;padding:20px;background:${margin>=0?'#ecfdf5':'#fef2f2'};border-left:10px solid ${margin>=0?'#10b981':'#ef4444'}}@media print{body{background:white}.page{padding:0}}</style></head><body><div class="page"><div class="header"><img class="logo" src="/logo-asb.png"/><h1>Rapport terrassement / rentabilité</h1><p><b>${item.name}</b> · ${item.client || ''}</p><p>${item.address || ''}</p></div><div class="grid"><div class="card"><b>Facturation client</b><div class="value">${money(clientBilling)}</div></div><div class="card"><b>Factures</b><div class="value">${money(invoicesTotal)}</div></div><div class="card"><b>Locations engins</b><div class="value">${money(rentalsTotal)}</div></div><div class="card"><b>Marge</b><div class="value">${money(margin)} · ${marginRate}%</div></div></div><div class="summary"><b>Synthèse</b><div style="font-size:34px;font-weight:900">${margin>=0?'+':''}${money(margin)}</div><p>Coût total terrassement : ${money(totalCosts)}. À comparer avec la facturation client enregistrée sur la fiche.</p></div><div class="section"><h2>Factures terrassement</h2><table><thead><tr><th>Fournisseur</th><th>Date</th><th>Montant</th><th>Notes</th></tr></thead><tbody>${myInvoices.map((i:any)=>`<tr><td><b>${i.supplier||'Fournisseur'}</b></td><td>${i.invoice_date||''}</td><td>${money(Number(i.amount||0))}</td><td>${i.notes||''}</td></tr>`).join('') || '<tr><td colspan="4">Aucune facture.</td></tr>'}</tbody></table></div><div class="section"><h2>Locations d’engins</h2><table><thead><tr><th>Engin</th><th>Début</th><th>Fin</th><th>Montant</th><th>Notes</th></tr></thead><tbody>${myRentals.map((r:any)=>`<tr><td><b>${r.machine_type||'Engin'}</b></td><td>${r.start_date||''}</td><td>${r.end_date||''}</td><td>${money(Number(r.rental_price||0))}</td><td>${r.notes||''}</td></tr>`).join('') || '<tr><td colspan="5">Aucune location.</td></tr>'}</tbody></table></div><p style="font-size:12px;color:#64748b;margin-top:22px">Document interne ASB — rapport terrassement.</p></div></body></html>`;
+    const w = window.open("", "_blank");
+    if (!w) return alert("Popup bloquée. Autorise les popups pour générer le rapport.");
+    w.document.write(html); w.document.close(); w.focus(); setTimeout(() => w.print(), 300);
   }
 
   return (
     <div className="space-y-6">
       <Card className="border-l-8" style={{ borderLeftColor: item.color || "#92400e" }}>
-        <h2 className="text-2xl font-black">{item.name}</h2>
-        <p className="text-sm text-slate-500">{item.client} · {item.address}</p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-2xl font-black">{item.name}</h2>
+            <p className="text-sm text-slate-500">{item.client} · {item.address}</p>
+          </div>
+          <Button variant="secondary" onClick={generateEarthworkReport}>Rapport terrassement PDF</Button>
+        </div>
         {item.description && <p className="mt-3 rounded-2xl bg-slate-50 p-3 text-sm">{item.description}</p>}
+        <div className="mt-4 grid gap-3 md:grid-cols-4">
+          <div className="rounded-2xl bg-emerald-50 p-3"><p className="text-xs font-bold uppercase text-emerald-700">Facturé client</p><p className="text-xl font-black text-emerald-700">{money(Number(item.client_billing || 0))}</p></div>
+          <div className="rounded-2xl bg-red-50 p-3"><p className="text-xs font-bold uppercase text-red-700">Factures</p><p className="text-xl font-black text-red-700">{money(invoicesTotal)}</p></div>
+          <div className="rounded-2xl bg-orange-50 p-3"><p className="text-xs font-bold uppercase text-orange-700">Locations engins</p><p className="text-xl font-black text-orange-700">{money(rentalsTotal)}</p></div>
+          <div className="rounded-2xl bg-blue-50 p-3"><p className="text-xs font-bold uppercase text-blue-700">Solde estimé</p><p className="text-xl font-black text-blue-700">{money(Number(item.client_billing || 0) - invoicesTotal - rentalsTotal)}</p></div>
+        </div>
+      </Card>
+
+      <Card className="border-l-8 border-emerald-500 bg-emerald-50">
+        <h3 className="mb-3 text-xl font-black text-emerald-950">💶 Factures terrassement</h3>
+        <form onSubmit={saveInvoice} className="grid gap-3 md:grid-cols-5">
+          <Field label="Fournisseur"><Input value={invoiceForm.supplier} onChange={(e: any) => setInvoiceForm({ ...invoiceForm, supplier: e.target.value })} /></Field>
+          <Field label="Montant €"><Input type="number" value={invoiceForm.amount} onChange={(e: any) => setInvoiceForm({ ...invoiceForm, amount: e.target.value })} /></Field>
+          <Field label="Date facture"><Input type="date" value={invoiceForm.invoice_date} onChange={(e: any) => setInvoiceForm({ ...invoiceForm, invoice_date: e.target.value })} /></Field>
+          <Field label="Notes"><Input value={invoiceForm.notes} onChange={(e: any) => setInvoiceForm({ ...invoiceForm, notes: e.target.value })} /></Field>
+          <div className="flex gap-2 md:col-span-5"><Button variant="green">{editingInvoiceId ? "Modifier facture" : "Ajouter facture"}</Button>{editingInvoiceId && <Button type="button" variant="secondary" onClick={() => { setEditingInvoiceId(null); setInvoiceForm({ supplier: "", amount: "", invoice_date: "", notes: "" }); }}>Annuler</Button>}</div>
+        </form>
+        <div className="mt-4 space-y-2">
+          {myInvoices.map((i: any) => <div key={i.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-white p-3"><span><b>{i.supplier || "Fournisseur"}</b> · {i.invoice_date || ""} · {money(Number(i.amount || 0))}</span><div className="flex gap-2"><Button variant="secondary" onClick={() => editInvoice(i)}>Modifier</Button><Button variant="danger" onClick={() => deleteInvoice(i)}>Supprimer</Button></div></div>)}
+        </div>
       </Card>
 
       <Card className="border-l-8 border-orange-500 bg-orange-50">
@@ -1821,11 +1952,11 @@ function EarthworkDetail({ item, photos, docs, notes, materials, vigilance, plan
       </Card>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <Card className="bg-amber-50 border-l-8 border-amber-400"><h3 className="mb-3 text-xl font-black text-amber-950">📦 Matériel terrassement</h3><form onSubmit={addMaterial} className="space-y-3"><Field label="Titre"><Input value={matTitle} onChange={(e: any) => setMatTitle(e.target.value)} /></Field><Field label="Détail"><Textarea value={matContent} onChange={(e: any) => setMatContent(e.target.value)} /></Field><Button variant="amber">Ajouter</Button></form><div className="mt-4 space-y-2">{myMaterials.map((m: any) => <div key={m.id} className="rounded-2xl bg-white p-3"><b>{m.title}</b><pre className="mt-2 whitespace-pre-wrap text-sm">{m.content}</pre><Button variant="danger" className="mt-2" onClick={() => deleteRow("earthwork_materials", m.id)}>Supprimer</Button></div>)}</div></Card>
-        <Card className="bg-red-50 border-l-8 border-red-500"><h3 className="mb-3 text-xl font-black text-red-950">⚠️ Vigilance terrassement</h3><form onSubmit={addVigilance} className="space-y-3"><Field label="Titre"><Input value={vigTitle} onChange={(e: any) => setVigTitle(e.target.value)} /></Field><Field label="Détail"><Textarea value={vigContent} onChange={(e: any) => setVigContent(e.target.value)} /></Field><Button variant="danger">Ajouter</Button></form><div className="mt-4 space-y-2">{myVigilance.map((v: any) => <div key={v.id} className="rounded-2xl bg-white p-3"><b>{v.title}</b><pre className="mt-2 whitespace-pre-wrap text-sm">{v.content}</pre><Button variant="danger" className="mt-2" onClick={() => deleteRow("earthwork_vigilance", v.id)}>Supprimer</Button></div>)}</div></Card>
+        <Card className="bg-amber-50 border-l-8 border-amber-400"><h3 className="mb-3 text-xl font-black text-amber-950">📦 Matériel terrassement</h3><form onSubmit={addMaterial} className="space-y-3"><Field label="Titre"><Input value={matTitle} onChange={(e: any) => setMatTitle(e.target.value)} /></Field><Field label="Détail"><Textarea value={matContent} onChange={(e: any) => setMatContent(e.target.value)} /></Field><Field label="Photo ou document"><Input type="file" onChange={(e: any) => setMaterialFile(e.target.files?.[0] || null)} /></Field><div className="flex gap-2"><Button variant="amber">{editingMaterialId ? "Modifier" : "Ajouter"}</Button>{editingMaterialId && <Button type="button" variant="secondary" onClick={() => { setEditingMaterialId(null); setMatTitle(""); setMatContent(""); setMaterialFile(null); }}>Annuler</Button>}</div></form><div className="mt-4 space-y-2">{myMaterials.map((m: any) => <div key={m.id} className="rounded-2xl bg-white p-3"><b>{m.title}</b><pre className="mt-2 whitespace-pre-wrap text-sm">{m.content}</pre>{m.attachment_url && <a href={m.attachment_url} target="_blank" className="mt-2 inline-block font-bold underline">Voir pièce jointe</a>}<div className="mt-2 flex gap-2"><Button variant="secondary" onClick={() => editMaterial(m)}>Modifier</Button><Button variant="danger" onClick={() => deleteRow("earthwork_materials", m.id)}>Supprimer</Button></div></div>)}</div></Card>
+        <Card className="bg-red-50 border-l-8 border-red-500"><h3 className="mb-3 text-xl font-black text-red-950">⚠️ Vigilance terrassement</h3><form onSubmit={addVigilance} className="space-y-3"><Field label="Titre"><Input value={vigTitle} onChange={(e: any) => setVigTitle(e.target.value)} /></Field><Field label="Détail"><Textarea value={vigContent} onChange={(e: any) => setVigContent(e.target.value)} /></Field><Field label="Photo ou document"><Input type="file" onChange={(e: any) => setVigilanceFile(e.target.files?.[0] || null)} /></Field><div className="flex gap-2"><Button variant="danger">{editingVigilanceId ? "Modifier" : "Ajouter"}</Button>{editingVigilanceId && <Button type="button" variant="secondary" onClick={() => { setEditingVigilanceId(null); setVigTitle(""); setVigContent(""); setVigilanceFile(null); }}>Annuler</Button>}</div></form><div className="mt-4 space-y-2">{myVigilance.map((v: any) => <div key={v.id} className="rounded-2xl bg-white p-3"><b>{v.title}</b><pre className="mt-2 whitespace-pre-wrap text-sm">{v.content}</pre>{v.attachment_url && <a href={v.attachment_url} target="_blank" className="mt-2 inline-block font-bold underline">Voir pièce jointe</a>}<div className="mt-2 flex gap-2"><Button variant="secondary" onClick={() => editVigilance(v)}>Modifier</Button><Button variant="danger" onClick={() => deleteRow("earthwork_vigilance", v.id)}>Supprimer</Button></div></div>)}</div></Card>
       </div>
 
-      <Card><h3 className="mb-3 font-black">Planning terrassement autonome</h3><form onSubmit={addPlanning} className="grid gap-3 md:grid-cols-3"><Field label="Tâche"><Input value={plan.title} onChange={(e: any) => setPlan({ ...plan, title: e.target.value })} /></Field><Field label="Début"><Input type="date" value={plan.start_date} onChange={(e: any) => setPlan({ ...plan, start_date: e.target.value })} /></Field><Field label="Fin"><Input type="date" value={plan.end_date} onChange={(e: any) => setPlan({ ...plan, end_date: e.target.value })} /></Field><Button>Ajouter au planning</Button></form><div className="mt-4 space-y-2">{myPlanning.map((p: any) => <div key={p.id} className="rounded-2xl p-3 text-white" style={{ background: p.color || item.color || "#92400e" }}><b>{p.title}</b><br />{p.start_date} → {p.end_date}<div className="mt-2 flex gap-2"><button onClick={() => updatePlanning(p)} className="rounded-xl bg-white/20 px-3 py-1 text-xs">Modifier</button><button onClick={() => deleteRow("earthwork_planning", p.id)} className="rounded-xl bg-white/20 px-3 py-1 text-xs">Supprimer</button></div></div>)}</div></Card>
+      <Card><h3 className="mb-3 font-black">Planning terrassement autonome</h3><form onSubmit={savePlanning} className="grid gap-3 md:grid-cols-3"><Field label="Tâche"><Input value={plan.title} onChange={(e: any) => setPlan({ ...plan, title: e.target.value })} /></Field><Field label="Début"><Input type="date" value={plan.start_date} onChange={(e: any) => setPlan({ ...plan, start_date: e.target.value })} /></Field><Field label="Fin"><Input type="date" value={plan.end_date} onChange={(e: any) => setPlan({ ...plan, end_date: e.target.value })} /></Field><div className="flex gap-2 md:col-span-3"><Button>{editingPlanningId ? "Modifier planning" : "Ajouter au planning"}</Button>{editingPlanningId && <Button type="button" variant="secondary" onClick={() => { setEditingPlanningId(null); setPlan({ title: "", start_date: "", end_date: "", start_time: "", end_time: "", color: item.color || "#92400e", notes: "" }); }}>Annuler</Button>}</div></form><div className="mt-4 space-y-2">{myPlanning.map((p: any) => <div key={p.id} className="rounded-2xl p-3 text-white" style={{ background: p.color || item.color || "#92400e" }}><b>{p.title}</b><br />{p.start_date} → {p.end_date}<div className="mt-2 flex gap-2"><button onClick={() => editPlanning(p)} className="rounded-xl bg-white/20 px-3 py-1 text-xs">Modifier</button><button onClick={() => deleteRow("earthwork_planning", p.id)} className="rounded-xl bg-white/20 px-3 py-1 text-xs">Supprimer</button></div></div>)}</div></Card>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card><h3 className="mb-3 font-black">Photos terrassement</h3><form onSubmit={addPhoto} className="space-y-3"><Field label="Titre"><Input value={photoTitle} onChange={(e: any) => setPhotoTitle(e.target.value)} /></Field><Input name="photo" type="file" accept="image/*" /><Button>Ajouter photo</Button></form><div className="mt-4 grid grid-cols-2 gap-3">{myPhotos.map((p: any) => <div key={p.id}><img src={p.file_url} className="h-32 w-full rounded-2xl object-cover" /><Button variant="danger" className="mt-2" onClick={() => deleteRow("earthwork_photos", p.id)}>Supprimer</Button></div>)}</div></Card>
@@ -2026,7 +2157,7 @@ function Storekeeper({ projects, materials, invoices = [], returns = [], refresh
             <Field label="Chantier">
               <Select value={createForm.project_id} onChange={(e: any) => setCreateForm({ ...createForm, project_id: e.target.value })}>
                 <option value="">Choisir chantier</option>
-                {projects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                {projects.filter((p: any) => p.status !== "archive").map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
               </Select>
             </Field>
 
@@ -2213,14 +2344,14 @@ function Storekeeper({ projects, materials, invoices = [], returns = [], refresh
 }
 
 
-function Management({ projects, employees, planning, invoices, revenues, refreshAll }: any) {
+function Management({ projects, employees, planning, invoices, revenues, returns = [], refreshAll }: any) {
   const [form, setForm] = useState({ project_id: "", label: "", amount: "", billing_date: "", notes: "" });
   const [editingRevenueId, setEditingRevenueId] = useState<string | null>(null);
   const [showRevenueForm, setShowRevenueForm] = useState(false);
   function daysBetween(start: string, end: string) { if (!start) return 0; const s = new Date(start); const e = new Date(end || start); return Math.max(0, Math.round((e.getTime() - s.getTime()) / 86400000)) + 1; }
   function employeeCost(employeeId: string) { const e = employees.find((x: any) => x.id === employeeId); return Number(e?.daily_cost || 0); }
   function money(v: number) { return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(v || 0); }
-  function projectStats(projectId: string) { const supplierTotal = invoices.filter((i: any) => i.project_id === projectId).reduce((s: number, i: any) => s + Number(i.amount || 0), 0); const revenueTotal = revenues.filter((r: any) => r.project_id === projectId).reduce((s: number, r: any) => s + Number(r.amount || 0), 0); const laborTotal = planning.filter((p: any) => p.project_id === projectId).reduce((s: number, p: any) => s + daysBetween(p.start_date, p.end_date) * employeeCost(p.employee_id), 0); const totalCosts = supplierTotal + laborTotal; const margin = revenueTotal - totalCosts; const marginRate = revenueTotal > 0 ? Math.round((margin / revenueTotal) * 100) : 0; return { supplierTotal, revenueTotal, laborTotal, totalCosts, margin, marginRate }; }
+  function projectStats(projectId: string) { const grossSupplierTotal = invoices.filter((i: any) => i.project_id === projectId).reduce((s: number, i: any) => s + Number(i.amount || 0), 0); const returnsTotal = returns.filter((r: any) => r.project_id === projectId).reduce((s: number, r: any) => s + Number(r.amount || 0), 0); const supplierTotal = Math.max(0, grossSupplierTotal - returnsTotal); const revenueTotal = revenues.filter((r: any) => r.project_id === projectId).reduce((s: number, r: any) => s + Number(r.amount || 0), 0); const laborTotal = planning.filter((p: any) => p.project_id === projectId).reduce((s: number, p: any) => s + daysBetween(p.start_date, p.end_date) * employeeCost(p.employee_id), 0); const totalCosts = supplierTotal + laborTotal; const margin = revenueTotal - totalCosts; const marginRate = revenueTotal > 0 ? Math.round((margin / revenueTotal) * 100) : 0; return { supplierTotal, grossSupplierTotal, returnsTotal, revenueTotal, laborTotal, totalCosts, margin, marginRate }; }
   async function addRevenue(e: any) { e.preventDefault(); if (!form.project_id || !form.amount) return alert("Chantier et montant obligatoires"); const { error } = await supabase.from("project_revenues").insert({ project_id: form.project_id, label: form.label || "Facturation client", amount: Number(form.amount || 0), billing_date: form.billing_date || null, notes: form.notes }); if (error) return alert(error.message); setForm({ project_id: form.project_id, label: "", amount: "", billing_date: "", notes: "" }); setEditingRevenueId(null); setShowRevenueForm(false); await refreshAll(); }
   function editRevenue(item: any) {
     setEditingRevenueId(item.id);
@@ -2239,6 +2370,7 @@ function Management({ projects, employees, planning, invoices, revenues, refresh
     const s = projectStats(project.id);
     const projectRevenues = revenues.filter((r: any) => r.project_id === project.id);
     const projectInvoices = invoices.filter((i: any) => i.project_id === project.id);
+    const projectReturns = returns.filter((r: any) => r.project_id === project.id);
     const projectPlanning = planning.filter((p: any) => p.project_id === project.id);
     const statusColor = s.margin >= 0 ? "#10b981" : "#ef4444";
     const statusLabel = s.margin >= 0 ? "Rentable" : "À surveiller";
@@ -2293,7 +2425,7 @@ function Management({ projects, employees, planning, invoices, revenues, refresh
 
             <div class="grid">
               <div class="card green"><h3>CA chantier</h3><div class="value">${money(s.revenueTotal)}</div></div>
-              <div class="card red"><h3>Achats / fournisseurs</h3><div class="value">${money(s.supplierTotal)}</div></div>
+              <div class="card red"><h3>Achats - retours</h3><div class="value">${money(s.supplierTotal)}</div></div>
               <div class="card amber"><h3>Main d'œuvre</h3><div class="value">${money(s.laborTotal)}</div></div>
               <div class="card blue"><h3>Marge estimée</h3><div class="value">${money(s.margin)} · ${s.marginRate}%</div></div>
             </div>
@@ -2316,6 +2448,13 @@ function Management({ projects, employees, planning, invoices, revenues, refresh
               <h2>Factures fournisseurs</h2>
               <table><thead><tr><th>Fournisseur</th><th>Date</th><th>Montant</th><th>Notes</th></tr></thead><tbody>
                 ${projectInvoices.map((i: any) => `<tr><td><b>${i.supplier || "Fournisseur"}</b></td><td>${i.invoice_date || ""}</td><td>${money(Number(i.amount || 0))}</td><td>${i.notes || ""}</td></tr>`).join("") || `<tr><td colspan="4">Aucune facture fournisseur enregistrée.</td></tr>`}
+              </tbody></table>
+            </div>
+
+            <div class="section">
+              <h2>Retours marchandise déduits</h2>
+              <table><thead><tr><th>Fournisseur</th><th>Date</th><th>Montant déduit</th><th>Notes</th></tr></thead><tbody>
+                ${projectReturns.map((r: any) => `<tr><td><b>${r.supplier || "Retour"}</b></td><td>${r.return_date || ""}</td><td>${money(Number(r.amount || 0))}</td><td>${r.notes || ""}</td></tr>`).join("") || `<tr><td colspan="4">Aucun retour marchandise.</td></tr>`}
               </tbody></table>
             </div>
 
@@ -2344,7 +2483,7 @@ function Management({ projects, employees, planning, invoices, revenues, refresh
       {showRevenueForm ? (editingRevenueId ? "Formulaire facturation ouvert" : "Fermer création facturation client") : "+ Créer facturation client"}
     </Button>
     {showRevenueForm && <Card><h3 className="mb-4 text-xl font-black">Ajouter ce qu'on a facturé au client</h3><form onSubmit={addRevenue} className="grid gap-3 md:grid-cols-5"><Field label="Chantier"><Select value={form.project_id} onChange={(e: any) => setForm({ ...form, project_id: e.target.value })}><option value="">Choisir chantier</option>{projects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field><Field label="Libellé"><Input value={form.label} onChange={(e: any) => setForm({ ...form, label: e.target.value })} /></Field><Field label="Montant €"><Input type="number" value={form.amount} onChange={(e: any) => setForm({ ...form, amount: e.target.value })} /></Field><Field label="Date"><Input type="date" value={form.billing_date} onChange={(e: any) => setForm({ ...form, billing_date: e.target.value })} /></Field><Field label="Notes"><Input value={form.notes} onChange={(e: any) => setForm({ ...form, notes: e.target.value })} /></Field><div className="flex gap-2 md:col-span-5"><Button variant="green">{editingRevenueId ? "Enregistrer modification" : "Ajouter facturation client"}</Button>{editingRevenueId && <Button type="button" variant="secondary" onClick={() => { setEditingRevenueId(null); setForm({ project_id: "", label: "", amount: "", billing_date: "", notes: "" }); }}>Annuler</Button>}</div></form></Card>}
-    <div className="mt-6 grid gap-4 xl:grid-cols-2">{projects.map((p: any) => { const s = projectStats(p.id); return <Card key={p.id} className="border-l-8" style={{ borderLeftColor: s.margin >= 0 ? "#10b981" : "#ef4444" }}><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-xl font-black">{p.name}</h3><p className="text-sm text-slate-500">{p.client}</p></div><div className="flex flex-wrap gap-2"><Badge tone={s.margin >= 0 ? "green" : "red"}>{s.margin >= 0 ? "Rentable" : "À surveiller"}</Badge><Button variant="secondary" onClick={() => generateProjectReport(p)}>Rapport PDF</Button></div></div><div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><div className="rounded-2xl bg-emerald-50 p-3"><p className="text-xs font-bold uppercase text-emerald-700">Facturé client</p><p className="text-xl font-black text-emerald-700">{money(s.revenueTotal)}</p></div><div className="rounded-2xl bg-red-50 p-3"><p className="text-xs font-bold uppercase text-red-700">Factures fournisseurs</p><p className="text-xl font-black text-red-700">{money(s.supplierTotal)}</p></div><div className="rounded-2xl bg-amber-50 p-3"><p className="text-xs font-bold uppercase text-amber-700">Coût salariés</p><p className="text-xl font-black text-amber-700">{money(s.laborTotal)}</p></div><div className={s.margin >= 0 ? "rounded-2xl bg-blue-50 p-3" : "rounded-2xl bg-red-100 p-3"}><p className="text-xs font-bold uppercase">Marge estimée</p><p className="text-xl font-black">{money(s.margin)} · {s.marginRate}%</p></div></div><div className="mt-4 space-y-2">{revenues.filter((r: any) => r.project_id === p.id).map((r: any) => <div key={r.id} className="flex items-center justify-between gap-3 rounded-2xl bg-slate-50 p-3 text-sm"><span><b>{r.label}</b> · {money(Number(r.amount || 0))} · {r.billing_date || "date non renseignée"}</span><div className="flex gap-2"><Button variant="secondary" onClick={() => editRevenue(r)}>Modifier</Button><Button variant="danger" onClick={() => deleteRevenue(r)}>Supprimer</Button></div></div>)}</div></Card>; })}</div>
+    <div className="mt-6 grid gap-4 xl:grid-cols-2">{projects.map((p: any) => { const s = projectStats(p.id); return <Card key={p.id} className="border-l-8" style={{ borderLeftColor: s.margin >= 0 ? "#10b981" : "#ef4444" }}><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-xl font-black">{p.name}</h3><p className="text-sm text-slate-500">{p.client}</p></div><div className="flex flex-wrap gap-2"><Badge tone={s.margin >= 0 ? "green" : "red"}>{s.margin >= 0 ? "Rentable" : "À surveiller"}</Badge><Button variant="secondary" onClick={() => generateProjectReport(p)}>Rapport PDF</Button></div></div><div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><div className="rounded-2xl bg-emerald-50 p-3"><p className="text-xs font-bold uppercase text-emerald-700">Facturé client</p><p className="text-xl font-black text-emerald-700">{money(s.revenueTotal)}</p></div><div className="rounded-2xl bg-red-50 p-3"><p className="text-xs font-bold uppercase text-red-700">Factures - retours</p><p className="text-xl font-black text-red-700">{money(s.supplierTotal)}</p><p className="text-[11px] text-slate-500">Retours déduits : {money(s.returnsTotal || 0)}</p></div><div className="rounded-2xl bg-amber-50 p-3"><p className="text-xs font-bold uppercase text-amber-700">Coût salariés</p><p className="text-xl font-black text-amber-700">{money(s.laborTotal)}</p></div><div className={s.margin >= 0 ? "rounded-2xl bg-blue-50 p-3" : "rounded-2xl bg-red-100 p-3"}><p className="text-xs font-bold uppercase">Marge estimée</p><p className="text-xl font-black">{money(s.margin)} · {s.marginRate}%</p></div></div><div className="mt-4 space-y-2">{revenues.filter((r: any) => r.project_id === p.id).map((r: any) => <div key={r.id} className="flex items-center justify-between gap-3 rounded-2xl bg-slate-50 p-3 text-sm"><span><b>{r.label}</b> · {money(Number(r.amount || 0))} · {r.billing_date || "date non renseignée"}</span><div className="flex gap-2"><Button variant="secondary" onClick={() => editRevenue(r)}>Modifier</Button><Button variant="danger" onClick={() => deleteRevenue(r)}>Supprimer</Button></div></div>)}</div></Card>; })}</div>
   </div>;
 }
 
