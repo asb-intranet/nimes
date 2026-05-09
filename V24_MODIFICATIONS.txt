@@ -1,0 +1,10 @@
+ASB Intranet V24
+
+- Magasinier : formulaires masqués, bouton Retour ajouté, création facture conservée.
+- Magasinier : liste des factures fournisseurs chantier masquée dans le module pour alléger l'écran ; consultation dans la fiche chantier.
+- Salariés : suppression de l'affichage lourd "Affectations existantes" dans la page salariés.
+- Menu mobile : ajout des icônes sur chaque bouton du menu.
+- Demandes internes : priorité mise en valeur par couleur et pictogramme.
+- Demandes internes : attribution salarié optionnelle et date de planification optionnelle.
+- Demandes internes : demande simple toujours possible sans chantier, sans attribution et sans planification.
+- SQL V24 ajouté pour les colonnes optionnelles assigned_to et planned_date.

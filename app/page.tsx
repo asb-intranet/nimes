@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { Card, Button, Field, Input, Select, Textarea, Section, Badge } from "@/components/Ui";
 import {
   Building2, Camera, FileText, Users, Truck, MessageSquare, Smartphone,
-  LayoutDashboard, LogOut, Pencil, Trash2, CalendarDays, Package, HardHat, Euro
+  LayoutDashboard, LogOut, Pencil, Trash2, CalendarDays, Package, HardHat, Euro, ClipboardList, Wrench, Shovel, MapPinned, Image as ImageIcon
 } from "lucide-react";
 
 const menu = [
@@ -16,8 +16,8 @@ const menu = [
   { id: "planning", title: "Planning", icon: CalendarDays },
   { id: "employees", title: "Salariés", icon: Users },
   { id: "vehicles", title: "Véhicules", icon: Truck },
-  { id: "requests", title: "Demandes internes", icon: MessageSquare },
-  { id: "mobile", title: "Photos Express", icon: Camera },
+  { id: "requests", title: "Demandes internes", icon: ClipboardList },
+  { id: "mobile", title: "Photos Express", icon: ImageIcon },
   { id: "management", title: "Gestion", icon: Euro }
 ];
 
@@ -250,11 +250,14 @@ export default function Page() {
             </Button>
             {mobileMenuOpen && (
               <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
-                {menu.filter((m) => userRole === "admin" || ["projects", "planning", "earthworks"].includes(m.id)).map((m) => (
-                  <Button key={m.id} variant={active === m.id ? "primary" : "secondary"} onClick={() => { setActive(m.id); setMobileMenuOpen(false); }}>
-                    {m.title}
-                  </Button>
-                ))}
+                {menu.filter((m) => userRole === "admin" || ["projects", "planning", "earthworks"].includes(m.id)).map((m) => {
+                  const Icon = m.icon;
+                  return (
+                    <Button key={m.id} variant={active === m.id ? "primary" : "secondary"} onClick={() => { setActive(m.id); setMobileMenuOpen(false); }}>
+                      <Icon size={16} className="mr-2" /> {m.title}
+                    </Button>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -268,7 +271,7 @@ export default function Page() {
           {active === "planning" && <Planning projects={projects} employees={employees} links={links} planning={planning} refreshAll={refreshAll} />}
           {active === "employees" && userRole === "admin" && <Employees employees={employees} projects={projects} refreshAll={refreshAll} />}
           {active === "vehicles" && userRole === "admin" && <Vehicles vehicles={vehicles} refreshAll={refreshAll} />}
-          {active === "requests" && userRole === "admin" && <Requests requests={requests} projects={projects} refreshAll={refreshAll} projectName={projectName} />}
+          {active === "requests" && userRole === "admin" && <Requests requests={requests} projects={projects} employees={employees} refreshAll={refreshAll} projectName={projectName} />}
           {active === "mobile" && userRole === "admin" && <Mobile projects={projects} refreshAll={refreshAll} />}
           {active === "management" && userRole === "admin" && <Management projects={projects} employees={employees} planning={planning} invoices={invoices} revenues={revenues} refreshAll={refreshAll} />}
         </section>
@@ -1275,7 +1278,7 @@ function Employees({ employees, projects, refreshAll }: any) {
           <Field label="Coût journée €"><Input type="number" value={form.daily_cost} onChange={(e: any) => setForm({ ...form, daily_cost: e.target.value })} /></Field>
           <div className="flex gap-2"><Button>{editingId ? "Enregistrer" : "Ajouter salarié"}</Button>{editingId && <Button type="button" variant="secondary" onClick={() => { setEditingId(null); setForm({ firstname: "", lastname: "", position: "", role: "terrain", phone: "", email: "", daily_cost: "" }); }}>Annuler</Button>}</div>
         </form></Card>}
-        <Card><h3 className="mb-4 font-black">Affecter un salarié à un chantier</h3><form onSubmit={assign} className="space-y-3"><Field label="Salarié"><Select value={employeeId} onChange={(e: any) => setEmployeeId(e.target.value)}><option value="">Choisir salarié</option>{employees.map((e: any) => <option key={e.id} value={e.id}>{e.firstname} {e.lastname} — {e.position || e.role}</option>)}</Select></Field><Field label="Chantier"><Select value={projectId} onChange={(e: any) => setProjectId(e.target.value)}><option value="">Choisir chantier</option>{projects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field><Button>Affecter au chantier</Button></form><div className="mt-6 space-y-2"><h4 className="font-black">Affectations existantes</h4>{assignments.map((a: any) => <div key={a.id} className="flex items-center justify-between gap-3 rounded-2xl bg-slate-50 p-3 text-sm"><span><b>{employeeName(a.employee_id)}</b> → {projectNameLocal(a.project_id)}</span><button type="button" onClick={() => removeAssignment(a)} className="rounded-xl bg-red-600 px-3 py-2 text-xs font-bold text-white">Retirer</button></div>)}</div></Card>
+        <Card><h3 className="mb-4 font-black">Affecter un salarié à un chantier</h3><form onSubmit={assign} className="space-y-3"><Field label="Salarié"><Select value={employeeId} onChange={(e: any) => setEmployeeId(e.target.value)}><option value="">Choisir salarié</option>{employees.map((e: any) => <option key={e.id} value={e.id}>{e.firstname} {e.lastname} — {e.position || e.role}</option>)}</Select></Field><Field label="Chantier"><Select value={projectId} onChange={(e: any) => setProjectId(e.target.value)}><option value="">Choisir chantier</option>{projects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field><Button>Affecter au chantier</Button><p className="text-xs text-slate-500">Les affectations détaillées restent visibles dans chaque fiche chantier pour garder cette page légère.</p></form></Card>
       </div>
       <div className="mt-6 grid gap-4 md:grid-cols-3">{employees.map((e: any) => { const employeeAssignments = assignments.filter((a: any) => a.employee_id === e.id); return <Card key={e.id}><div className="flex items-start justify-between gap-3"><div><h3 className="font-black">{e.firstname} {e.lastname}</h3><p className="text-sm text-slate-500">{e.position}</p><p className="text-sm font-bold text-slate-700">{e.daily_cost ? `${e.daily_cost} €/jour` : "Coût journée non renseigné"}</p></div><Badge>{e.role}</Badge></div><div className="mt-4 space-y-1"><p className="text-xs font-bold uppercase text-slate-500">Chantiers affectés</p>{employeeAssignments.map((a: any) => <div key={a.id} className="rounded-xl bg-slate-50 px-3 py-2 text-xs font-bold">{projectNameLocal(a.project_id)}</div>)}</div><div className="mt-4 grid grid-cols-2 gap-2"><Button variant="secondary" onClick={() => editEmployee(e)}>Modifier</Button><Button variant="danger" onClick={() => deleteEmployee(e)}>Supprimer</Button></div></Card>; })}</div>
     </div>
@@ -1366,27 +1369,76 @@ function Vehicles({ vehicles, refreshAll }: any) {
   );
 }
 
-function Requests({ requests, projects, refreshAll, projectName }: any) {
-  const [form, setForm] = useState({ project_id: "", type: "achat", requester: "", message: "", priority: "normale", status: "nouvelle" });
+function Requests({ requests, projects, employees = [], refreshAll, projectName }: any) {
+  const emptyForm = { project_id: "", type: "achat", requester: "", message: "", priority: "normale", status: "nouvelle", assigned_to: "", planned_date: "" };
+  const [form, setForm] = useState<any>(emptyForm);
+  const [editingRequest, setEditingRequest] = useState<any>(null);
+  const [editForm, setEditForm] = useState<any>(emptyForm);
+
+  function employeeNameLocal(id: string) {
+    const e = employees.find((x: any) => x.id === id);
+    return e ? `${e.firstname} ${e.lastname}` : "Non attribuée";
+  }
+
+  function priorityMeta(priority: string) {
+    const p = String(priority || "normale").toLowerCase();
+    if (p === "urgente") return { icon: "🚨", label: "Urgente", tone: "red", card: "border-red-600 bg-red-50", text: "text-red-800" };
+    if (p === "haute") return { icon: "⚠️", label: "Haute", tone: "red", card: "border-orange-500 bg-orange-50", text: "text-orange-800" };
+    if (p === "basse") return { icon: "🟢", label: "Basse", tone: "green", card: "border-emerald-500 bg-emerald-50", text: "text-emerald-800" };
+    return { icon: "🔵", label: "Normale", tone: "blue", card: "border-blue-500 bg-blue-50", text: "text-blue-800" };
+  }
 
   async function addRequest(e: any) {
     e.preventDefault();
     if (!form.message) return;
-    const { error } = await supabase.from("internal_requests").insert(form);
+    const payload: any = {
+      project_id: form.project_id || null,
+      type: form.type,
+      requester: form.requester,
+      message: form.message,
+      priority: form.priority,
+      status: form.status || "nouvelle"
+    };
+    if (form.assigned_to) payload.assigned_to = form.assigned_to;
+    if (form.planned_date) payload.planned_date = form.planned_date;
+    const { error } = await supabase.from("internal_requests").insert(payload);
     if (error) return alert(error.message);
-    setForm({ ...form, message: "" });
+    setForm({ ...emptyForm, project_id: form.project_id });
     await refreshAll();
   }
 
-  async function updateRequest(req: any) {
-    const message = prompt("Modifier la demande :", req.message || "");
-    if (message === null) return;
-    const status = prompt("Statut :", req.status || "nouvelle");
-    if (status === null) return;
-    const priority = prompt("Priorité (basse/normale/haute) :", req.priority || "normale");
-    if (priority === null) return;
-    const { error } = await supabase.from("internal_requests").update({ message, status, priority }).eq("id", req.id);
+  function startEditRequest(req: any) {
+    setEditingRequest(req);
+    setEditForm({
+      project_id: req.project_id || "",
+      type: req.type || "achat",
+      requester: req.requester || "",
+      message: req.message || "",
+      priority: req.priority || "normale",
+      status: req.status || "nouvelle",
+      assigned_to: req.assigned_to || "",
+      planned_date: req.planned_date || ""
+    });
+    setTimeout(() => document.getElementById("request-edit-form")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+  }
+
+  async function saveEditRequest(e: any) {
+    e.preventDefault();
+    if (!editingRequest) return;
+    const payload: any = {
+      project_id: editForm.project_id || null,
+      type: editForm.type,
+      requester: editForm.requester,
+      message: editForm.message,
+      priority: editForm.priority,
+      status: editForm.status || "nouvelle"
+    };
+    if (editForm.assigned_to) payload.assigned_to = editForm.assigned_to;
+    if (editForm.planned_date) payload.planned_date = editForm.planned_date;
+    const { error } = await supabase.from("internal_requests").update(payload).eq("id", editingRequest.id);
     if (error) return alert(error.message);
+    setEditingRequest(null);
+    setEditForm(emptyForm);
     await refreshAll();
   }
 
@@ -1397,34 +1449,73 @@ function Requests({ requests, projects, refreshAll, projectName }: any) {
     await refreshAll();
   }
 
+  const openRequests = requests.filter((r: any) => !["termine", "traité", "traite", "closed", "fait"].includes(String(r.status || "").toLowerCase()));
+
   return (
     <div>
-      <Section title="Demandes internes" subtitle="Demandes d'achat, matériel, messages chantier." />
-      <Card>
+      <Section title="Demandes internes" subtitle="Demande simple possible. Attribution et planification sont optionnelles." />
+      <Card className="border-l-8 border-slate-900">
         <form onSubmit={addRequest} className="grid gap-3 md:grid-cols-3">
-          <Field label="Chantier"><Select value={form.project_id} onChange={(e: any) => setForm({ ...form, project_id: e.target.value })}><option value="">Sans chantier</option>{projects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field>
+          <Field label="Chantier optionnel"><Select value={form.project_id} onChange={(e: any) => setForm({ ...form, project_id: e.target.value })}><option value="">Sans chantier</option>{projects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field>
           <Field label="Type"><Select value={form.type} onChange={(e: any) => setForm({ ...form, type: e.target.value })}><option value="achat">Achat</option><option value="materiel">Matériel</option><option value="sav">SAV</option><option value="autre">Autre</option></Select></Field>
-          <Field label="Priorité"><Select value={form.priority} onChange={(e: any) => setForm({ ...form, priority: e.target.value })}><option value="basse">Basse</option><option value="normale">Normale</option><option value="haute">Haute</option></Select></Field>
+          <Field label="Priorité"><Select value={form.priority} onChange={(e: any) => setForm({ ...form, priority: e.target.value })}><option value="basse">Basse</option><option value="normale">Normale</option><option value="haute">Haute</option><option value="urgente">Urgente</option></Select></Field>
           <Field label="Demandeur"><Input value={form.requester} onChange={(e: any) => setForm({ ...form, requester: e.target.value })} /></Field>
-          <div className="md:col-span-2"><Field label="Message"><Textarea value={form.message} onChange={(e: any) => setForm({ ...form, message: e.target.value })} /></Field></div>
+          <Field label="Attribuer à optionnel"><Select value={form.assigned_to} onChange={(e: any) => setForm({ ...form, assigned_to: e.target.value })}><option value="">Non attribuée</option>{employees.map((emp: any) => <option key={emp.id} value={emp.id}>{emp.firstname} {emp.lastname}</option>)}</Select></Field>
+          <Field label="Planifier optionnel"><Input type="date" value={form.planned_date} onChange={(e: any) => setForm({ ...form, planned_date: e.target.value })} /></Field>
+          <div className="md:col-span-3"><Field label="Message"><Textarea value={form.message} onChange={(e: any) => setForm({ ...form, message: e.target.value })} /></Field></div>
           <Button className="md:col-span-3">Créer demande</Button>
         </form>
       </Card>
-      <div className="mt-6 space-y-3">
-        {requests.map((r: any) => (
-          <Card key={r.id}>
-            <div className="flex justify-between gap-3">
-              <div><h3 className="font-black">{r.type} · {projectName(r.project_id)}</h3><p className="text-sm text-slate-600">{r.message}</p><p className="mt-1 text-xs text-slate-500">Statut : {r.status}</p></div>
-              <Badge tone={r.priority === "haute" ? "red" : "amber"}>{r.priority}</Badge>
-            </div>
-            <div className="mt-4 flex gap-2"><Button variant="secondary" onClick={() => updateRequest(r)}>Modifier</Button><Button variant="danger" onClick={() => deleteRequest(r)}>Supprimer</Button></div>
-          </Card>
-        ))}
+
+      {editingRequest && <Card id="request-edit-form" className="mt-6 border-l-8 border-blue-500 bg-blue-50">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><h3 className="text-xl font-black">Modifier demande</h3><Button type="button" variant="secondary" onClick={() => setEditingRequest(null)}>Retour</Button></div>
+        <form onSubmit={saveEditRequest} className="grid gap-3 md:grid-cols-3">
+          <Field label="Chantier"><Select value={editForm.project_id} onChange={(e: any) => setEditForm({ ...editForm, project_id: e.target.value })}><option value="">Sans chantier</option>{projects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field>
+          <Field label="Type"><Select value={editForm.type} onChange={(e: any) => setEditForm({ ...editForm, type: e.target.value })}><option value="achat">Achat</option><option value="materiel">Matériel</option><option value="sav">SAV</option><option value="autre">Autre</option></Select></Field>
+          <Field label="Priorité"><Select value={editForm.priority} onChange={(e: any) => setEditForm({ ...editForm, priority: e.target.value })}><option value="basse">Basse</option><option value="normale">Normale</option><option value="haute">Haute</option><option value="urgente">Urgente</option></Select></Field>
+          <Field label="Statut"><Select value={editForm.status} onChange={(e: any) => setEditForm({ ...editForm, status: e.target.value })}><option value="nouvelle">Nouvelle</option><option value="attribuee">Attribuée</option><option value="planifiee">Planifiée</option><option value="en_cours">En cours</option><option value="termine">Terminée</option></Select></Field>
+          <Field label="Attribuer à optionnel"><Select value={editForm.assigned_to} onChange={(e: any) => setEditForm({ ...editForm, assigned_to: e.target.value })}><option value="">Non attribuée</option>{employees.map((emp: any) => <option key={emp.id} value={emp.id}>{emp.firstname} {emp.lastname}</option>)}</Select></Field>
+          <Field label="Planifier optionnel"><Input type="date" value={editForm.planned_date} onChange={(e: any) => setEditForm({ ...editForm, planned_date: e.target.value })} /></Field>
+          <div className="md:col-span-3"><Field label="Message"><Textarea value={editForm.message} onChange={(e: any) => setEditForm({ ...editForm, message: e.target.value })} /></Field></div>
+          <div className="flex flex-wrap gap-2 md:col-span-3"><Button>Enregistrer</Button><Button type="button" variant="secondary" onClick={() => setEditingRequest(null)}>Retour</Button></div>
+        </form>
+      </Card>}
+
+      <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-4">
+        <Card><p className="text-xs font-bold uppercase text-slate-500">Demandes</p><p className="text-4xl font-black">{requests.length}</p></Card>
+        <Card className="border-l-8 border-blue-500 bg-blue-50"><p className="text-xs font-bold uppercase text-blue-700">Ouvertes</p><p className="text-4xl font-black text-blue-700">{openRequests.length}</p></Card>
+        <Card className="border-l-8 border-orange-500 bg-orange-50"><p className="text-xs font-bold uppercase text-orange-700">Haute/Urgente</p><p className="text-4xl font-black text-orange-700">{requests.filter((r: any) => ["haute", "urgente"].includes(String(r.priority).toLowerCase())).length}</p></Card>
+        <Card className="border-l-8 border-emerald-500 bg-emerald-50"><p className="text-xs font-bold uppercase text-emerald-700">Planifiées</p><p className="text-4xl font-black text-emerald-700">{requests.filter((r: any) => r.planned_date).length}</p></Card>
+      </div>
+
+      <div className="mt-6 grid gap-3 lg:grid-cols-2">
+        {requests.map((r: any) => {
+          const meta = priorityMeta(r.priority);
+          return (
+            <Card key={r.id} className={`border-l-8 ${meta.card}`}>
+              <div className="flex justify-between gap-3">
+                <div>
+                  <div className={`text-xs font-black uppercase ${meta.text}`}>{meta.icon} Priorité {meta.label}</div>
+                  <h3 className="mt-1 font-black">{r.type || "Demande"} · {projectName(r.project_id)}</h3>
+                  <p className="mt-2 text-sm text-slate-700">{r.message}</p>
+                  <div className="mt-3 flex flex-wrap gap-2 text-xs font-bold text-slate-600">
+                    <span className="rounded-xl bg-white px-3 py-1">Statut : {r.status || "nouvelle"}</span>
+                    {r.requester && <span className="rounded-xl bg-white px-3 py-1">Demandeur : {r.requester}</span>}
+                    {r.assigned_to && <span className="rounded-xl bg-white px-3 py-1">Attribuée : {employeeNameLocal(r.assigned_to)}</span>}
+                    {r.planned_date && <span className="rounded-xl bg-white px-3 py-1">Planifiée : {r.planned_date}</span>}
+                  </div>
+                </div>
+                <Badge tone={meta.tone}>{meta.icon} {meta.label}</Badge>
+              </div>
+              <div className="mt-4 flex gap-2"><Button variant="secondary" onClick={() => startEditRequest(r)}>Modifier</Button><Button variant="danger" onClick={() => deleteRequest(r)}>Supprimer</Button></div>
+            </Card>
+          );
+        })}
+        {requests.length === 0 && <Card><p className="text-sm text-slate-500">Aucune demande enregistrée.</p></Card>}
       </div>
     </div>
   );
 }
-
 
 
 function Earthworks({ earthworks, photos, docs, notes, materials, vigilance, planning, rentals = [], refreshAll }: any) {
@@ -1859,10 +1950,11 @@ function Storekeeper({ projects, materials, invoices = [], returns = [], refresh
 
   return (
     <div>
-      <Section title="Magasinier" subtitle="Matériel, factures fournisseurs et retours liés aux chantiers." />
+      <Section title="Magasinier" subtitle="Matériel et création rapide de factures/retours. Les factures détaillées restent dans les fiches chantier." />
       <div className="mb-4 flex flex-wrap gap-2">
-        <Button onClick={() => { setShowCreateMaterial(!showCreateMaterial); setShowInvoiceForm(false); }}>{showCreateMaterial ? "Fermer création matériel" : "+ Créer matériel à prévoir"}</Button>
-        <Button variant="green" onClick={() => { setShowInvoiceForm(!showInvoiceForm); setShowCreateMaterial(false); }}>{showInvoiceForm ? "Fermer création facture" : "+ Créer facture"}</Button>
+        <Button onClick={() => { setShowCreateMaterial(!showCreateMaterial); setShowInvoiceForm(false); setEditingItem(null); }}>{showCreateMaterial ? "Fermer création matériel" : "+ Créer matériel à prévoir"}</Button>
+        <Button variant="green" onClick={() => { setShowInvoiceForm(!showInvoiceForm); setShowCreateMaterial(false); setEditingItem(null); }}>{showInvoiceForm ? "Fermer création facture" : "+ Créer facture"}</Button>
+        {(showCreateMaterial || showInvoiceForm || editingItem) && <Button variant="secondary" onClick={() => { setShowCreateMaterial(false); setShowInvoiceForm(false); setEditingItem(null); }}>← Retour</Button>}
       </div>
 
       {showCreateMaterial && <Card className="mb-6 border-l-8 border-slate-900">
@@ -1899,7 +1991,7 @@ function Storekeeper({ projects, materials, invoices = [], returns = [], refresh
             <Input type="file" onChange={(e: any) => setCreateFile(e.target.files?.[0] || null)} />
           </Field>
 
-          <Button>Créer matériel</Button>
+          <div className="flex flex-wrap gap-2"><Button>Créer matériel</Button><Button type="button" variant="secondary" onClick={() => setShowCreateMaterial(false)}>Retour</Button></div>
         </form>
       </Card>}
 
@@ -2004,23 +2096,12 @@ function Storekeeper({ projects, materials, invoices = [], returns = [], refresh
       </div>
 
       <Card className="mt-8 border-l-8 border-blue-500 bg-blue-50">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <h3 className="text-xl font-black text-blue-950">🧾 Factures fournisseurs chantier</h3>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="text-xl font-black text-blue-950">🧾 Factures fournisseurs chantier</h3>
+            <p className="mt-1 text-sm text-blue-900/70">Liste masquée ici pour alléger : les factures se consultent directement dans chaque fiche chantier.</p>
+          </div>
           <Button variant="green" onClick={() => { setShowInvoiceForm(true); setShowCreateMaterial(false); window.scrollTo({ top: 0, behavior: "smooth" }); }}>+ Créer facture</Button>
-        </div>
-        <div className="grid gap-3 lg:grid-cols-2">
-          {invoices.map((inv: any) => (
-            <div key={inv.id} className="rounded-2xl bg-white p-4 shadow-sm">
-              <div className="text-xs font-bold uppercase text-blue-700">{projectNameLocal(inv.project_id)}</div>
-              <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
-                <b>{inv.supplier}</b>
-                <span className="text-lg font-black">{new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(Number(inv.amount || 0))}</span>
-              </div>
-              <div className="mt-1 text-xs text-slate-500">{inv.invoice_date || "Date non renseignée"}{inv.notes ? ` · ${inv.notes}` : ""}</div>
-              <div className="mt-3 flex gap-2"><Button variant="danger" onClick={() => deleteStoreInvoice(inv)}>Supprimer</Button></div>
-            </div>
-          ))}
-          {invoices.length === 0 && <div className="rounded-2xl bg-white p-4 text-sm text-slate-500">Aucune facture enregistrée.</div>}
         </div>
       </Card>
 
