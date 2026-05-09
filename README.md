@@ -1,15 +1,9 @@
-# ASB Intranet complet V5.1
+# ASB Intranet V20
 
-## Installation GitHub
-Remplace tous les fichiers du dépôt par le contenu de ce dossier.
+- Bouton + Créer un nouveau terrassement
+- Création terrassement masquée par défaut
+- Archiver terrassement
+- Location engin dans fiche terrassement
+- Type engin, dates, prix, notes, modifier, supprimer
 
-## Supabase
-Dans Supabase > SQL Editor, lance :
-`supabase/schema-complet-v5-1.sql`
-
-## V5.1
-- Mobile plus compact
-- Statistiques tableau de bord en 2 colonnes sur téléphone
-- Barre basse mobile : Accueil / Chantiers / Planning / Photos
-- Notifications demandes internes avec compteur
-- Stabilisation Supabase : index, grants, policies storage, anti-doublon affectations
+SQL : supabase/schema-complet-v20.sql
