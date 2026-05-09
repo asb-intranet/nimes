@@ -1,0 +1,19 @@
+V23 - Tableau de bord + Magasinier
+
+Tableau de bord :
+- Suppression du détail long des chantiers.
+- Cartes synthétiques optimisées en 2 colonnes sur mobile.
+- Cartes visuelles : Chantiers en cours, Matériel à prévoir, Demandes internes, Factures chantier.
+- Blocs de résumé courts avec accès rapide aux modules.
+
+Magasinier :
+- Ajout du bouton + Créer facture.
+- Facture fournisseur attribuable à un chantier.
+- Champs : chantier, fournisseur, montant, date, notes.
+- Bouton Retour sur le formulaire facture.
+- Affichage plus clair des factures par chantier.
+- Conservation des fonctions matériel à prévoir et retour marchandise.
+
+Technique :
+- Pas de package-lock.json dans le ZIP.
+- Pas de changement SQL obligatoire.

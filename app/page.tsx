@@ -262,7 +262,7 @@ export default function Page() {
 
         <section className="p-5 pb-28 lg:p-8">
           {active === "dashboard" && userRole === "admin" && <Dashboard projects={projects} photos={photos} docs={docs} requests={requests} materials={materials} invoices={invoices} setActive={setActive} />}
-          {active === "storekeeper" && userRole === "admin" && <Storekeeper projects={projects} materials={materials} returns={returns} refreshAll={refreshAll} />}
+          {active === "storekeeper" && userRole === "admin" && <Storekeeper projects={projects} materials={materials} invoices={invoices} returns={returns} refreshAll={refreshAll} />}
           {active === "projects" && <Projects projects={projects} photos={photos} docs={docs} notes={notes} materials={materials} vigilance={vigilance} invoices={invoices} employees={employees} links={links} planning={planning} refreshAll={refreshAll} />}
           {active === "earthworks" && <Earthworks earthworks={earthworks} photos={earthworkPhotos} docs={earthworkDocs} notes={earthworkNotes} materials={earthworkMaterials} vigilance={earthworkVigilance} planning={earthworkPlanning} rentals={earthworkRentals} refreshAll={refreshAll} />}
           {active === "planning" && <Planning projects={projects} employees={employees} links={links} planning={planning} refreshAll={refreshAll} />}
@@ -281,28 +281,70 @@ export default function Page() {
 
 function Dashboard({ projects, photos, docs, requests, materials = [], invoices = [], setActive }: any) {
   const enCours = projects.filter((p: any) => p.status === "en_cours");
+  const materialTodo = materials.filter((m: any) => !m.ready);
+  const openRequests = requests.filter((r: any) => !["termine", "traité", "traite", "closed", "fait"].includes(String(r.status || "").toLowerCase()));
+
+  const dashboardCards = [
+    { title: "Chantiers en cours", value: enCours.length, subtitle: enCours.slice(0, 3).map((p: any) => p.name).join(" · ") || "Aucun chantier en cours", tone: "border-emerald-500 bg-emerald-50 text-emerald-700", action: "Voir chantiers", target: "projects" },
+    { title: "Matériel à prévoir", value: materialTodo.length, subtitle: materialTodo.slice(0, 3).map((m: any) => m.title || "Matériel").join(" · ") || "Aucun matériel en attente", tone: "border-amber-400 bg-amber-50 text-amber-700", action: "Voir magasinier", target: "storekeeper" },
+    { title: "Demandes internes", value: openRequests.length, subtitle: openRequests.slice(0, 3).map((r: any) => r.title || r.message || "Demande").join(" · ") || "Aucune demande ouverte", tone: "border-blue-500 bg-blue-50 text-blue-700", action: "Voir demandes", target: "requests" },
+    { title: "Factures chantier", value: invoices.length, subtitle: invoices.slice(0, 3).map((i: any) => i.supplier || "Facture").join(" · ") || "Aucune facture enregistrée", tone: "border-purple-500 bg-purple-50 text-purple-700", action: "Voir gestion", target: "management" }
+  ];
 
   return (
     <div>
-      <Section title="Tableau de bord" subtitle="Vue rapide des chantiers en cours." />
+      <Section title="Tableau de bord" subtitle="Vue synthétique sans détail long, optimisée mobile." />
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card><p className="text-sm text-slate-500">Chantiers</p><p className="text-4xl font-black">{projects.length}</p></Card>
-        <Card><p className="text-sm text-slate-500">Chantiers en cours</p><p className="text-4xl font-black text-emerald-600">{enCours.length}</p></Card>
-        <Card><p className="text-sm text-slate-500">Demandes internes</p><p className="text-4xl font-black text-amber-600">{requests.length}</p></Card>
+      <div className="grid grid-cols-2 gap-3 md:gap-4 xl:grid-cols-4">
+        {dashboardCards.map((card: any) => (
+          <Card key={card.title} className={`border-l-8 ${card.tone}`}>
+            <p className="text-xs font-black uppercase opacity-80">{card.title}</p>
+            <p className="mt-2 text-4xl font-black">{card.value}</p>
+            <p className="mt-2 line-clamp-2 min-h-10 text-xs text-slate-600">{card.subtitle}</p>
+            <Button className="mt-4 w-full text-xs" onClick={() => setActive(card.target)}>{card.action}</Button>
+          </Card>
+        ))}
       </div>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-3">
-        {enCours.map((p: any) => (
-          <Card key={p.id} className="border-l-8" style={{ borderLeftColor: p.color || "#0f172a" }}>
-            <div className="flex items-start justify-between gap-3">
-              <div><h3 className="font-black">{p.name}</h3><p className="mt-1 text-sm text-slate-500">{p.address}</p></div>
-              <Badge tone="green">En cours</Badge>
-            </div>
-            <p className="mt-3 text-sm">Photos : <b>{photos.filter((x: any) => x.project_id === p.id).length}</b> · Documents : <b>{docs.filter((x: any) => x.project_id === p.id).length}</b></p>
-            <Button className="mt-4" onClick={() => setActive("projects")}>Ouvrir chantier</Button>
-          </Card>
-        ))}
+        <Card className="border-l-8 border-emerald-500">
+          <h3 className="text-lg font-black">🏗️ Chantiers en cours</h3>
+          <div className="mt-4 space-y-2">
+            {enCours.slice(0, 5).map((p: any) => (
+              <div key={p.id} className="rounded-2xl bg-slate-50 p-3">
+                <div className="font-black">{p.name}</div>
+                <div className="text-xs text-slate-500">{p.address || p.client || "Adresse non renseignée"}</div>
+              </div>
+            ))}
+            {enCours.length === 0 && <p className="text-sm text-slate-500">Aucun chantier en cours.</p>}
+          </div>
+        </Card>
+
+        <Card className="border-l-8 border-amber-400">
+          <h3 className="text-lg font-black">📦 Matériel à prévoir</h3>
+          <div className="mt-4 space-y-2">
+            {materialTodo.slice(0, 5).map((m: any) => (
+              <div key={m.id} className="rounded-2xl bg-amber-50 p-3">
+                <div className="font-black">{m.title || "Matériel à prévoir"}</div>
+                <div className="text-xs text-slate-500">{projects.find((p: any) => p.id === m.project_id)?.name || "Chantier inconnu"}</div>
+              </div>
+            ))}
+            {materialTodo.length === 0 && <p className="text-sm text-slate-500">Aucun matériel à préparer.</p>}
+          </div>
+        </Card>
+
+        <Card className="border-l-8 border-blue-500">
+          <h3 className="text-lg font-black">💬 Demandes internes</h3>
+          <div className="mt-4 space-y-2">
+            {openRequests.slice(0, 5).map((r: any) => (
+              <div key={r.id} className="rounded-2xl bg-blue-50 p-3">
+                <div className="font-black">{r.title || r.message || "Demande interne"}</div>
+                <div className="text-xs text-slate-500">{projects.find((p: any) => p.id === r.project_id)?.name || "Sans chantier"}</div>
+              </div>
+            ))}
+            {openRequests.length === 0 && <p className="text-sm text-slate-500">Aucune demande ouverte.</p>}
+          </div>
+        </Card>
       </div>
     </div>
   );
@@ -1674,7 +1716,7 @@ function EarthworkDetail({ item, photos, docs, notes, materials, vigilance, plan
   );
 }
 
-function Storekeeper({ projects, materials, returns = [], refreshAll }: any) {
+function Storekeeper({ projects, materials, invoices = [], returns = [], refreshAll }: any) {
   const [editingItem, setEditingItem] = useState<any>(null);
   const [form, setForm] = useState({ title: "", content: "" });
   const [createForm, setCreateForm] = useState({ project_id: "", title: "", content: "", priority: "normale" });
@@ -1764,6 +1806,33 @@ function Storekeeper({ projects, materials, returns = [], refreshAll }: any) {
   const todo = materials.filter((m: any) => !m.ready);
   const ready = materials.filter((m: any) => m.ready);
 
+  const [showInvoiceForm, setShowInvoiceForm] = useState(false);
+  const [invoiceForm, setInvoiceForm] = useState({ project_id: "", supplier: "", amount: "", invoice_date: "", notes: "" });
+
+  async function addStoreInvoice(e: any) {
+    e.preventDefault();
+    if (!invoiceForm.project_id) return alert("Choisis un chantier");
+    if (!invoiceForm.supplier || !invoiceForm.amount) return alert("Fournisseur et montant obligatoires");
+    const { error } = await supabase.from("project_invoices").insert({
+      project_id: invoiceForm.project_id,
+      supplier: invoiceForm.supplier,
+      amount: Number(invoiceForm.amount || 0),
+      invoice_date: invoiceForm.invoice_date || null,
+      notes: invoiceForm.notes
+    });
+    if (error) return alert(error.message);
+    setInvoiceForm({ project_id: invoiceForm.project_id, supplier: "", amount: "", invoice_date: "", notes: "" });
+    setShowInvoiceForm(false);
+    await refreshAll();
+  }
+
+  async function deleteStoreInvoice(item: any) {
+    if (!confirm("Supprimer cette facture chantier ?")) return;
+    const { error } = await supabase.from("project_invoices").delete().eq("id", item.id);
+    if (error) return alert(error.message);
+    await refreshAll();
+  }
+
   const [returnForm, setReturnForm] = useState({ project_id: "", supplier: "", amount: "", return_date: "", notes: "" });
 
   async function addReturn(e: any) {
@@ -1790,8 +1859,11 @@ function Storekeeper({ projects, materials, returns = [], refreshAll }: any) {
 
   return (
     <div>
-      <Section title="Magasinier" subtitle="Gestion globale du matériel à prévoir pour les chantiers." />
-      <Button className="mb-4" onClick={() => setShowCreateMaterial(!showCreateMaterial)}>{showCreateMaterial ? "Fermer création matériel" : "+ Créer matériel à prévoir"}</Button>
+      <Section title="Magasinier" subtitle="Matériel, factures fournisseurs et retours liés aux chantiers." />
+      <div className="mb-4 flex flex-wrap gap-2">
+        <Button onClick={() => { setShowCreateMaterial(!showCreateMaterial); setShowInvoiceForm(false); }}>{showCreateMaterial ? "Fermer création matériel" : "+ Créer matériel à prévoir"}</Button>
+        <Button variant="green" onClick={() => { setShowInvoiceForm(!showInvoiceForm); setShowCreateMaterial(false); }}>{showInvoiceForm ? "Fermer création facture" : "+ Créer facture"}</Button>
+      </div>
 
       {showCreateMaterial && <Card className="mb-6 border-l-8 border-slate-900">
         <h3 className="mb-4 text-2xl font-black">Créer matériel à prévoir</h3>
@@ -1828,6 +1900,24 @@ function Storekeeper({ projects, materials, returns = [], refreshAll }: any) {
           </Field>
 
           <Button>Créer matériel</Button>
+        </form>
+      </Card>}
+
+      {showInvoiceForm && <Card className="mb-6 border-l-8 border-emerald-500 bg-emerald-50">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="text-2xl font-black text-emerald-950">Créer facture fournisseur</h3>
+            <p className="mt-1 text-sm text-emerald-900/70">Facture attribuée directement à un chantier.</p>
+          </div>
+          <Button type="button" variant="secondary" onClick={() => setShowInvoiceForm(false)}>Retour</Button>
+        </div>
+        <form onSubmit={addStoreInvoice} className="grid gap-3 md:grid-cols-5">
+          <Field label="Chantier"><Select value={invoiceForm.project_id} onChange={(e: any) => setInvoiceForm({ ...invoiceForm, project_id: e.target.value })}><option value="">Choisir chantier</option>{projects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field>
+          <Field label="Fournisseur"><Input value={invoiceForm.supplier} onChange={(e: any) => setInvoiceForm({ ...invoiceForm, supplier: e.target.value })} /></Field>
+          <Field label="Montant €"><Input type="number" value={invoiceForm.amount} onChange={(e: any) => setInvoiceForm({ ...invoiceForm, amount: e.target.value })} /></Field>
+          <Field label="Date facture"><Input type="date" value={invoiceForm.invoice_date} onChange={(e: any) => setInvoiceForm({ ...invoiceForm, invoice_date: e.target.value })} /></Field>
+          <Field label="Notes"><Input value={invoiceForm.notes} onChange={(e: any) => setInvoiceForm({ ...invoiceForm, notes: e.target.value })} /></Field>
+          <div className="flex gap-2 md:col-span-5"><Button variant="green">Enregistrer facture</Button><Button type="button" variant="secondary" onClick={() => setShowInvoiceForm(false)}>Retour</Button></div>
         </form>
       </Card>}
 
@@ -1871,10 +1961,11 @@ function Storekeeper({ projects, materials, returns = [], refreshAll }: any) {
         </Card>
       )}
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
         <Card className="border-l-8 border-amber-400 bg-amber-50"><p className="text-sm font-bold text-amber-800">À préparer</p><p className="text-4xl font-black text-amber-700">{todo.length}</p></Card>
         <Card className="border-l-8 border-emerald-500 bg-emerald-50"><p className="text-sm font-bold text-emerald-800">Prêt</p><p className="text-4xl font-black text-emerald-700">{ready.length}</p></Card>
-        <Card><p className="text-sm text-slate-500">Total fiches matériel</p><p className="text-4xl font-black">{materials.length}</p></Card>
+        <Card><p className="text-sm text-slate-500">Fiches matériel</p><p className="text-4xl font-black">{materials.length}</p></Card>
+        <Card className="border-l-8 border-blue-500 bg-blue-50"><p className="text-sm font-bold text-blue-800">Factures</p><p className="text-4xl font-black text-blue-700">{invoices.length}</p></Card>
       </div>
 
       <h3 className="mt-8 mb-3 text-xl font-black">📦 À préparer</h3>
@@ -1888,8 +1979,6 @@ function Storekeeper({ projects, materials, returns = [], refreshAll }: any) {
               <Button variant="green" onClick={() => setReady(m, true)}>OK prêt !</Button>
               <Button variant="secondary" onClick={() => startEdit(m)}>Modifier</Button>
               <Button variant="danger" onClick={() => deleteItem(m)}>Supprimer</Button>
-              <label className="cursor-pointer rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold">Photo/doc<input className="hidden" type="file" onChange={(e: any) => uploadMaterialAttachment(m, e)} /></label>
-              {m.attachment_url && <a href={m.attachment_url} target="_blank" className="rounded-2xl bg-blue-600 px-4 py-2 text-sm font-bold text-white">Voir pièce jointe</a>}
               <label className="cursor-pointer rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold">Photo/doc<input className="hidden" type="file" onChange={(e: any) => uploadMaterialAttachment(m, e)} /></label>
               {m.attachment_url && <a href={m.attachment_url} target="_blank" className="rounded-2xl bg-blue-600 px-4 py-2 text-sm font-bold text-white">Voir pièce jointe</a>}
             </div>
@@ -1913,6 +2002,27 @@ function Storekeeper({ projects, materials, returns = [], refreshAll }: any) {
           </Card>
         ))}
       </div>
+
+      <Card className="mt-8 border-l-8 border-blue-500 bg-blue-50">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <h3 className="text-xl font-black text-blue-950">🧾 Factures fournisseurs chantier</h3>
+          <Button variant="green" onClick={() => { setShowInvoiceForm(true); setShowCreateMaterial(false); window.scrollTo({ top: 0, behavior: "smooth" }); }}>+ Créer facture</Button>
+        </div>
+        <div className="grid gap-3 lg:grid-cols-2">
+          {invoices.map((inv: any) => (
+            <div key={inv.id} className="rounded-2xl bg-white p-4 shadow-sm">
+              <div className="text-xs font-bold uppercase text-blue-700">{projectNameLocal(inv.project_id)}</div>
+              <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+                <b>{inv.supplier}</b>
+                <span className="text-lg font-black">{new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(Number(inv.amount || 0))}</span>
+              </div>
+              <div className="mt-1 text-xs text-slate-500">{inv.invoice_date || "Date non renseignée"}{inv.notes ? ` · ${inv.notes}` : ""}</div>
+              <div className="mt-3 flex gap-2"><Button variant="danger" onClick={() => deleteStoreInvoice(inv)}>Supprimer</Button></div>
+            </div>
+          ))}
+          {invoices.length === 0 && <div className="rounded-2xl bg-white p-4 text-sm text-slate-500">Aucune facture enregistrée.</div>}
+        </div>
+      </Card>
 
       <Card className="mt-8 border-l-8 border-purple-500 bg-purple-50">
         <h3 className="mb-4 text-xl font-black text-purple-950">↩️ Retour marchandise</h3>
