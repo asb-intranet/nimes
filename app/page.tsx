@@ -45,7 +45,13 @@ function storagePathFromPublicUrl(url: string, bucket: string) {
 }
 
 function formatDate(d: Date) {
-  return d.toISOString().slice(0, 10);
+  // Important : ne pas utiliser toISOString() ici.
+  // En France, un Date local à minuit peut devenir la veille en UTC,
+  // ce qui décale l'affichage du planning d'une journée.
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function startOfWeek(date: Date) {
