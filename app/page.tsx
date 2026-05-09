@@ -525,6 +525,7 @@ function ProjectDetail({ project, photos, docs, notes, materials, vigilance, inv
   const [vigilanceContent, setVigilanceContent] = useState("");
   const [openMaterialId, setOpenMaterialId] = useState<string | null>(null);
   const [openVigilanceId, setOpenVigilanceId] = useState<string | null>(null);
+  const [fullVigilance, setFullVigilance] = useState<any>(null);
   const [chantierTab, setChantierTab] = useState("factures");
   const [invoiceForm, setInvoiceForm] = useState({ supplier: "", amount: "", invoice_date: "", notes: "" });
   const [editingText, setEditingText] = useState<any>(null);
@@ -805,6 +806,29 @@ function ProjectDetail({ project, photos, docs, notes, materials, vigilance, inv
         </Card>
       </div>
 
+      {fullVigilance && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 p-3 md:p-8">
+          <div className="mx-auto min-h-[90vh] max-w-5xl rounded-[2rem] bg-white p-4 shadow-2xl md:p-8">
+            <div className="sticky top-0 z-10 mb-5 flex flex-wrap items-center justify-between gap-3 rounded-3xl bg-white/95 p-3 shadow-sm">
+              <div>
+                <p className="text-xs font-black uppercase tracking-wide text-red-600">Point de vigilance chantier</p>
+                <h2 className="text-2xl font-black text-slate-950 md:text-4xl">{fullVigilance.title || "Point de vigilance"}</h2>
+                <p className="text-sm font-bold text-slate-500">{project.name}</p>
+              </div>
+              <Button variant="secondary" onClick={() => setFullVigilance(null)}>← Retour chantier</Button>
+            </div>
+            <div className="rounded-3xl border-l-8 border-red-500 bg-red-50 p-5">
+              <pre className="min-h-[55vh] whitespace-pre-wrap rounded-3xl bg-white p-5 text-base leading-7 text-slate-800">{fullVigilance.content || "Aucun détail."}</pre>
+              <div className="mt-5 flex flex-wrap gap-2">
+                <Button variant="secondary" onClick={() => copyText(fullVigilance.title, fullVigilance.content)}>Copier</Button>
+                <Button variant="secondary" onClick={() => { openEditor("vigilance", fullVigilance); setFullVigilance(null); }}>Modifier</Button>
+                <Button variant="danger" onClick={() => { deleteVigilance(fullVigilance); setFullVigilance(null); }}>Supprimer</Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className={`${chantierTab === "vigilance" ? "grid" : "hidden"} gap-6 lg:grid-cols-2`}>
         <Card className="hidden">
           <h3 className="mb-4 text-xl font-black text-amber-900">📦 Matériel à prévoir</h3>
@@ -826,10 +850,10 @@ function ProjectDetail({ project, photos, docs, notes, materials, vigilance, inv
                 <div key={m.id} className={`rounded-2xl border p-3 ${m.ready ? "border-emerald-300 bg-emerald-50" : "border-amber-200 bg-white/90"}`}>
                   <button type="button" onClick={() => setOpenMaterialId(isOpen ? null : m.id)} className="flex w-full items-center justify-between gap-3 text-left">
                     <span className={m.ready ? "font-black text-emerald-950" : "font-black text-amber-950"}>{m.ready ? "✅ " : "📦 "}{m.title || "Matériel à prévoir"}</span>
-                    <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-900">{isOpen ? "Fermer" : "Ouvrir"}</span>
+                    <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-900">Plein écran</span>
                   </button>
 
-                  {isOpen && (
+                  {false && isOpen && (
                     <div className="mt-3">
                       <pre className="whitespace-pre-wrap rounded-2xl bg-amber-50 p-3 text-sm text-slate-800">{m.content || "Aucun détail."}</pre>
                       <div className="mt-3 flex flex-wrap gap-2">
@@ -866,12 +890,12 @@ function ProjectDetail({ project, photos, docs, notes, materials, vigilance, inv
               const isOpen = openVigilanceId === v.id;
               return (
                 <div key={v.id} className="rounded-2xl border border-red-200 bg-white/90 p-3">
-                  <button type="button" onClick={() => setOpenVigilanceId(isOpen ? null : v.id)} className="flex w-full items-center justify-between gap-3 text-left">
+                  <button type="button" onClick={() => setFullVigilance(v)} className="flex w-full items-center justify-between gap-3 text-left">
                     <span className="font-black text-red-950">{v.title || "Point de vigilance"}</span>
-                    <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-900">{isOpen ? "Fermer" : "Ouvrir"}</span>
+                    <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-900">Plein écran</span>
                   </button>
 
-                  {isOpen && (
+                  {false && isOpen && (
                     <div className="mt-3">
                       <pre className="whitespace-pre-wrap rounded-2xl bg-red-50 p-3 text-sm text-slate-800">{v.content || "Aucun détail."}</pre>
                       <div className="mt-3 flex flex-wrap gap-2">
@@ -1819,6 +1843,7 @@ function Storekeeper({ projects, materials, invoices = [], returns = [], refresh
   const [createForm, setCreateForm] = useState({ project_id: "", title: "", content: "", priority: "normale" });
   const [createFile, setCreateFile] = useState<any>(null);
   const [showCreateMaterial, setShowCreateMaterial] = useState(false);
+  const [fullMaterial, setFullMaterial] = useState<any>(null);
 
   function projectNameLocal(id: string) {
     return projects.find((p: any) => p.id === id)?.name || "Chantier inconnu";
@@ -1957,6 +1982,34 @@ function Storekeeper({ projects, materials, invoices = [], returns = [], refresh
 
   return (
     <div>
+      {fullMaterial && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 p-3 md:p-8">
+          <div className="mx-auto min-h-[90vh] max-w-5xl rounded-[2rem] bg-white p-4 shadow-2xl md:p-8">
+            <div className="sticky top-0 z-10 mb-5 flex flex-wrap items-center justify-between gap-3 rounded-3xl bg-white/95 p-3 shadow-sm">
+              <div>
+                <p className="text-xs font-black uppercase tracking-wide text-amber-600">Matériel à prévoir</p>
+                <h2 className="text-2xl font-black text-slate-950 md:text-4xl">{fullMaterial.title || "Matériel à prévoir"}</h2>
+                <p className="text-sm font-bold text-slate-500">{projectNameLocal(fullMaterial.project_id)}</p>
+              </div>
+              <Button variant="secondary" onClick={() => setFullMaterial(null)}>← Retour magasinier</Button>
+            </div>
+            <div className={`rounded-3xl border-l-8 p-5 ${fullMaterial.ready ? "border-emerald-500 bg-emerald-50" : "border-amber-400 bg-amber-50"}`}>
+              <div className="mb-4 flex flex-wrap gap-2">
+                <Badge tone={fullMaterial.ready ? "green" : "amber"}>{fullMaterial.ready ? "Prêt" : "À préparer"}</Badge>
+                <Badge>{fullMaterial.priority || "normale"}</Badge>
+              </div>
+              <pre className="min-h-[55vh] whitespace-pre-wrap rounded-3xl bg-white p-5 text-base leading-7 text-slate-800">{fullMaterial.content || "Aucun détail."}</pre>
+              <div className="mt-5 flex flex-wrap gap-2">
+                {!fullMaterial.ready && <Button variant="green" onClick={() => { setReady(fullMaterial, true); setFullMaterial({ ...fullMaterial, ready: true }); }}>OK prêt !</Button>}
+                {fullMaterial.ready && <Button variant="amber" onClick={() => { setReady(fullMaterial, false); setFullMaterial({ ...fullMaterial, ready: false }); }}>Remettre à préparer</Button>}
+                <Button variant="secondary" onClick={() => { startEdit(fullMaterial); setFullMaterial(null); }}>Modifier</Button>
+                {fullMaterial.attachment_url && <a href={fullMaterial.attachment_url} target="_blank" className="rounded-2xl bg-blue-600 px-4 py-2 text-sm font-bold text-white">Voir pièce jointe</a>}
+                <Button variant="danger" onClick={() => { deleteItem(fullMaterial); setFullMaterial(null); }}>Supprimer</Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       <Section title="Magasinier" subtitle="Matériel et création rapide de factures/retours. Les factures détaillées restent dans les fiches chantier." />
       <div className="mb-4 flex flex-wrap gap-2">
         <Button onClick={() => { setShowCreateMaterial(!showCreateMaterial); setShowInvoiceForm(false); setShowReturnForm(false); setEditingItem(null); }}>{showCreateMaterial ? "Fermer création matériel" : "+ Créer matériel à prévoir"}</Button>
@@ -2097,8 +2150,9 @@ function Storekeeper({ projects, materials, invoices = [], returns = [], refresh
           <Card key={m.id} className="border-l-8 border-amber-400 bg-amber-50">
             <div className="text-xs font-bold uppercase text-amber-700">{projectNameLocal(m.project_id)}</div>
             <h3 className="mt-1 text-xl font-black">{m.title || "Matériel à prévoir"}</h3>
-            {m.content && <pre className="mt-3 whitespace-pre-wrap rounded-2xl bg-white p-3 text-sm">{m.content}</pre>}
+            {m.content && <pre className="mt-3 max-h-24 overflow-hidden whitespace-pre-wrap rounded-2xl bg-white p-3 text-sm">{m.content}</pre>}
             <div className="mt-4 flex flex-wrap gap-2">
+              <Button variant="secondary" onClick={() => setFullMaterial(m)}>Plein écran</Button>
               <Button variant="green" onClick={() => setReady(m, true)}>OK prêt !</Button>
               <Button variant="secondary" onClick={() => startEdit(m)}>Modifier</Button>
               <Button variant="danger" onClick={() => deleteItem(m)}>Supprimer</Button>
@@ -2116,8 +2170,9 @@ function Storekeeper({ projects, materials, invoices = [], returns = [], refresh
           <Card key={m.id} className="border-l-8 border-emerald-500 bg-emerald-50">
             <div className="text-xs font-bold uppercase text-emerald-700">{projectNameLocal(m.project_id)}</div>
             <h3 className="mt-1 text-xl font-black">✅ {m.title || "Matériel prêt"}</h3>
-            {m.content && <pre className="mt-3 whitespace-pre-wrap rounded-2xl bg-white p-3 text-sm">{m.content}</pre>}
+            {m.content && <pre className="mt-3 max-h-24 overflow-hidden whitespace-pre-wrap rounded-2xl bg-white p-3 text-sm">{m.content}</pre>}
             <div className="mt-4 flex flex-wrap gap-2">
+              <Button variant="secondary" onClick={() => setFullMaterial(m)}>Plein écran</Button>
               <Button variant="amber" onClick={() => setReady(m, false)}>Remettre à préparer</Button>
               <Button variant="secondary" onClick={() => startEdit(m)}>Modifier</Button>
               <Button variant="danger" onClick={() => deleteItem(m)}>Supprimer</Button>
@@ -2182,23 +2237,97 @@ function Management({ projects, employees, planning, invoices, revenues, refresh
 
   function generateProjectReport(project: any) {
     const s = projectStats(project.id);
+    const projectRevenues = revenues.filter((r: any) => r.project_id === project.id);
+    const projectInvoices = invoices.filter((i: any) => i.project_id === project.id);
+    const projectPlanning = planning.filter((p: any) => p.project_id === project.id);
+    const statusColor = s.margin >= 0 ? "#10b981" : "#ef4444";
+    const statusLabel = s.margin >= 0 ? "Rentable" : "À surveiller";
     const html = `
       <html>
-        <head><title>Rapport chantier - ${project.name}</title></head>
-        <body style="font-family: Arial; padding: 30px;">
-          <h1>Rapport résultat chantier</h1>
-          <h2>${project.name}</h2>
-          <p><b>Client :</b> ${project.client || ""}</p>
-          <p><b>Adresse :</b> ${project.address || ""}</p>
-          <hr/>
-          <h3>Résultat financier</h3>
-          <p><b>Facturé client :</b> ${money(s.revenueTotal)}</p>
-          <p><b>Factures fournisseurs :</b> ${money(s.supplierTotal)}</p>
-          <p><b>Coût salariés :</b> ${money(s.laborTotal)}</p>
-          <p><b>Coûts totaux :</b> ${money(s.totalCosts)}</p>
-          <p><b>Marge estimée :</b> ${money(s.margin)} (${s.marginRate}%)</p>
-          <hr/>
-          <p>Généré depuis ASB Intranet.</p>
+        <head>
+          <title>Rapport gestion ASB - ${project.name}</title>
+          <style>
+            @page { size: A4; margin: 14mm; }
+            * { box-sizing: border-box; }
+            body { margin: 0; font-family: Arial, sans-serif; background: #f1f5f9; color: #0f172a; }
+            .page { max-width: 980px; margin: 0 auto; background: white; padding: 28px; }
+            .header { display: flex; justify-content: space-between; gap: 18px; align-items: center; border-bottom: 4px solid #0f172a; padding-bottom: 18px; }
+            .logo { height: 72px; object-fit: contain; }
+            .title { margin: 0; font-size: 30px; font-weight: 900; letter-spacing: -1px; }
+            .subtitle { margin: 6px 0 0; color: #64748b; font-weight: 700; }
+            .badge { display: inline-block; padding: 10px 16px; border-radius: 999px; background: ${statusColor}; color: white; font-weight: 900; }
+            .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 20px; }
+            .card { border-radius: 22px; padding: 16px; background: #f8fafc; border: 1px solid #e2e8f0; }
+            .card h3 { margin: 0 0 8px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: #475569; }
+            .card .value { font-size: 24px; font-weight: 900; }
+            .green { background: #ecfdf5; color: #047857; border-left: 8px solid #10b981; }
+            .red { background: #fef2f2; color: #b91c1c; border-left: 8px solid #ef4444; }
+            .amber { background: #fffbeb; color: #b45309; border-left: 8px solid #f59e0b; }
+            .blue { background: #eff6ff; color: #1d4ed8; border-left: 8px solid #3b82f6; }
+            .section { margin-top: 24px; }
+            .section h2 { font-size: 20px; margin: 0 0 12px; font-weight: 900; }
+            table { width: 100%; border-collapse: collapse; overflow: hidden; border-radius: 18px; font-size: 13px; }
+            th { background: #0f172a; color: white; text-align: left; padding: 10px; }
+            td { padding: 10px; border-bottom: 1px solid #e2e8f0; }
+            tr:nth-child(even) td { background: #f8fafc; }
+            .summary { margin-top: 22px; border-radius: 28px; padding: 22px; background: ${s.margin >= 0 ? "#ecfdf5" : "#fef2f2"}; border-left: 10px solid ${statusColor}; }
+            .summary .big { font-size: 38px; font-weight: 900; margin-top: 5px; color: ${statusColor}; }
+            .note { color: #64748b; font-size: 12px; margin-top: 22px; }
+            @media print { body { background: white; } .page { padding: 0; } }
+          </style>
+        </head>
+        <body>
+          <div class="page">
+            <div class="header">
+              <div>
+                <img class="logo" src="/logo-asb.png" />
+                <h1 class="title">Rapport gestion / rentabilité</h1>
+                <p class="subtitle">${project.name} · ${project.client || "Client non renseigné"}</p>
+                <p class="subtitle">${project.address || "Adresse non renseignée"}</p>
+              </div>
+              <div style="text-align:right">
+                <div class="badge">${statusLabel}</div>
+                <p class="subtitle">Généré depuis ASB Intranet</p>
+              </div>
+            </div>
+
+            <div class="grid">
+              <div class="card green"><h3>CA chantier</h3><div class="value">${money(s.revenueTotal)}</div></div>
+              <div class="card red"><h3>Achats / fournisseurs</h3><div class="value">${money(s.supplierTotal)}</div></div>
+              <div class="card amber"><h3>Main d'œuvre</h3><div class="value">${money(s.laborTotal)}</div></div>
+              <div class="card blue"><h3>Marge estimée</h3><div class="value">${money(s.margin)} · ${s.marginRate}%</div></div>
+            </div>
+
+            <div class="summary">
+              <div style="font-size:13px;font-weight:900;text-transform:uppercase;color:#475569">Synthèse décisionnelle</div>
+              <div class="big">${s.margin >= 0 ? "+" : ""}${s.marginRate}%</div>
+              <div style="font-weight:900">${s.margin >= 0 ? "Chantier rentable à ce stade." : "Chantier en dérive ou marge négative."}</div>
+              <p style="margin-bottom:0;color:#475569">À surveiller : factures fournisseurs, temps salariés engagé et reste à facturer client.</p>
+            </div>
+
+            <div class="section">
+              <h2>Facturation client</h2>
+              <table><thead><tr><th>Libellé</th><th>Date</th><th>Montant</th><th>Notes</th></tr></thead><tbody>
+                ${projectRevenues.map((r: any) => `<tr><td><b>${r.label || "Facturation client"}</b></td><td>${r.billing_date || ""}</td><td>${money(Number(r.amount || 0))}</td><td>${r.notes || ""}</td></tr>`).join("") || `<tr><td colspan="4">Aucune facturation client enregistrée.</td></tr>`}
+              </tbody></table>
+            </div>
+
+            <div class="section">
+              <h2>Factures fournisseurs</h2>
+              <table><thead><tr><th>Fournisseur</th><th>Date</th><th>Montant</th><th>Notes</th></tr></thead><tbody>
+                ${projectInvoices.map((i: any) => `<tr><td><b>${i.supplier || "Fournisseur"}</b></td><td>${i.invoice_date || ""}</td><td>${money(Number(i.amount || 0))}</td><td>${i.notes || ""}</td></tr>`).join("") || `<tr><td colspan="4">Aucune facture fournisseur enregistrée.</td></tr>`}
+              </tbody></table>
+            </div>
+
+            <div class="section">
+              <h2>Temps salariés / planning</h2>
+              <table><thead><tr><th>Salarié</th><th>Début</th><th>Fin</th><th>Coût estimé</th></tr></thead><tbody>
+                ${projectPlanning.map((pl: any) => `<tr><td><b>${employees.find((e: any) => e.id === pl.employee_id)?.name || "Salarié"}</b></td><td>${pl.start_date || ""}</td><td>${pl.end_date || ""}</td><td>${money(daysBetween(pl.start_date, pl.end_date) * employeeCost(pl.employee_id))}</td></tr>`).join("") || `<tr><td colspan="4">Aucun temps salarié lié au chantier.</td></tr>`}
+              </tbody></table>
+            </div>
+
+            <p class="note">Document interne ASB — rapport de gestion et rentabilité. Ne pas transmettre au client sans validation.</p>
+          </div>
         </body>
       </html>`;
     const w = window.open("", "_blank");
@@ -2206,7 +2335,7 @@ function Management({ projects, employees, planning, invoices, revenues, refresh
     w.document.write(html);
     w.document.close();
     w.focus();
-    w.print();
+    setTimeout(() => w.print(), 300);
   }
 
   async function deleteRevenue(item: any) { if (!confirm("Supprimer cette facturation client ?")) return; const { error } = await supabase.from("project_revenues").delete().eq("id", item.id); if (error) return alert(error.message); await refreshAll(); }

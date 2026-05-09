@@ -1,0 +1,21 @@
+V28 - Rapport gestion et vues plein écran
+
+- Gestion : rapport PDF rentabilité refait en présentation interne ASB.
+  - Logo ASB intégré.
+  - Cartes CA chantier / fournisseurs / main d'oeuvre / marge.
+  - Statut rentable / à surveiller.
+  - Tableaux facturation client, factures fournisseurs, temps salariés.
+  - Synthèse décisionnelle interne.
+
+- Magasinier : matériel à prévoir consultable en plein écran.
+  - Bouton Plein écran sur chaque fiche matériel.
+  - Vue mobile/tablette confortable.
+  - Bouton Retour magasinier.
+  - Actions OK prêt / modifier / supprimer conservées.
+
+- Chantier : points de vigilance consultables en plein écran.
+  - Clic sur un point = ouverture plein écran.
+  - Bouton Retour chantier.
+  - Actions copier / modifier / supprimer conservées.
+
+- Aucun changement SQL obligatoire.
