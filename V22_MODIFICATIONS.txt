@@ -1,0 +1,7 @@
+V22 - Planning
+- Ajout du bouton + Créer planning.
+- Le planning semaine/mois s'affiche directement, formulaire masqué par défaut.
+- Création planning avec sélection d'un ou plusieurs salariés.
+- Ajout automatique des salariés sélectionnés dans les affectations chantier si nécessaire.
+- Modification sans popup : le bouton Modif. ouvre la page/formulaire de création-modification.
+- package-lock.json supprimé volontairement pour éviter les blocages Vercel rencontrés précédemment.
