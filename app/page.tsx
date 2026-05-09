@@ -88,9 +88,7 @@ export default function Page() {
   const [userRole, setUserRole] = useState("admin");
   const [materials, setMaterials] = useState<any[]>([]);
   const [vigilance, setVigilance] = useState<any[]>([]);
-  const [userRole, setUserRole] = useState("admin");
-
-  useEffect(() => {
+    useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
       setUserRole(data.session?.user?.user_metadata?.role || "admin");
