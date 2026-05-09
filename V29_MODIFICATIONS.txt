@@ -1,0 +1,14 @@
+V29 - Accès par rôle salarié
+
+Objectif : adapter le menu affiché selon le rôle utilisateur Supabase.
+
+Modifications :
+- lecture du rôle utilisateur depuis la table public.profils, colonne role
+- fallback sur user_metadata.role si le profil n'est pas trouvé
+- rôle salarie : accès à tout sauf Gestion, Salariés et Terrassement
+- admin : accès complet à tous les modules
+- menu desktop et menu mobile filtrés selon le rôle
+- pages protégées côté interface selon le rôle
+- normalisation du rôle pour accepter salarie / salarié
+
+Aucun changement SQL obligatoire si la table profils contient déjà id + role.
