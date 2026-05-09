@@ -1,0 +1,6 @@
+V27 - Magasinier retour marchandise
+
+- Déplacement du formulaire + Créer retour directement sous les boutons principaux.
+- Suppression du formulaire retour en bas de page pour éviter le scroll mobile.
+- Carte retours marchandise conservée uniquement pour l'affichage des retours existants.
+- Aucun changement SQL.

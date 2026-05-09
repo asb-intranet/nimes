@@ -2021,6 +2021,29 @@ function Storekeeper({ projects, materials, invoices = [], returns = [], refresh
         </form>
       </Card>}
 
+      {showReturnForm && <Card className="mb-6 border-l-8 border-purple-500 bg-purple-50">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="text-2xl font-black text-purple-950">Créer retour marchandise</h3>
+            <p className="mt-1 text-sm text-purple-900/70">Retour attribuable à un chantier, sans obligation.</p>
+          </div>
+          <Button type="button" variant="secondary" onClick={() => setShowReturnForm(false)}>Retour</Button>
+        </div>
+        <form onSubmit={addReturn} className="grid gap-3 md:grid-cols-5">
+          <Field label="Chantier">
+            <Select value={returnForm.project_id} onChange={(e: any) => setReturnForm({ ...returnForm, project_id: e.target.value })}>
+              <option value="">Sans chantier</option>
+              {projects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </Select>
+          </Field>
+          <Field label="Fournisseur"><Input value={returnForm.supplier} onChange={(e: any) => setReturnForm({ ...returnForm, supplier: e.target.value })} /></Field>
+          <Field label="Montant €"><Input type="number" value={returnForm.amount} onChange={(e: any) => setReturnForm({ ...returnForm, amount: e.target.value })} /></Field>
+          <Field label="Date"><Input type="date" value={returnForm.return_date} onChange={(e: any) => setReturnForm({ ...returnForm, return_date: e.target.value })} /></Field>
+          <Field label="Notes"><Input value={returnForm.notes} onChange={(e: any) => setReturnForm({ ...returnForm, notes: e.target.value })} /></Field>
+          <div className="flex flex-wrap gap-2 md:col-span-5"><Button variant="amber">Ajouter retour marchandise</Button><Button type="button" variant="secondary" onClick={() => setShowReturnForm(false)}>Retour</Button></div>
+        </form>
+      </Card>}
+
       {editingItem && (
         <Card className="mb-8 border-l-8 border-blue-500 bg-blue-50">
           <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
@@ -2117,23 +2140,9 @@ function Storekeeper({ projects, materials, invoices = [], returns = [], refresh
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h3 className="text-xl font-black text-purple-950">↩️ Retours marchandise</h3>
-            <p className="mt-1 text-sm text-purple-900/70">Formulaire masqué pour alléger la page. Clique sur + Créer retour pour l’afficher.</p>
+            <p className="mt-1 text-sm text-purple-900/70">Le bouton + Créer retour ouvre maintenant le formulaire directement en haut de page.</p>
           </div>
-          <Button variant="amber" onClick={() => { setShowReturnForm(!showReturnForm); setShowCreateMaterial(false); setShowInvoiceForm(false); window.scrollTo({ top: 0, behavior: "smooth" }); }}>{showReturnForm ? "Fermer création retour" : "+ Créer retour"}</Button>
         </div>
-        {showReturnForm && <form onSubmit={addReturn} className="mt-4 grid gap-3 md:grid-cols-5">
-          <Field label="Chantier">
-            <Select value={returnForm.project_id} onChange={(e: any) => setReturnForm({ ...returnForm, project_id: e.target.value })}>
-              <option value="">Sans chantier</option>
-              {projects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </Select>
-          </Field>
-          <Field label="Fournisseur"><Input value={returnForm.supplier} onChange={(e: any) => setReturnForm({ ...returnForm, supplier: e.target.value })} /></Field>
-          <Field label="Montant €"><Input type="number" value={returnForm.amount} onChange={(e: any) => setReturnForm({ ...returnForm, amount: e.target.value })} /></Field>
-          <Field label="Date"><Input type="date" value={returnForm.return_date} onChange={(e: any) => setReturnForm({ ...returnForm, return_date: e.target.value })} /></Field>
-          <Field label="Notes"><Input value={returnForm.notes} onChange={(e: any) => setReturnForm({ ...returnForm, notes: e.target.value })} /></Field>
-          <div className="flex flex-wrap gap-2 md:col-span-5"><Button>Ajouter retour marchandise</Button><Button type="button" variant="secondary" onClick={() => setShowReturnForm(false)}>Retour</Button></div>
-        </form>}
         <div className="mt-4 space-y-2">
           {returns.map((r: any) => (
             <div key={r.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-white p-3">
