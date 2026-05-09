@@ -77,6 +77,7 @@ export default function Page() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [active, setActive] = useState("dashboard");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const [projects, setProjects] = useState<any[]>([]);
@@ -243,8 +244,19 @@ export default function Page() {
         <header className="sticky top-0 z-20 border-b border-slate-100 bg-white/90 p-5 backdrop-blur">
           <div className="text-sm text-slate-500">Connecté : {session.user.email}</div>
           <h1 className="text-3xl font-black">{menu.find((m) => m.id === active)?.title}</h1>
-          <div className="mt-3 flex flex-wrap gap-2 lg:hidden">
-            {menu.filter((m) => userRole === "admin" || ["projects", "planning", "earthworks"].includes(m.id)).map((m) => <Button key={m.id} variant={active === m.id ? "primary" : "secondary"} onClick={() => setActive(m.id)}>{m.title}</Button>)}
+          <div className="mt-3 lg:hidden">
+            <Button type="button" variant="secondary" className="w-full justify-center" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
+              ☰ Menu
+            </Button>
+            {mobileMenuOpen && (
+              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {menu.filter((m) => userRole === "admin" || ["projects", "planning", "earthworks"].includes(m.id)).map((m) => (
+                  <Button key={m.id} variant={active === m.id ? "primary" : "secondary"} onClick={() => { setActive(m.id); setMobileMenuOpen(false); }}>
+                    {m.title}
+                  </Button>
+                ))}
+              </div>
+            )}
           </div>
         </header>
 
@@ -1111,6 +1123,7 @@ function Planning({ projects, employees, links, planning, refreshAll }: any) {
 function Employees({ employees, projects, refreshAll }: any) {
   const [form, setForm] = useState({ firstname: "", lastname: "", position: "", role: "terrain", phone: "", email: "", daily_cost: "" });
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [showEmployeeForm, setShowEmployeeForm] = useState(false);
   const [employeeId, setEmployeeId] = useState("");
   const [projectId, setProjectId] = useState("");
   const [assignments, setAssignments] = useState<any[]>([]);
@@ -1127,9 +1140,11 @@ function Employees({ employees, projects, refreshAll }: any) {
     const { error } = await query;
     if (error) return alert(error.message);
     setForm({ firstname: "", lastname: "", position: "", role: "terrain", phone: "", email: "", daily_cost: "" });
-    setEditingId(null); await refreshEmployeesAll();
+    setEditingId(null);
+    setShowEmployeeForm(false);
+    await refreshEmployeesAll();
   }
-  function editEmployee(emp: any) { setEditingId(emp.id); setForm({ firstname: emp.firstname || "", lastname: emp.lastname || "", position: emp.position || "", role: emp.role || "terrain", phone: emp.phone || "", email: emp.email || "", daily_cost: String(emp.daily_cost || "") }); window.scrollTo({ top: 0, behavior: "smooth" }); }
+  function editEmployee(emp: any) { setEditingId(emp.id); setShowEmployeeForm(true); setForm({ firstname: emp.firstname || "", lastname: emp.lastname || "", position: emp.position || "", role: emp.role || "terrain", phone: emp.phone || "", email: emp.email || "", daily_cost: String(emp.daily_cost || "") }); window.scrollTo({ top: 0, behavior: "smooth" }); }
   async function deleteEmployee(emp: any) { if (!confirm(`Supprimer le salarié "${emp.firstname} ${emp.lastname}" ?`)) return; const { error } = await supabase.from("employees").delete().eq("id", emp.id); if (error) return alert(error.message); await refreshEmployeesAll(); }
   async function assign(e: any) { e.preventDefault(); if (!employeeId || !projectId) return alert("Choisis un salarié et un chantier"); const already = assignments.find((a: any) => a.employee_id === employeeId && a.project_id === projectId); if (already) return alert("Ce salarié est déjà affecté à ce chantier"); const { error } = await supabase.from("employee_projects").insert({ employee_id: employeeId, project_id: projectId }); if (error) return alert(error.message); await refreshEmployeesAll(); }
   async function removeAssignment(assignment: any) { if (!confirm("Retirer cette affectation ?")) return; const { error } = await supabase.from("employee_projects").delete().eq("id", assignment.id); if (error) return alert(error.message); await refreshEmployeesAll(); }
@@ -1138,8 +1153,11 @@ function Employees({ employees, projects, refreshAll }: any) {
   return (
     <div>
       <Section title="Gestion salariés" subtitle="Création, modification, coût journée et affectation aux chantiers." />
+      <Button className="mb-4" onClick={() => { if (showEmployeeForm && !editingId) { setShowEmployeeForm(false); } else { setShowEmployeeForm(true); setEditingId(null); setForm({ firstname: "", lastname: "", position: "", role: "terrain", phone: "", email: "", daily_cost: "" }); } }}>
+        {showEmployeeForm ? (editingId ? "Formulaire salarié ouvert" : "Fermer création salarié") : "+ Créer salarié"}
+      </Button>
       <div className="grid gap-6 lg:grid-cols-2">
-        <Card><h3 className="mb-4 font-black">{editingId ? "Modifier salarié" : "Créer salarié"}</h3><form onSubmit={saveEmployee} className="space-y-3">
+        {showEmployeeForm && <Card><h3 className="mb-4 font-black">{editingId ? "Modifier salarié" : "Créer salarié"}</h3><form onSubmit={saveEmployee} className="space-y-3">
           <Field label="Prénom"><Input value={form.firstname} onChange={(e: any) => setForm({ ...form, firstname: e.target.value })} /></Field>
           <Field label="Nom"><Input value={form.lastname} onChange={(e: any) => setForm({ ...form, lastname: e.target.value })} /></Field>
           <Field label="Poste"><Input value={form.position} onChange={(e: any) => setForm({ ...form, position: e.target.value })} /></Field>
@@ -1148,7 +1166,7 @@ function Employees({ employees, projects, refreshAll }: any) {
           <Field label="Email"><Input value={form.email} onChange={(e: any) => setForm({ ...form, email: e.target.value })} /></Field>
           <Field label="Coût journée €"><Input type="number" value={form.daily_cost} onChange={(e: any) => setForm({ ...form, daily_cost: e.target.value })} /></Field>
           <div className="flex gap-2"><Button>{editingId ? "Enregistrer" : "Ajouter salarié"}</Button>{editingId && <Button type="button" variant="secondary" onClick={() => { setEditingId(null); setForm({ firstname: "", lastname: "", position: "", role: "terrain", phone: "", email: "", daily_cost: "" }); }}>Annuler</Button>}</div>
-        </form></Card>
+        </form></Card>}
         <Card><h3 className="mb-4 font-black">Affecter un salarié à un chantier</h3><form onSubmit={assign} className="space-y-3"><Field label="Salarié"><Select value={employeeId} onChange={(e: any) => setEmployeeId(e.target.value)}><option value="">Choisir salarié</option>{employees.map((e: any) => <option key={e.id} value={e.id}>{e.firstname} {e.lastname} — {e.position || e.role}</option>)}</Select></Field><Field label="Chantier"><Select value={projectId} onChange={(e: any) => setProjectId(e.target.value)}><option value="">Choisir chantier</option>{projects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field><Button>Affecter au chantier</Button></form><div className="mt-6 space-y-2"><h4 className="font-black">Affectations existantes</h4>{assignments.map((a: any) => <div key={a.id} className="flex items-center justify-between gap-3 rounded-2xl bg-slate-50 p-3 text-sm"><span><b>{employeeName(a.employee_id)}</b> → {projectNameLocal(a.project_id)}</span><button type="button" onClick={() => removeAssignment(a)} className="rounded-xl bg-red-600 px-3 py-2 text-xs font-bold text-white">Retirer</button></div>)}</div></Card>
       </div>
       <div className="mt-6 grid gap-4 md:grid-cols-3">{employees.map((e: any) => { const employeeAssignments = assignments.filter((a: any) => a.employee_id === e.id); return <Card key={e.id}><div className="flex items-start justify-between gap-3"><div><h3 className="font-black">{e.firstname} {e.lastname}</h3><p className="text-sm text-slate-500">{e.position}</p><p className="text-sm font-bold text-slate-700">{e.daily_cost ? `${e.daily_cost} €/jour` : "Coût journée non renseigné"}</p></div><Badge>{e.role}</Badge></div><div className="mt-4 space-y-1"><p className="text-xs font-bold uppercase text-slate-500">Chantiers affectés</p>{employeeAssignments.map((a: any) => <div key={a.id} className="rounded-xl bg-slate-50 px-3 py-2 text-xs font-bold">{projectNameLocal(a.project_id)}</div>)}</div><div className="mt-4 grid grid-cols-2 gap-2"><Button variant="secondary" onClick={() => editEmployee(e)}>Modifier</Button><Button variant="danger" onClick={() => deleteEmployee(e)}>Supprimer</Button></div></Card>; })}</div>
@@ -1159,6 +1177,7 @@ function Employees({ employees, projects, refreshAll }: any) {
 function Vehicles({ vehicles, refreshAll }: any) {
   const [form, setForm] = useState({ name: "", plate: "", driver: "", km: "", status: "ras", next_service: "", insurance_date: "", technical_control_date: "", notes: "" });
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [showVehicleForm, setShowVehicleForm] = useState(false);
 
   async function saveVehicle(e: any) {
     e.preventDefault();
@@ -1169,11 +1188,13 @@ function Vehicles({ vehicles, refreshAll }: any) {
     if (error) return alert(error.message);
     setForm({ name: "", plate: "", driver: "", km: "", status: "ras", next_service: "", insurance_date: "", technical_control_date: "", notes: "" });
     setEditingId(null);
+    setShowVehicleForm(false);
     await refreshAll();
   }
 
   function editVehicle(v: any) {
     setEditingId(v.id);
+    setShowVehicleForm(true);
     setForm({
       name: v.name || "",
       plate: v.plate || "",
@@ -1198,7 +1219,10 @@ function Vehicles({ vehicles, refreshAll }: any) {
   return (
     <div>
       <Section title="Gestion véhicules" subtitle="Ajout, modification, suppression, km, entretien, CT et assurance." />
-      <Card>
+      <Button className="mb-4" onClick={() => { if (showVehicleForm && !editingId) { setShowVehicleForm(false); } else { setShowVehicleForm(true); setEditingId(null); setForm({ name: "", plate: "", driver: "", km: "", status: "ras", next_service: "", insurance_date: "", technical_control_date: "", notes: "" }); } }}>
+        {showVehicleForm ? (editingId ? "Formulaire véhicule ouvert" : "Fermer création véhicule") : "+ Créer véhicule"}
+      </Button>
+      {showVehicleForm && <Card>
         <form onSubmit={saveVehicle} className="grid gap-3 md:grid-cols-3">
           <Field label="Véhicule"><Input value={form.name} onChange={(e: any) => setForm({ ...form, name: e.target.value })} /></Field>
           <Field label="Immatriculation"><Input value={form.plate} onChange={(e: any) => setForm({ ...form, plate: e.target.value })} /></Field>
@@ -1214,7 +1238,7 @@ function Vehicles({ vehicles, refreshAll }: any) {
             {editingId && <Button type="button" variant="secondary" onClick={() => { setEditingId(null); setForm({ name: "", plate: "", driver: "", km: "", status: "ras", next_service: "", insurance_date: "", technical_control_date: "", notes: "" }); }}>Annuler</Button>}
           </div>
         </form>
-      </Card>
+      </Card>}
       <div className="mt-6 grid gap-4 md:grid-cols-3">
         {vehicles.map((v: any) => (
           <Card key={v.id}>
@@ -1857,13 +1881,15 @@ function Storekeeper({ projects, materials, returns = [], refreshAll }: any) {
 function Management({ projects, employees, planning, invoices, revenues, refreshAll }: any) {
   const [form, setForm] = useState({ project_id: "", label: "", amount: "", billing_date: "", notes: "" });
   const [editingRevenueId, setEditingRevenueId] = useState<string | null>(null);
+  const [showRevenueForm, setShowRevenueForm] = useState(false);
   function daysBetween(start: string, end: string) { if (!start) return 0; const s = new Date(start); const e = new Date(end || start); return Math.max(0, Math.round((e.getTime() - s.getTime()) / 86400000)) + 1; }
   function employeeCost(employeeId: string) { const e = employees.find((x: any) => x.id === employeeId); return Number(e?.daily_cost || 0); }
   function money(v: number) { return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(v || 0); }
   function projectStats(projectId: string) { const supplierTotal = invoices.filter((i: any) => i.project_id === projectId).reduce((s: number, i: any) => s + Number(i.amount || 0), 0); const revenueTotal = revenues.filter((r: any) => r.project_id === projectId).reduce((s: number, r: any) => s + Number(r.amount || 0), 0); const laborTotal = planning.filter((p: any) => p.project_id === projectId).reduce((s: number, p: any) => s + daysBetween(p.start_date, p.end_date) * employeeCost(p.employee_id), 0); const totalCosts = supplierTotal + laborTotal; const margin = revenueTotal - totalCosts; const marginRate = revenueTotal > 0 ? Math.round((margin / revenueTotal) * 100) : 0; return { supplierTotal, revenueTotal, laborTotal, totalCosts, margin, marginRate }; }
-  async function addRevenue(e: any) { e.preventDefault(); if (!form.project_id || !form.amount) return alert("Chantier et montant obligatoires"); const { error } = await supabase.from("project_revenues").insert({ project_id: form.project_id, label: form.label || "Facturation client", amount: Number(form.amount || 0), billing_date: form.billing_date || null, notes: form.notes }); if (error) return alert(error.message); setForm({ project_id: form.project_id, label: "", amount: "", billing_date: "", notes: "" }); await refreshAll(); }
+  async function addRevenue(e: any) { e.preventDefault(); if (!form.project_id || !form.amount) return alert("Chantier et montant obligatoires"); const { error } = await supabase.from("project_revenues").insert({ project_id: form.project_id, label: form.label || "Facturation client", amount: Number(form.amount || 0), billing_date: form.billing_date || null, notes: form.notes }); if (error) return alert(error.message); setForm({ project_id: form.project_id, label: "", amount: "", billing_date: "", notes: "" }); setEditingRevenueId(null); setShowRevenueForm(false); await refreshAll(); }
   function editRevenue(item: any) {
     setEditingRevenueId(item.id);
+    setShowRevenueForm(true);
     setForm({
       project_id: item.project_id || "",
       label: item.label || "",
@@ -1905,7 +1931,10 @@ function Management({ projects, employees, planning, invoices, revenues, refresh
 
   async function deleteRevenue(item: any) { if (!confirm("Supprimer cette facturation client ?")) return; const { error } = await supabase.from("project_revenues").delete().eq("id", item.id); if (error) return alert(error.message); await refreshAll(); }
   return <div><Section title="Gestion" subtitle="Rentabilité chantier : factures fournisseurs + coût salariés + facturation client." />
-    <Card><h3 className="mb-4 text-xl font-black">Ajouter ce qu'on a facturé au client</h3><form onSubmit={addRevenue} className="grid gap-3 md:grid-cols-5"><Field label="Chantier"><Select value={form.project_id} onChange={(e: any) => setForm({ ...form, project_id: e.target.value })}><option value="">Choisir chantier</option>{projects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field><Field label="Libellé"><Input value={form.label} onChange={(e: any) => setForm({ ...form, label: e.target.value })} /></Field><Field label="Montant €"><Input type="number" value={form.amount} onChange={(e: any) => setForm({ ...form, amount: e.target.value })} /></Field><Field label="Date"><Input type="date" value={form.billing_date} onChange={(e: any) => setForm({ ...form, billing_date: e.target.value })} /></Field><Field label="Notes"><Input value={form.notes} onChange={(e: any) => setForm({ ...form, notes: e.target.value })} /></Field><div className="flex gap-2 md:col-span-5"><Button variant="green">{editingRevenueId ? "Enregistrer modification" : "Ajouter facturation client"}</Button>{editingRevenueId && <Button type="button" variant="secondary" onClick={() => { setEditingRevenueId(null); setForm({ project_id: "", label: "", amount: "", billing_date: "", notes: "" }); }}>Annuler</Button>}</div></form></Card>
+    <Button className="mb-4" onClick={() => { if (showRevenueForm && !editingRevenueId) { setShowRevenueForm(false); } else { setShowRevenueForm(true); setEditingRevenueId(null); setForm({ project_id: "", label: "", amount: "", billing_date: "", notes: "" }); } }}>
+      {showRevenueForm ? (editingRevenueId ? "Formulaire facturation ouvert" : "Fermer création facturation client") : "+ Créer facturation client"}
+    </Button>
+    {showRevenueForm && <Card><h3 className="mb-4 text-xl font-black">Ajouter ce qu'on a facturé au client</h3><form onSubmit={addRevenue} className="grid gap-3 md:grid-cols-5"><Field label="Chantier"><Select value={form.project_id} onChange={(e: any) => setForm({ ...form, project_id: e.target.value })}><option value="">Choisir chantier</option>{projects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field><Field label="Libellé"><Input value={form.label} onChange={(e: any) => setForm({ ...form, label: e.target.value })} /></Field><Field label="Montant €"><Input type="number" value={form.amount} onChange={(e: any) => setForm({ ...form, amount: e.target.value })} /></Field><Field label="Date"><Input type="date" value={form.billing_date} onChange={(e: any) => setForm({ ...form, billing_date: e.target.value })} /></Field><Field label="Notes"><Input value={form.notes} onChange={(e: any) => setForm({ ...form, notes: e.target.value })} /></Field><div className="flex gap-2 md:col-span-5"><Button variant="green">{editingRevenueId ? "Enregistrer modification" : "Ajouter facturation client"}</Button>{editingRevenueId && <Button type="button" variant="secondary" onClick={() => { setEditingRevenueId(null); setForm({ project_id: "", label: "", amount: "", billing_date: "", notes: "" }); }}>Annuler</Button>}</div></form></Card>}
     <div className="mt-6 grid gap-4 xl:grid-cols-2">{projects.map((p: any) => { const s = projectStats(p.id); return <Card key={p.id} className="border-l-8" style={{ borderLeftColor: s.margin >= 0 ? "#10b981" : "#ef4444" }}><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-xl font-black">{p.name}</h3><p className="text-sm text-slate-500">{p.client}</p></div><div className="flex flex-wrap gap-2"><Badge tone={s.margin >= 0 ? "green" : "red"}>{s.margin >= 0 ? "Rentable" : "À surveiller"}</Badge><Button variant="secondary" onClick={() => generateProjectReport(p)}>Rapport PDF</Button></div></div><div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><div className="rounded-2xl bg-emerald-50 p-3"><p className="text-xs font-bold uppercase text-emerald-700">Facturé client</p><p className="text-xl font-black text-emerald-700">{money(s.revenueTotal)}</p></div><div className="rounded-2xl bg-red-50 p-3"><p className="text-xs font-bold uppercase text-red-700">Factures fournisseurs</p><p className="text-xl font-black text-red-700">{money(s.supplierTotal)}</p></div><div className="rounded-2xl bg-amber-50 p-3"><p className="text-xs font-bold uppercase text-amber-700">Coût salariés</p><p className="text-xl font-black text-amber-700">{money(s.laborTotal)}</p></div><div className={s.margin >= 0 ? "rounded-2xl bg-blue-50 p-3" : "rounded-2xl bg-red-100 p-3"}><p className="text-xs font-bold uppercase">Marge estimée</p><p className="text-xl font-black">{money(s.margin)} · {s.marginRate}%</p></div></div><div className="mt-4 space-y-2">{revenues.filter((r: any) => r.project_id === p.id).map((r: any) => <div key={r.id} className="flex items-center justify-between gap-3 rounded-2xl bg-slate-50 p-3 text-sm"><span><b>{r.label}</b> · {money(Number(r.amount || 0))} · {r.billing_date || "date non renseignée"}</span><div className="flex gap-2"><Button variant="secondary" onClick={() => editRevenue(r)}>Modifier</Button><Button variant="danger" onClick={() => deleteRevenue(r)}>Supprimer</Button></div></div>)}</div></Card>; })}</div>
   </div>;
 }

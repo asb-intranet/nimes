@@ -1,0 +1,25 @@
+ASB Intranet V21 - Modifications interface
+
+1. Menu mobile
+- Ajout d'un bouton "☰ Menu" sur mobile.
+- Le menu est replié par défaut pour libérer l'écran.
+- Le menu se referme automatiquement après sélection d'une rubrique.
+
+2. Véhicules
+- Ajout du bouton "+ Créer véhicule".
+- Le formulaire véhicule est masqué par défaut.
+- Le formulaire s'ouvre automatiquement en modification.
+
+3. Salariés
+- Ajout du bouton "+ Créer salarié".
+- Le formulaire salarié est masqué par défaut.
+- Le formulaire s'ouvre automatiquement en modification.
+- Le bloc d'affectation chantier reste visible.
+
+4. Gestion / facturation client
+- Ajout du bouton "+ Créer facturation client".
+- Le formulaire facturation client est masqué par défaut.
+- Le formulaire s'ouvre automatiquement en modification.
+
+5. Base de données
+- Aucun changement SQL nécessaire.
