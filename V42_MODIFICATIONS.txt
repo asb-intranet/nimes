@@ -1,0 +1,5 @@
+V42
+- Suppression de la facturation client du module Chantier.
+- La facturation client reste accessible dans Gestion uniquement.
+- Masquage visuel de la TVA collectée/rentabilité client dans Chantier pour éviter l’accès salarié.
+- Onglet chantier renommé Achats / retours.

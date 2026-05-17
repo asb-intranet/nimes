@@ -895,7 +895,7 @@ function ProjectDetail({ project, photos, docs, notes, materials, vigilance, inv
 
         <div className="grid gap-2 border-t border-slate-100 p-4 sm:grid-cols-2 lg:grid-cols-4">
           {[
-            ["factures", "💰 Factures", projectInvoices.length],
+            ["factures", "🧾 Achats / retours", projectInvoices.length + projectReturns.length],
             ["photos", "📸 Photos", projectPhotos.length],
             ["documents", "📄 Documents", projectDocs.length],
             ["intervenants", "👷 Intervenants", assignedEmployees.length],
@@ -919,32 +919,21 @@ function ProjectDetail({ project, photos, docs, notes, materials, vigilance, inv
       
       <div className={chantierTab === "factures" ? "block" : "hidden"}>
         <Card className="border-l-8 border-slate-900 bg-slate-50">
-          <div className="mb-3 rounded-2xl bg-slate-900 px-4 py-3 text-white"><p className="text-xs font-black uppercase">V31 FIX 2 — Chantier TVA actif</p><h3 className="text-xl font-black">📊 Synthèse chantier HT / TVA / TTC</h3></div>
-          <div className="grid gap-3 md:grid-cols-4">
-            <div className="rounded-2xl bg-emerald-50 p-3"><p className="text-xs font-bold uppercase text-emerald-700">Facturé client HT</p><p className="text-xl font-black text-emerald-700">{money(revenuesHT)}</p></div>
-            <div className="rounded-2xl bg-red-50 p-3"><p className="text-xs font-bold uppercase text-red-700">Factures HT</p><p className="text-xl font-black text-red-700">{money(invoicesHT)}</p></div>
-            <div className="rounded-2xl bg-purple-50 p-3"><p className="text-xs font-bold uppercase text-purple-700">Retours HT</p><p className="text-xl font-black text-purple-700">-{money(returnsHT)}</p></div>
-            <div className={marginHT >= 0 ? "rounded-2xl bg-blue-50 p-3" : "rounded-2xl bg-red-100 p-3"}><p className="text-xs font-bold uppercase">Marge HT</p><p className="text-xl font-black">{money(marginHT)}</p></div>
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-slate-900 px-4 py-3 text-white">
+            <div>
+              <p className="text-xs font-black uppercase">V42 — chantier sans facturation client</p>
+              <h3 className="text-xl font-black">🔒 Données financières client masquées</h3>
+            </div>
+            <Badge tone="blue">Gestion uniquement</Badge>
           </div>
+          <p className="mt-3 text-sm font-bold text-slate-600">
+            La facturation client, la TVA collectée et la rentabilité complète sont maintenant visibles uniquement dans le module Gestion.
+          </p>
           <div className="mt-3 grid gap-3 md:grid-cols-3">
-            <div className="rounded-2xl bg-white p-3"><p className="text-xs font-bold uppercase text-slate-500">TVA collectée client</p><p className="text-xl font-black">{money(revenuesTVA)}</p></div>
-            <div className="rounded-2xl bg-white p-3"><p className="text-xs font-bold uppercase text-slate-500">TVA déductible nette</p><p className="text-xl font-black">{money(Math.max(0, invoicesTVA - returnsTVA))}</p></div>
-            <div className="rounded-2xl bg-white p-3"><p className="text-xs font-bold uppercase text-slate-500">Solde TVA estimatif</p><p className="text-xl font-black">{money(tvaBalance)}</p></div>
+            <div className="rounded-2xl bg-white p-3"><p className="text-xs font-bold uppercase text-slate-500">Factures fournisseurs</p><p className="text-xl font-black">{projectInvoices.length}</p></div>
+            <div className="rounded-2xl bg-white p-3"><p className="text-xs font-bold uppercase text-slate-500">Retours chantier</p><p className="text-xl font-black">{projectReturns.length}</p></div>
+            <div className="rounded-2xl bg-white p-3"><p className="text-xs font-bold uppercase text-slate-500">Accès facturation client</p><p className="text-xl font-black text-slate-900">Gestion</p></div>
           </div>
-        </Card>
-
-        <Card className="border-l-8 border-blue-500 bg-blue-50">
-          <h3 className="mb-3 text-xl font-black text-blue-950">🧾 Factures clients chantier avec TVA</h3>
-          <form onSubmit={saveClientInvoice} className="grid gap-3 md:grid-cols-6">
-            <Field label="Libellé"><Input value={clientInvoiceForm.label} onChange={(e: any) => setClientInvoiceForm({ ...clientInvoiceForm, label: e.target.value })} /></Field>
-            <Field label="Montant HT"><Input type="number" value={clientInvoiceForm.amount} onChange={(e: any) => setClientInvoiceForm({ ...clientInvoiceForm, amount: e.target.value })} /></Field>
-            <Field label="TVA"><Select value={clientInvoiceForm.tva_rate} onChange={(e: any) => setClientInvoiceForm({ ...clientInvoiceForm, tva_rate: e.target.value })}><option value="0">0%</option><option value="5.5">5,5%</option><option value="10">10%</option><option value="20">20%</option></Select></Field>
-            <Field label="Date"><Input type="date" value={clientInvoiceForm.billing_date} onChange={(e: any) => setClientInvoiceForm({ ...clientInvoiceForm, billing_date: e.target.value })} /></Field>
-            <Field label="Statut"><Select value={clientInvoiceForm.status} onChange={(e: any) => setClientInvoiceForm({ ...clientInvoiceForm, status: e.target.value })}><option value="devis">Devis</option><option value="acompte">Acompte</option><option value="facturé">Facturé</option><option value="payé">Payé</option></Select></Field>
-            <Field label="Notes"><Input value={clientInvoiceForm.notes} onChange={(e: any) => setClientInvoiceForm({ ...clientInvoiceForm, notes: e.target.value })} /></Field>
-            <div className="flex gap-2 md:col-span-6"><Button variant="green">{editingClientInvoiceId ? "Modifier facturation" : "Ajouter facturation"}</Button>{editingClientInvoiceId && <Button type="button" variant="secondary" onClick={() => { setEditingClientInvoiceId(null); setClientInvoiceForm({ label: "Facturation client", amount: "", tva_rate: "10", billing_date: "", status: "facturé", notes: "" }); }}>Annuler</Button>}</div>
-          </form>
-          <div className="mt-4 space-y-2">{projectRevenues.map((r: any) => <div key={r.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-white p-3"><span><b>{r.label || "Facturation client"}</b> · HT {money(amountHT(r))} · TVA {money(amountTVA(r))} · TTC {money(amountTTC(r))}</span><div className="flex gap-2"><Button variant="secondary" onClick={() => editClientInvoice(r)}>Modifier</Button><Button variant="danger" onClick={() => deleteClientInvoice(r)}>Supprimer</Button></div></div>)}</div>
         </Card>
 
         <Card className="border-l-8 border-purple-500 bg-purple-50">
