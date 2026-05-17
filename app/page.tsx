@@ -2367,7 +2367,7 @@ function Storekeeper({ projects, materials, invoices = [], returns = [], refresh
           </div>
         </div>
       )}
-      <Section title="Magasinier" subtitle="V34 — création rapide avec TVA obligatoire : facture achat HT/TVA/TTC + retour HT/TVA/TTC." />
+      <Section title="Magasinier" subtitle="V37 — création rapide avec TVA obligatoire : facture achat HT/TVA/TTC + retour HT/TVA/TTC." />
       <div className="mb-4 flex flex-wrap gap-2">
         <Button onClick={() => { setShowCreateMaterial(!showCreateMaterial); setShowInvoiceForm(false); setShowReturnForm(false); setEditingItem(null); }}>{showCreateMaterial ? "Fermer création matériel" : "+ Créer matériel à prévoir"}</Button>
         <Button variant="green" onClick={() => { setShowInvoiceForm(!showInvoiceForm); setShowCreateMaterial(false); setShowReturnForm(false); setEditingItem(null); }}>{showInvoiceForm ? "Fermer création facture" : "+ Créer facture"}</Button>
@@ -2609,38 +2609,37 @@ function Management({ projects, employees, planning, invoices, revenues, returns
     const projectPlanning = planning.filter((p: any) => p.project_id === project.id);
     const statusColor = s.margin >= 0 ? "#10b981" : "#ef4444";
     const statusLabel = s.margin >= 0 ? "Rentable" : "À surveiller";
+    const employeeLabel = (id: string) => {
+      const e = employees.find((x: any) => x.id === id);
+      return e ? `${e.firstname || ""} ${e.lastname || ""}`.trim() || "Salarié" : "Salarié non défini";
+    };
+    const pct = (value: number, total: number) => total > 0 ? Math.max(0, Math.round((value / total) * 100)) : 0;
+    const revenueTTC = projectRevenues.reduce((sum: number, r: any) => sum + amountTTCLocal(r), 0);
+    const purchasesTTC = projectInvoices.reduce((sum: number, i: any) => sum + amountTTCLocal(i), 0);
+    const returnsTTC = projectReturns.reduce((sum: number, r: any) => sum + amountTTCLocal(r), 0);
+    const tvaTotal = Math.max(1, s.revenueTVA + s.netDeductibleTVA);
+    const costTotalForPie = Math.max(1, s.supplierTotal + s.laborTotal + Math.max(0, s.margin));
+    const pSupplier = pct(s.supplierTotal, costTotalForPie);
+    const pLabor = pct(s.laborTotal, costTotalForPie);
+    const pMargin = Math.max(0, 100 - pSupplier - pLabor);
+    const pCollectee = pct(s.revenueTVA, tvaTotal);
+    const pDeductible = Math.max(0, 100 - pCollectee);
     const html = `
       <html>
         <head>
           <title>Rapport gestion ASB - ${project.name}</title>
           <style>
-            @page { size: A4; margin: 14mm; }
-            * { box-sizing: border-box; }
-            body { margin: 0; font-family: Arial, sans-serif; background: #f1f5f9; color: #0f172a; }
-            .page { max-width: 980px; margin: 0 auto; background: white; padding: 28px; }
-            .header { display: flex; justify-content: space-between; gap: 18px; align-items: center; border-bottom: 4px solid #0f172a; padding-bottom: 18px; }
-            .logo { height: 72px; object-fit: contain; }
-            .title { margin: 0; font-size: 30px; font-weight: 900; letter-spacing: -1px; }
-            .subtitle { margin: 6px 0 0; color: #64748b; font-weight: 700; }
-            .badge { display: inline-block; padding: 10px 16px; border-radius: 999px; background: ${statusColor}; color: white; font-weight: 900; }
-            .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 20px; }
-            .card { border-radius: 22px; padding: 16px; background: #f8fafc; border: 1px solid #e2e8f0; }
-            .card h3 { margin: 0 0 8px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: #475569; }
-            .card .value { font-size: 24px; font-weight: 900; }
-            .green { background: #ecfdf5; color: #047857; border-left: 8px solid #10b981; }
-            .red { background: #fef2f2; color: #b91c1c; border-left: 8px solid #ef4444; }
-            .amber { background: #fffbeb; color: #b45309; border-left: 8px solid #f59e0b; }
-            .blue { background: #eff6ff; color: #1d4ed8; border-left: 8px solid #3b82f6; }
-            .section { margin-top: 24px; }
-            .section h2 { font-size: 20px; margin: 0 0 12px; font-weight: 900; }
-            table { width: 100%; border-collapse: collapse; overflow: hidden; border-radius: 18px; font-size: 13px; }
-            th { background: #0f172a; color: white; text-align: left; padding: 10px; }
-            td { padding: 10px; border-bottom: 1px solid #e2e8f0; }
-            tr:nth-child(even) td { background: #f8fafc; }
-            .summary { margin-top: 22px; border-radius: 28px; padding: 22px; background: ${s.margin >= 0 ? "#ecfdf5" : "#fef2f2"}; border-left: 10px solid ${statusColor}; }
-            .summary .big { font-size: 38px; font-weight: 900; margin-top: 5px; color: ${statusColor}; }
-            .note { color: #64748b; font-size: 12px; margin-top: 22px; }
-            @media print { body { background: white; } .page { padding: 0; } }
+            @page{size:A4;margin:10mm}
+            *{box-sizing:border-box}
+            body{font-family:Arial,sans-serif;background:#e5e7eb;color:#0f172a;margin:0}
+            .page{max-width:980px;margin:auto;background:white;padding:28px}
+            .header{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;border-bottom:4px solid #0f172a;padding-bottom:18px}
+            .logo{height:66px;object-fit:contain}.title{margin:0;font-size:30px;letter-spacing:-.04em}.muted{color:#64748b}.badge{display:inline-block;border-radius:999px;padding:8px 14px;background:${statusColor};color:white;font-weight:900}
+            .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:18px}.card{border-radius:20px;padding:14px;background:#f8fafc;border:1px solid #e2e8f0}.card b{font-size:11px;text-transform:uppercase;color:#475569}.value{font-size:22px;font-weight:900;margin-top:6px}.small{font-size:12px;color:#64748b;margin-top:4px}
+            .summary{margin-top:20px;border-radius:24px;padding:20px;background:${s.margin>=0?'#ecfdf5':'#fef2f2'};border-left:10px solid ${statusColor}}
+            .big{font-size:38px;font-weight:900;letter-spacing:-.04em}.section{margin-top:24px;break-inside:avoid}h2{font-size:18px;margin:0 0 10px}table{width:100%;border-collapse:collapse;font-size:12px}th{background:#0f172a;color:white;text-align:left;padding:9px}td{padding:9px;border-bottom:1px solid #e2e8f0;vertical-align:top}.num{text-align:right;white-space:nowrap}
+            .charts{display:grid;grid-template-columns:repeat(2,1fr);gap:18px;margin-top:22px}.chartbox{border:1px solid #e2e8f0;border-radius:24px;padding:18px;background:#f8fafc}.pie{width:190px;height:190px;border-radius:50%;margin:10px auto;border:10px solid white;box-shadow:0 10px 24px rgba(15,23,42,.12)}.legend{display:grid;gap:7px;font-size:12px}.legend span{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:6px}.c1{background:#0ea5e9}.c2{background:#f59e0b}.c3{background:#10b981}.c4{background:#ef4444}.note{margin-top:22px;font-size:11px;color:#64748b}.pagebreak{break-before:page}
+            @media print{body{background:white}.page{padding:0}.charts{break-inside:avoid}}
           </style>
         </head>
         <body>
@@ -2648,58 +2647,66 @@ function Management({ projects, employees, planning, invoices, revenues, returns
             <div class="header">
               <div>
                 <img class="logo" src="/logo-asb.png" />
-                <h1 class="title">Rapport gestion / rentabilité</h1>
-                <p class="subtitle">${project.name} · ${project.client || "Client non renseigné"}</p>
-                <p class="subtitle">${project.address || "Adresse non renseignée"}</p>
+                <h1 class="title">Rapport gestion / rentabilité V37</h1>
+                <p><b>${project.name}</b> · ${project.client || ""}</p>
+                <p class="muted">${project.address || ""}</p>
               </div>
-              <div style="text-align:right">
-                <div class="badge">${statusLabel}</div>
-                <p class="subtitle">Généré depuis ASB Intranet</p>
-              </div>
+              <div style="text-align:right"><div class="badge">${statusLabel}</div><p class="muted">Généré depuis ASB Intranet</p></div>
             </div>
-
             <div class="grid">
-              <div class="card green"><h3>CA chantier</h3><div class="value">${money(s.revenueTotal)}</div></div>
-              <div class="card red"><h3>Achats - retours</h3><div class="value">${money(s.supplierTotal)}</div></div>
-              <div class="card amber"><h3>Main d'œuvre</h3><div class="value">${money(s.laborTotal)}</div></div>
-              <div class="card blue"><h3>Marge estimée</h3><div class="value">${money(s.margin)} · ${s.marginRate}%</div></div>
+              <div class="card"><b>CA client HT</b><div class="value">${money(s.revenueTotal)}</div><div class="small">TTC ${money(revenueTTC)}</div></div>
+              <div class="card"><b>Achats - retours HT</b><div class="value">${money(s.supplierTotal)}</div><div class="small">Achats TTC ${money(purchasesTTC)} · retours TTC ${money(returnsTTC)}</div></div>
+              <div class="card"><b>Main d'œuvre</b><div class="value">${money(s.laborTotal)}</div><div class="small">${projectPlanning.length} ligne(s) planning</div></div>
+              <div class="card"><b>Marge estimée HT</b><div class="value">${money(s.margin)}</div><div class="small">${s.marginRate}% du CA HT</div></div>
             </div>
-
+            <div class="grid">
+              <div class="card"><b>TVA collectée</b><div class="value">${money(s.revenueTVA)}</div><div class="small">Sur factures clients</div></div>
+              <div class="card"><b>TVA déductible</b><div class="value">${money(s.netDeductibleTVA)}</div><div class="small">Achats - TVA retours</div></div>
+              <div class="card"><b>Solde TVA estimatif</b><div class="value">${money(s.tvaBalance)}</div><div class="small">Collectée - déductible</div></div>
+              <div class="card"><b>Total coûts HT</b><div class="value">${money(s.totalCosts)}</div><div class="small">Achats nets + main d'œuvre</div></div>
+            </div>
             <div class="summary">
               <div style="font-size:13px;font-weight:900;text-transform:uppercase;color:#475569">Synthèse décisionnelle</div>
               <div class="big">${s.margin >= 0 ? "+" : ""}${s.marginRate}%</div>
               <div style="font-weight:900">${s.margin >= 0 ? "Chantier rentable à ce stade." : "Chantier en dérive ou marge négative."}</div>
-              <p style="margin-bottom:0;color:#475569">À surveiller : factures fournisseurs, temps salariés engagé et reste à facturer client.</p>
+              <p style="margin-bottom:0;color:#475569">Jeux de TVA intégrés : TVA collectée client, TVA déductible achats, TVA corrigée par les retours et solde TVA estimatif.</p>
             </div>
-
-            <div class="section">
-              <h2>Facturation client</h2>
-              <table><thead><tr><th>Libellé</th><th>Date</th><th>Montant</th><th>Notes</th></tr></thead><tbody>
-                ${projectRevenues.map((r: any) => `<tr><td><b>${r.label || "Facturation client"}</b></td><td>${r.billing_date || ""}</td><td>${money(Number(r.amount || 0))}</td><td>${r.notes || ""}</td></tr>`).join("") || `<tr><td colspan="4">Aucune facturation client enregistrée.</td></tr>`}
+            <div class="charts">
+              <div class="chartbox">
+                <h2>Camembert rentabilité HT</h2>
+                <div class="pie" style="background:conic-gradient(#ef4444 0 ${pSupplier}%, #f59e0b ${pSupplier}% ${pSupplier+pLabor}%, #10b981 ${pSupplier+pLabor}% 100%)"></div>
+                <div class="legend"><div><span class="c4"></span>Achats nets : ${money(s.supplierTotal)} (${pSupplier}%)</div><div><span class="c2"></span>Main d'œuvre : ${money(s.laborTotal)} (${pLabor}%)</div><div><span class="c3"></span>Marge : ${money(Math.max(0, s.margin))} (${pMargin}%)</div></div>
+              </div>
+              <div class="chartbox">
+                <h2>Camembert jeu de TVA</h2>
+                <div class="pie" style="background:conic-gradient(#0ea5e9 0 ${pCollectee}%, #10b981 ${pCollectee}% 100%)"></div>
+                <div class="legend"><div><span class="c1"></span>TVA collectée : ${money(s.revenueTVA)} (${pCollectee}%)</div><div><span class="c3"></span>TVA déductible nette : ${money(s.netDeductibleTVA)} (${pDeductible}%)</div><div><b>Solde TVA :</b> ${money(s.tvaBalance)}</div></div>
+              </div>
+            </div>
+            <div class="section pagebreak">
+              <h2>Facturation client — détail TVA collectée</h2>
+              <table><thead><tr><th>Libellé</th><th>Date</th><th class="num">HT</th><th class="num">Taux</th><th class="num">TVA collectée</th><th class="num">TTC</th><th>Notes</th></tr></thead><tbody>
+                ${projectRevenues.map((r: any) => `<tr><td><b>${r.label || "Facturation client"}</b></td><td>${r.billing_date || ""}</td><td class="num">${money(amountHTLocal(r))}</td><td class="num">${Number(r.tva_rate ?? 0).toFixed(2).replace('.', ',')}%</td><td class="num">${money(amountTVALocal(r))}</td><td class="num">${money(amountTTCLocal(r))}</td><td>${r.notes || ""}</td></tr>`).join("") || `<tr><td colspan="7">Aucune facturation client enregistrée.</td></tr>`}
               </tbody></table>
             </div>
-
             <div class="section">
-              <h2>Factures fournisseurs</h2>
-              <table><thead><tr><th>Fournisseur</th><th>Date</th><th>Montant</th><th>Notes</th></tr></thead><tbody>
-                ${projectInvoices.map((i: any) => `<tr><td><b>${i.supplier || "Fournisseur"}</b></td><td>${i.invoice_date || ""}</td><td>${money(amountHTLocal(i))}</td><td>${money(amountTVALocal(i))}</td><td>${money(amountTTCLocal(i))}</td><td>${i.notes || ""}</td></tr>`).join("") || `<tr><td colspan="6">Aucune facture fournisseur enregistrée.</td></tr>`}
+              <h2>Factures fournisseurs — détail TVA déductible</h2>
+              <table><thead><tr><th>Fournisseur</th><th>Date</th><th class="num">HT</th><th class="num">Taux</th><th class="num">TVA déductible</th><th class="num">TTC</th><th>Notes</th></tr></thead><tbody>
+                ${projectInvoices.map((i: any) => `<tr><td><b>${i.supplier || "Fournisseur"}</b></td><td>${i.invoice_date || ""}</td><td class="num">${money(amountHTLocal(i))}</td><td class="num">${Number(i.tva_rate ?? 0).toFixed(2).replace('.', ',')}%</td><td class="num">${money(amountTVALocal(i))}</td><td class="num">${money(amountTTCLocal(i))}</td><td>${i.notes || ""}</td></tr>`).join("") || `<tr><td colspan="7">Aucune facture fournisseur enregistrée.</td></tr>`}
               </tbody></table>
             </div>
-
             <div class="section">
-              <h2>Retours marchandise déduits</h2>
-              <table><thead><tr><th>Fournisseur</th><th>Date</th><th>Montant déduit</th><th>Notes</th></tr></thead><tbody>
-                ${projectReturns.map((r: any) => `<tr><td><b>${r.supplier || "Retour"}</b></td><td>${r.return_date || ""}</td><td>-${money(amountHTLocal(r))}</td><td>-${money(amountTVALocal(r))}</td><td>-${money(amountTTCLocal(r))}</td><td>${r.notes || ""}</td></tr>`).join("") || `<tr><td colspan="6">Aucun retour marchandise.</td></tr>`}
+              <h2>Retours marchandise — TVA déductible corrigée</h2>
+              <table><thead><tr><th>Fournisseur</th><th>Date</th><th class="num">HT déduit</th><th class="num">Taux</th><th class="num">TVA corrigée</th><th class="num">TTC déduit</th><th>Notes</th></tr></thead><tbody>
+                ${projectReturns.map((r: any) => `<tr><td><b>${r.supplier || "Retour"}</b></td><td>${r.return_date || ""}</td><td class="num">-${money(amountHTLocal(r))}</td><td class="num">${Number(r.tva_rate ?? 0).toFixed(2).replace('.', ',')}%</td><td class="num">-${money(amountTVALocal(r))}</td><td class="num">-${money(amountTTCLocal(r))}</td><td>${r.notes || ""}</td></tr>`).join("") || `<tr><td colspan="7">Aucun retour marchandise.</td></tr>`}
               </tbody></table>
             </div>
-
             <div class="section">
               <h2>Temps salariés / planning</h2>
-              <table><thead><tr><th>Salarié</th><th>Début</th><th>Fin</th><th>Coût estimé</th></tr></thead><tbody>
-                ${projectPlanning.map((pl: any) => `<tr><td><b>${employees.find((e: any) => e.id === pl.employee_id)?.name || "Salarié"}</b></td><td>${pl.start_date || ""}</td><td>${pl.end_date || ""}</td><td>${money(daysBetween(pl.start_date, pl.end_date) * employeeCost(pl.employee_id))}</td></tr>`).join("") || `<tr><td colspan="4">Aucun temps salarié lié au chantier.</td></tr>`}
+              <table><thead><tr><th>Salarié</th><th>Début</th><th>Fin</th><th class="num">Jours</th><th class="num">Coût jour</th><th class="num">Coût estimé</th></tr></thead><tbody>
+                ${projectPlanning.map((pl: any) => { const days = daysBetween(pl.start_date, pl.end_date); const cost = employeeCost(pl.employee_id); return `<tr><td><b>${employeeLabel(pl.employee_id)}</b></td><td>${pl.start_date || ""}</td><td>${pl.end_date || ""}</td><td class="num">${days}</td><td class="num">${money(cost)}</td><td class="num">${money(days * cost)}</td></tr>`; }).join("") || `<tr><td colspan="6">Aucun temps salarié lié au chantier.</td></tr>`}
               </tbody></table>
             </div>
-
             <p class="note">Document interne ASB — rapport de gestion et rentabilité. Ne pas transmettre au client sans validation.</p>
           </div>
         </body>
@@ -2709,11 +2716,11 @@ function Management({ projects, employees, planning, invoices, revenues, returns
     w.document.write(html);
     w.document.close();
     w.focus();
-    setTimeout(() => w.print(), 300);
+    setTimeout(() => w.print(), 500);
   }
 
   async function deleteRevenue(item: any) { if (!confirm("Supprimer cette facturation client ?")) return; const { error } = await supabase.from("project_revenues").delete().eq("id", item.id); if (error) return alert(error.message); await refreshAll(); }
-  return <div><Section title="Gestion" subtitle="V34 — factures clients avec montant HT, taux TVA, TVA calculée et TTC." />
+  return <div><Section title="Gestion" subtitle="V37 — rapports premium avec camemberts, TVA collectée/déductible et salariés nominatifs." />
     <Button className="mb-4" onClick={() => { if (showRevenueForm && !editingRevenueId) { setShowRevenueForm(false); } else { setShowRevenueForm(true); setEditingRevenueId(null); setForm({ project_id: "", label: "", amount: "", tva_rate: "10", billing_date: "", notes: "" }); } }}>
       {showRevenueForm ? (editingRevenueId ? "Formulaire facturation ouvert" : "Fermer création facturation client") : "+ Créer facturation client"}
     </Button>
