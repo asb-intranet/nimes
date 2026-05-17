@@ -1,0 +1,13 @@
+V39 - Correctif crash module Gestion / company_expenses
+
+Inclus :
+- droits Supabase GRANT + RLS pour company_expenses
+- migration schema-complet-v39.sql
+- message d’erreur visible au lieu d’un crash page
+- module Gestion & Pilotage global V39
+- build testé OK avant nettoyage du dossier
+
+À faire :
+1. Déployer ce ZIP sur Vercel
+2. Lancer supabase/schema-complet-v39.sql dans Supabase SQL Editor
+3. Recharger l’intranet

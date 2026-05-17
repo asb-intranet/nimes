@@ -113,6 +113,7 @@ export default function Page() {
   const [earthworkRevenues, setEarthworkRevenues] = useState<any[]>([]);
   const [earthworkReturns, setEarthworkReturns] = useState<any[]>([]);
   const [companyExpenses, setCompanyExpenses] = useState<any[]>([]);
+  const [dataWarning, setDataWarning] = useState<string>("");
   
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -160,6 +161,9 @@ export default function Page() {
       supabase.from("earthwork_returns").select("*").order("return_date", { ascending: false }),
       supabase.from("company_expenses").select("*").order("expense_date", { ascending: false })
     ]);
+
+    const errors = [p, ph, d, e, l, n, v, r, pl, mat, vig, inv, rev, ret, ew, ewph, ewd, ewn, ewm, ewv, ewp, ewr, ewi, ewrev, ewret, ce].filter((x: any) => x?.error).map((x: any) => x.error.message);
+    setDataWarning(errors.length ? errors.join(" | ") : "");
 
     setProjects(p.data || []);
     setPhotos(ph.data || []);
@@ -391,7 +395,10 @@ function Projects({ projects, photos, docs, notes, materials, vigilance, invoice
     if (!form.name) return alert("Nom chantier obligatoire");
     const query = editingId ? supabase.from("projects").update(form).eq("id", editingId) : supabase.from("projects").insert(form);
     const { error } = await query;
-    if (error) return alert(error.message);
+    if (error) {
+      console.error("Erreur company_expenses", error);
+      return alert("Impossible d’enregistrer la charge : " + error.message + "\n\nSi le message parle de permission, lance le SQL V39 dans Supabase.");
+    }
     setForm({ name: "", client: "", address: "", description: "", status: "en_cours", color: "#0f172a", progress: 0 });
     setEditingId(null);
     await refreshAll();
@@ -673,7 +680,10 @@ function ProjectDetail({ project, photos, docs, notes, materials, vigilance, inv
     const payload = { project_id: project.id, supplier: invoiceForm.supplier, category: invoiceForm.category, ...makeTaxPayload(invoiceForm.amount, invoiceForm.tva_rate), invoice_date: invoiceForm.invoice_date || null, notes: invoiceForm.notes };
     const query = editingInvoiceId ? supabase.from("project_invoices").update(payload).eq("id", editingInvoiceId) : supabase.from("project_invoices").insert(payload);
     const { error } = await query;
-    if (error) return alert(error.message);
+    if (error) {
+      console.error("Erreur company_expenses", error);
+      return alert("Impossible d’enregistrer la charge : " + error.message + "\n\nSi le message parle de permission, lance le SQL V39 dans Supabase.");
+    }
     setEditingInvoiceId(null);
     setInvoiceForm({ supplier: "", category: "matériaux", amount: "", tva_rate: "20", invoice_date: "", notes: "" });
     await refreshAll();
@@ -697,7 +707,10 @@ function ProjectDetail({ project, photos, docs, notes, materials, vigilance, inv
     const payload = { project_id: project.id, label: clientInvoiceForm.label || "Facturation client", status: clientInvoiceForm.status, ...makeTaxPayload(clientInvoiceForm.amount, clientInvoiceForm.tva_rate), billing_date: clientInvoiceForm.billing_date || null, notes: clientInvoiceForm.notes };
     const query = editingClientInvoiceId ? supabase.from("project_revenues").update(payload).eq("id", editingClientInvoiceId) : supabase.from("project_revenues").insert(payload);
     const { error } = await query;
-    if (error) return alert(error.message);
+    if (error) {
+      console.error("Erreur company_expenses", error);
+      return alert("Impossible d’enregistrer la charge : " + error.message + "\n\nSi le message parle de permission, lance le SQL V39 dans Supabase.");
+    }
     setEditingClientInvoiceId(null);
     setClientInvoiceForm({ label: "Facturation client", amount: "", tva_rate: "10", billing_date: "", status: "facturé", notes: "" });
     await refreshAll();
@@ -721,7 +734,10 @@ function ProjectDetail({ project, photos, docs, notes, materials, vigilance, inv
     const payload = { project_id: project.id, supplier: returnForm.supplier, ...makeTaxPayload(returnForm.amount, returnForm.tva_rate), return_date: returnForm.return_date || null, notes: returnForm.notes };
     const query = editingReturnId ? supabase.from("merchandise_returns").update(payload).eq("id", editingReturnId) : supabase.from("merchandise_returns").insert(payload);
     const { error } = await query;
-    if (error) return alert(error.message);
+    if (error) {
+      console.error("Erreur company_expenses", error);
+      return alert("Impossible d’enregistrer la charge : " + error.message + "\n\nSi le message parle de permission, lance le SQL V39 dans Supabase.");
+    }
     setEditingReturnId(null);
     setReturnForm({ supplier: "", amount: "", tva_rate: "20", return_date: "", notes: "" });
     await refreshAll();
@@ -1399,7 +1415,10 @@ function Employees({ employees, projects, refreshAll }: any) {
     const payload = { ...form, daily_cost: Number(form.daily_cost || 0) };
     const query = editingId ? supabase.from("employees").update(payload).eq("id", editingId) : supabase.from("employees").insert(payload);
     const { error } = await query;
-    if (error) return alert(error.message);
+    if (error) {
+      console.error("Erreur company_expenses", error);
+      return alert("Impossible d’enregistrer la charge : " + error.message + "\n\nSi le message parle de permission, lance le SQL V39 dans Supabase.");
+    }
     setForm({ firstname: "", lastname: "", position: "", role: "terrain", phone: "", email: "", daily_cost: "" });
     setEditingId(null);
     setShowEmployeeForm(false);
@@ -1448,7 +1467,10 @@ function Vehicles({ vehicles, refreshAll }: any) {
     const payload = { ...form, km: Number(form.km || 0) };
     const query = editingId ? supabase.from("vehicles").update(payload).eq("id", editingId) : supabase.from("vehicles").insert(payload);
     const { error } = await query;
-    if (error) return alert(error.message);
+    if (error) {
+      console.error("Erreur company_expenses", error);
+      return alert("Impossible d’enregistrer la charge : " + error.message + "\n\nSi le message parle de permission, lance le SQL V39 dans Supabase.");
+    }
     setForm({ name: "", plate: "", driver: "", km: "", status: "ras", next_service: "", insurance_date: "", technical_control_date: "", notes: "" });
     setEditingId(null);
     setShowVehicleForm(false);
@@ -1702,7 +1724,10 @@ function Earthworks({ earthworks, photos, docs, notes, materials, vigilance, pla
       ? supabase.from("earthworks").update(payload).eq("id", editingId)
       : supabase.from("earthworks").insert(payload);
     const { error } = await query;
-    if (error) return alert(error.message);
+    if (error) {
+      console.error("Erreur company_expenses", error);
+      return alert("Impossible d’enregistrer la charge : " + error.message + "\n\nSi le message parle de permission, lance le SQL V39 dans Supabase.");
+    }
     resetForm();
     setShowCreate(false);
     await refreshAll();
@@ -1918,7 +1943,10 @@ function EarthworkDetail({ item, photos, docs, notes, materials, vigilance, plan
     const payload = { earthwork_id: item.id, title: matTitle || "Matériel", content: matContent, attachment_url, attachment_type };
     const query = editingMaterialId ? supabase.from("earthwork_materials").update(payload).eq("id", editingMaterialId) : supabase.from("earthwork_materials").insert(payload);
     const { error } = await query;
-    if (error) return alert(error.message);
+    if (error) {
+      console.error("Erreur company_expenses", error);
+      return alert("Impossible d’enregistrer la charge : " + error.message + "\n\nSi le message parle de permission, lance le SQL V39 dans Supabase.");
+    }
     setEditingMaterialId(null); setMatTitle(""); setMatContent(""); setMaterialFile(null);
     await refreshAll();
   }
@@ -1943,7 +1971,10 @@ function EarthworkDetail({ item, photos, docs, notes, materials, vigilance, plan
     const payload = { earthwork_id: item.id, title: vigTitle || "Point de vigilance", content: vigContent, attachment_url, attachment_type };
     const query = editingVigilanceId ? supabase.from("earthwork_vigilance").update(payload).eq("id", editingVigilanceId) : supabase.from("earthwork_vigilance").insert(payload);
     const { error } = await query;
-    if (error) return alert(error.message);
+    if (error) {
+      console.error("Erreur company_expenses", error);
+      return alert("Impossible d’enregistrer la charge : " + error.message + "\n\nSi le message parle de permission, lance le SQL V39 dans Supabase.");
+    }
     setEditingVigilanceId(null); setVigTitle(""); setVigContent(""); setVigilanceFile(null);
     await refreshAll();
   }
@@ -1971,7 +2002,10 @@ function EarthworkDetail({ item, photos, docs, notes, materials, vigilance, plan
     const payload = { earthwork_id: item.id, machine_type: rentalForm.machine_type, start_date: rentalForm.start_date || null, end_date: rentalForm.end_date || null, rental_price: rentalTax.amount_ht, ...rentalTax, notes: rentalForm.notes };
     const query = editingRentalId ? supabase.from("earthwork_machine_rentals").update(payload).eq("id", editingRentalId) : supabase.from("earthwork_machine_rentals").insert(payload);
     const { error } = await query;
-    if (error) return alert(error.message);
+    if (error) {
+      console.error("Erreur company_expenses", error);
+      return alert("Impossible d’enregistrer la charge : " + error.message + "\n\nSi le message parle de permission, lance le SQL V39 dans Supabase.");
+    }
     setEditingRentalId(null);
     setRentalForm({ machine_type: "", start_date: "", end_date: "", rental_price: "", tva_rate: "20", notes: "" });
     await refreshAll();
@@ -2000,7 +2034,10 @@ function EarthworkDetail({ item, photos, docs, notes, materials, vigilance, plan
     const payload = { earthwork_id: item.id, ...plan, start_time: plan.start_time || null, end_time: plan.end_time || null, end_date: plan.end_date || plan.start_date };
     const query = editingPlanningId ? supabase.from("earthwork_planning").update(payload).eq("id", editingPlanningId) : supabase.from("earthwork_planning").insert(payload);
     const { error } = await query;
-    if (error) return alert(error.message);
+    if (error) {
+      console.error("Erreur company_expenses", error);
+      return alert("Impossible d’enregistrer la charge : " + error.message + "\n\nSi le message parle de permission, lance le SQL V39 dans Supabase.");
+    }
     setEditingPlanningId(null);
     setPlan({ title: "", start_date: "", end_date: "", start_time: "", end_time: "", color: item.color || "#92400e", notes: "" });
     await refreshAll();
@@ -2012,7 +2049,10 @@ function EarthworkDetail({ item, photos, docs, notes, materials, vigilance, plan
     const payload = { earthwork_id: item.id, supplier: invoiceForm.supplier, category: invoiceForm.category, ...makeTaxPayload(invoiceForm.amount, invoiceForm.tva_rate), invoice_date: invoiceForm.invoice_date || null, notes: invoiceForm.notes };
     const query = editingInvoiceId ? supabase.from("earthwork_invoices").update(payload).eq("id", editingInvoiceId) : supabase.from("earthwork_invoices").insert(payload);
     const { error } = await query;
-    if (error) return alert(error.message);
+    if (error) {
+      console.error("Erreur company_expenses", error);
+      return alert("Impossible d’enregistrer la charge : " + error.message + "\n\nSi le message parle de permission, lance le SQL V39 dans Supabase.");
+    }
     setEditingInvoiceId(null);
     setInvoiceForm({ supplier: "", category: "matériaux", amount: "", tva_rate: "20", invoice_date: "", notes: "" });
     await refreshAll();
@@ -2029,7 +2069,10 @@ function EarthworkDetail({ item, photos, docs, notes, materials, vigilance, plan
     const payload = { earthwork_id: item.id, label: clientInvoiceForm.label || "Facturation client", status: clientInvoiceForm.status, ...makeTaxPayload(clientInvoiceForm.amount, clientInvoiceForm.tva_rate), billing_date: clientInvoiceForm.billing_date || null, notes: clientInvoiceForm.notes };
     const query = editingClientInvoiceId ? supabase.from("earthwork_revenues").update(payload).eq("id", editingClientInvoiceId) : supabase.from("earthwork_revenues").insert(payload);
     const { error } = await query;
-    if (error) return alert(error.message);
+    if (error) {
+      console.error("Erreur company_expenses", error);
+      return alert("Impossible d’enregistrer la charge : " + error.message + "\n\nSi le message parle de permission, lance le SQL V39 dans Supabase.");
+    }
     setEditingClientInvoiceId(null);
     setClientInvoiceForm({ label: "Facturation client", amount: "", tva_rate: "10", billing_date: "", status: "facturé", notes: "" });
     await refreshAll();
@@ -2053,7 +2096,10 @@ function EarthworkDetail({ item, photos, docs, notes, materials, vigilance, plan
     const payload = { earthwork_id: item.id, supplier: returnForm.supplier, ...makeTaxPayload(returnForm.amount, returnForm.tva_rate), return_date: returnForm.return_date || null, notes: returnForm.notes };
     const query = editingReturnId ? supabase.from("earthwork_returns").update(payload).eq("id", editingReturnId) : supabase.from("earthwork_returns").insert(payload);
     const { error } = await query;
-    if (error) return alert(error.message);
+    if (error) {
+      console.error("Erreur company_expenses", error);
+      return alert("Impossible d’enregistrer la charge : " + error.message + "\n\nSi le message parle de permission, lance le SQL V39 dans Supabase.");
+    }
     setEditingReturnId(null);
     setReturnForm({ supplier: "", amount: "", tva_rate: "20", return_date: "", notes: "" });
     await refreshAll();
@@ -2804,7 +2850,10 @@ function Management({ projects, employees, planning, invoices, revenues, returns
     const payload = { name: expenseForm.name, category: expenseForm.category, ...tax, frequency: expenseForm.frequency, expense_date: expenseForm.expense_date || null, notes: expenseForm.notes, active: expenseForm.active };
     const query = editingExpenseId ? supabase.from("company_expenses").update(payload).eq("id", editingExpenseId) : supabase.from("company_expenses").insert(payload);
     const { error } = await query;
-    if (error) return alert(error.message);
+    if (error) {
+      console.error("Erreur company_expenses", error);
+      return alert("Impossible d’enregistrer la charge : " + error.message + "\n\nSi le message parle de permission, lance le SQL V39 dans Supabase.");
+    }
     setEditingExpenseId(null); setShowExpenseForm(false); setExpenseForm({ name: "", category: "Charges fixes", amount: "", tva_rate: "20", frequency: "mensuelle", expense_date: formatDate(new Date()), notes: "", active: true });
     await refreshAll();
   }
@@ -2819,7 +2868,7 @@ function Management({ projects, employees, planning, invoices, revenues, returns
     await refreshAll();
   }
 
-  return <div><Section title="Gestion & pilotage global" subtitle="V38 — charges entreprise, pilotage semaine/mois, TVA globale et rentabilité nette." />
+  return <div><Section title="Gestion & pilotage global" subtitle="V39 — charges entreprise sécurisées, pilotage semaine/mois, TVA globale et rentabilité nette." />
     <div className="mb-6 flex flex-wrap gap-2"><Button variant={pilotageMode === "week" ? "primary" : "secondary"} onClick={() => setQuickPeriod("week")}>Semaine</Button><Button variant={pilotageMode === "month" ? "primary" : "secondary"} onClick={() => setQuickPeriod("month")}>Mois</Button><Button variant={pilotageMode === "quarter" ? "primary" : "secondary"} onClick={() => setQuickPeriod("quarter")}>Trimestre</Button><Button variant={pilotageMode === "year" ? "primary" : "secondary"} onClick={() => setQuickPeriod("year")}>Année</Button><Field label="Début"><Input type="date" value={periodStart} onChange={(e: any) => { setPilotageMode("custom"); setPeriodStart(e.target.value); }} /></Field><Field label="Fin"><Input type="date" value={periodEnd} onChange={(e: any) => { setPilotageMode("custom"); setPeriodEnd(e.target.value); }} /></Field></div>
     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
       <Card className="border-l-8 border-emerald-500 bg-emerald-50"><p className="text-xs font-bold uppercase text-emerald-700">CA HT période</p><p className="text-3xl font-black text-emerald-700">{money(globalCA)}</p><p className="text-xs text-slate-500">TVA collectée : {money(globalTvaCollectee)}</p></Card>
