@@ -110,6 +110,8 @@ export default function Page() {
   const [earthworkPlanning, setEarthworkPlanning] = useState<any[]>([]);
   const [earthworkRentals, setEarthworkRentals] = useState<any[]>([]);
   const [earthworkInvoices, setEarthworkInvoices] = useState<any[]>([]);
+  const [earthworkRevenues, setEarthworkRevenues] = useState<any[]>([]);
+  const [earthworkReturns, setEarthworkReturns] = useState<any[]>([]);
   
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -129,7 +131,7 @@ export default function Page() {
   }, []);
 
   async function refreshAll() {
-    const [p, ph, d, e, l, n, v, r, pl, mat, vig, inv, rev, ret, ew, ewph, ewd, ewn, ewm, ewv, ewp, ewr, ewi] = await Promise.all([
+    const [p, ph, d, e, l, n, v, r, pl, mat, vig, inv, rev, ret, ew, ewph, ewd, ewn, ewm, ewv, ewp, ewr, ewi, ewrev, ewret] = await Promise.all([
       supabase.from("projects").select("*").order("created_at", { ascending: false }),
       supabase.from("chantier_photos").select("*").order("created_at", { ascending: false }),
       supabase.from("chantier_documents").select("*").order("created_at", { ascending: false }),
@@ -152,7 +154,9 @@ export default function Page() {
       supabase.from("earthwork_vigilance").select("*").order("created_at", { ascending: false }),
       supabase.from("earthwork_planning").select("*").order("start_date", { ascending: true }),
       supabase.from("earthwork_machine_rentals").select("*").order("start_date", { ascending: true }),
-      supabase.from("earthwork_invoices").select("*").order("invoice_date", { ascending: false })
+      supabase.from("earthwork_invoices").select("*").order("invoice_date", { ascending: false }),
+      supabase.from("earthwork_revenues").select("*").order("billing_date", { ascending: false }),
+      supabase.from("earthwork_returns").select("*").order("return_date", { ascending: false })
     ]);
 
     setProjects(p.data || []);
@@ -178,6 +182,8 @@ export default function Page() {
     setEarthworkPlanning(ewp.data || []);
     setEarthworkRentals(ewr.data || []);
     setEarthworkInvoices(ewi.data || []);
+    setEarthworkRevenues(ewrev.data || []);
+    setEarthworkReturns(ewret.data || []);
   }
 
   async function signIn(e: any) {
@@ -276,7 +282,7 @@ export default function Page() {
           {active === "dashboard" && userRole === "admin" && <Dashboard projects={projects} photos={photos} docs={docs} requests={requests} materials={materials} invoices={invoices} setActive={setActive} />}
           {active === "storekeeper" && userRole === "admin" && <Storekeeper projects={projects} materials={materials} invoices={invoices} returns={returns} refreshAll={refreshAll} />}
           {active === "projects" && <Projects projects={projects} photos={photos} docs={docs} notes={notes} materials={materials} vigilance={vigilance} invoices={invoices} employees={employees} links={links} planning={planning} refreshAll={refreshAll} />}
-          {active === "earthworks" && <Earthworks earthworks={earthworks} photos={earthworkPhotos} docs={earthworkDocs} notes={earthworkNotes} materials={earthworkMaterials} vigilance={earthworkVigilance} planning={earthworkPlanning} rentals={earthworkRentals} earthworkInvoices={earthworkInvoices} refreshAll={refreshAll} />}
+          {active === "earthworks" && <Earthworks earthworks={earthworks} photos={earthworkPhotos} docs={earthworkDocs} notes={earthworkNotes} materials={earthworkMaterials} vigilance={earthworkVigilance} planning={earthworkPlanning} rentals={earthworkRentals} earthworkInvoices={earthworkInvoices} earthworkRevenues={earthworkRevenues} earthworkReturns={earthworkReturns} refreshAll={refreshAll} />}
           {active === "planning" && <Planning projects={projects} employees={employees} links={links} planning={planning} refreshAll={refreshAll} />}
           {active === "employees" && userRole === "admin" && <Employees employees={employees} projects={projects} refreshAll={refreshAll} />}
           {active === "vehicles" && userRole === "admin" && <Vehicles vehicles={vehicles} refreshAll={refreshAll} />}
@@ -530,7 +536,7 @@ function ProjectDetail({ project, photos, docs, notes, materials, vigilance, inv
   const [openVigilanceId, setOpenVigilanceId] = useState<string | null>(null);
   const [fullVigilance, setFullVigilance] = useState<any>(null);
   const [chantierTab, setChantierTab] = useState("factures");
-  const [invoiceForm, setInvoiceForm] = useState({ supplier: "", amount: "", invoice_date: "", notes: "" });
+  const [invoiceForm, setInvoiceForm] = useState({ supplier: "", category: "matériaux", amount: "", tva_rate: "20", invoice_date: "", notes: "" });
   const [editingText, setEditingText] = useState<any>(null);
 
   async function addPhoto(e: any) {
@@ -642,7 +648,7 @@ function ProjectDetail({ project, photos, docs, notes, materials, vigilance, inv
     if (!invoiceForm.supplier || !invoiceForm.amount) return alert("Fournisseur et montant obligatoires");
     const { error } = await supabase.from("project_invoices").insert({ project_id: project.id, supplier: invoiceForm.supplier, amount: Number(invoiceForm.amount || 0), invoice_date: invoiceForm.invoice_date || null, notes: invoiceForm.notes });
     if (error) return alert(error.message);
-    setInvoiceForm({ supplier: "", amount: "", invoice_date: "", notes: "" });
+    setInvoiceForm({ supplier: "", category: "matériaux", amount: "", tva_rate: "20", invoice_date: "", notes: "" });
     await refreshAll();
   }
 
@@ -1555,7 +1561,7 @@ function Requests({ requests, projects, employees = [], refreshAll, projectName 
 }
 
 
-function Earthworks({ earthworks, photos, docs, notes, materials, vigilance, planning, rentals = [], earthworkInvoices = [], refreshAll }: any) {
+function Earthworks({ earthworks, photos, docs, notes, materials, vigilance, planning, rentals = [], earthworkInvoices = [], earthworkRevenues = [], earthworkReturns = [], refreshAll }: any) {
   const [selectedId, setSelectedId] = useState("");
   const [detailMode, setDetailMode] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
@@ -1639,7 +1645,7 @@ function Earthworks({ earthworks, photos, docs, notes, materials, vigilance, pla
             <Button variant="secondary" onClick={() => { setDetailMode(false); window.scrollTo({ top: 0, behavior: "smooth" }); }}>← Retour liste terrassements</Button>
           </div>
         </div>
-        <EarthworkDetail item={current} photos={photos} docs={docs} notes={notes} materials={materials} vigilance={vigilance} planning={planning} rentals={rentals} invoices={earthworkInvoices} refreshAll={refreshAll} />
+        <EarthworkDetail item={current} photos={photos} docs={docs} notes={notes} materials={materials} vigilance={vigilance} planning={planning} rentals={rentals} invoices={earthworkInvoices} revenues={earthworkRevenues} returns={earthworkReturns} refreshAll={refreshAll} />
       </div>
     );
   }
@@ -1697,7 +1703,7 @@ function Earthworks({ earthworks, photos, docs, notes, materials, vigilance, pla
   );
 }
 
-function EarthworkDetail({ item, photos, docs, notes, materials, vigilance, planning, rentals = [], invoices = [], refreshAll }: any) {
+function EarthworkDetail({ item, photos, docs, notes, materials, vigilance, planning, rentals = [], invoices = [], revenues = [], returns = [], refreshAll }: any) {
   const [photoTitle, setPhotoTitle] = useState("");
   const [docName, setDocName] = useState("");
   const [note, setNote] = useState("");
@@ -1708,8 +1714,12 @@ function EarthworkDetail({ item, photos, docs, notes, materials, vigilance, plan
   const [plan, setPlan] = useState({ title: "", start_date: "", end_date: "", start_time: "", end_time: "", color: "#92400e", notes: "" });
   const [rentalForm, setRentalForm] = useState({ machine_type: "", start_date: "", end_date: "", rental_price: "", notes: "" });
   const [editingRentalId, setEditingRentalId] = useState<string | null>(null);
-  const [invoiceForm, setInvoiceForm] = useState({ supplier: "", amount: "", invoice_date: "", notes: "" });
+  const [invoiceForm, setInvoiceForm] = useState({ supplier: "", category: "matériaux", amount: "", tva_rate: "20", invoice_date: "", notes: "" });
   const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(null);
+  const [clientInvoiceForm, setClientInvoiceForm] = useState({ label: "Facturation client", amount: "", tva_rate: "10", billing_date: "", status: "facturé", notes: "" });
+  const [returnForm, setReturnForm] = useState({ supplier: "", amount: "", tva_rate: "20", return_date: "", notes: "" });
+  const [editingClientInvoiceId, setEditingClientInvoiceId] = useState<string | null>(null);
+  const [editingReturnId, setEditingReturnId] = useState<string | null>(null);
   const [editingPlanningId, setEditingPlanningId] = useState<string | null>(null);
   const [editingMaterialId, setEditingMaterialId] = useState<string | null>(null);
   const [editingVigilanceId, setEditingVigilanceId] = useState<string | null>(null);
@@ -1726,9 +1736,24 @@ function EarthworkDetail({ item, photos, docs, notes, materials, vigilance, plan
   const myPlanning = planning.filter((x: any) => x.earthwork_id === item.id);
   const myRentals = rentals.filter((x: any) => x.earthwork_id === item.id);
   const myInvoices = invoices.filter((x: any) => x.earthwork_id === item.id);
+  const myRevenues = revenues.filter((x: any) => x.earthwork_id === item.id);
+  const myReturns = returns.filter((x: any) => x.earthwork_id === item.id);
   const money = (v: number) => new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(v || 0);
-  const invoicesTotal = myInvoices.reduce((s: number, i: any) => s + Number(i.amount || 0), 0);
+  function amountHT(x: any) { return Number(x.amount_ht ?? x.amount ?? 0); }
+  function amountTVA(x: any) { return Number(x.amount_tva ?? (amountHT(x) * Number(x.tva_rate || 0) / 100)); }
+  function amountTTC(x: any) { return Number(x.amount_ttc ?? (amountHT(x) + amountTVA(x))); }
+  function makeTaxPayload(amount: string, rate: string) { const ht = Number(amount || 0); const tva = Math.round(ht * Number(rate || 0)) / 100; return { amount: ht, amount_ht: ht, tva_rate: Number(rate || 0), amount_tva: tva, amount_ttc: ht + tva }; }
+  const invoicesHT = myInvoices.reduce((s: number, i: any) => s + amountHT(i), 0);
+  const invoicesTVA = myInvoices.reduce((s: number, i: any) => s + amountTVA(i), 0);
+  const invoicesTTC = myInvoices.reduce((s: number, i: any) => s + amountTTC(i), 0);
+  const returnsHT = myReturns.reduce((s: number, r: any) => s + amountHT(r), 0);
+  const returnsTVA = myReturns.reduce((s: number, r: any) => s + amountTVA(r), 0);
+  const revenuesHT = myRevenues.reduce((s: number, r: any) => s + amountHT(r), 0) || Number(item.client_billing || 0);
+  const revenuesTVA = myRevenues.reduce((s: number, r: any) => s + amountTVA(r), 0);
   const rentalsTotal = myRentals.reduce((s: number, r: any) => s + Number(r.rental_price || 0), 0);
+  const netCostsHT = Math.max(0, invoicesHT - returnsHT) + rentalsTotal;
+  const marginHT = revenuesHT - netCostsHT;
+  const tvaBalance = revenuesTVA - Math.max(0, invoicesTVA - returnsTVA);
 
   async function deleteRow(table: string, id: string) {
     if (!confirm("Supprimer ?")) return;
@@ -1870,19 +1895,67 @@ function EarthworkDetail({ item, photos, docs, notes, materials, vigilance, plan
 
   async function saveInvoice(e: any) {
     e.preventDefault();
-    if (!invoiceForm.supplier || !invoiceForm.amount) return alert("Fournisseur et montant obligatoires");
-    const payload = { earthwork_id: item.id, supplier: invoiceForm.supplier, amount: Number(invoiceForm.amount || 0), invoice_date: invoiceForm.invoice_date || null, notes: invoiceForm.notes };
+    if (!invoiceForm.supplier || !invoiceForm.amount) return alert("Fournisseur et montant HT obligatoires");
+    const payload = { earthwork_id: item.id, supplier: invoiceForm.supplier, category: invoiceForm.category, ...makeTaxPayload(invoiceForm.amount, invoiceForm.tva_rate), invoice_date: invoiceForm.invoice_date || null, notes: invoiceForm.notes };
     const query = editingInvoiceId ? supabase.from("earthwork_invoices").update(payload).eq("id", editingInvoiceId) : supabase.from("earthwork_invoices").insert(payload);
     const { error } = await query;
     if (error) return alert(error.message);
     setEditingInvoiceId(null);
-    setInvoiceForm({ supplier: "", amount: "", invoice_date: "", notes: "" });
+    setInvoiceForm({ supplier: "", category: "matériaux", amount: "", tva_rate: "20", invoice_date: "", notes: "" });
     await refreshAll();
   }
 
   function editInvoice(i: any) {
     setEditingInvoiceId(i.id);
-    setInvoiceForm({ supplier: i.supplier || "", amount: String(i.amount || ""), invoice_date: i.invoice_date || "", notes: i.notes || "" });
+    setInvoiceForm({ supplier: i.supplier || "", category: i.category || "matériaux", amount: String(amountHT(i) || ""), tva_rate: String(i.tva_rate ?? 20), invoice_date: i.invoice_date || "", notes: i.notes || "" });
+  }
+
+  async function saveClientInvoice(e: any) {
+    e.preventDefault();
+    if (!clientInvoiceForm.amount) return alert("Montant HT obligatoire");
+    const payload = { earthwork_id: item.id, label: clientInvoiceForm.label || "Facturation client", status: clientInvoiceForm.status, ...makeTaxPayload(clientInvoiceForm.amount, clientInvoiceForm.tva_rate), billing_date: clientInvoiceForm.billing_date || null, notes: clientInvoiceForm.notes };
+    const query = editingClientInvoiceId ? supabase.from("earthwork_revenues").update(payload).eq("id", editingClientInvoiceId) : supabase.from("earthwork_revenues").insert(payload);
+    const { error } = await query;
+    if (error) return alert(error.message);
+    setEditingClientInvoiceId(null);
+    setClientInvoiceForm({ label: "Facturation client", amount: "", tva_rate: "10", billing_date: "", status: "facturé", notes: "" });
+    await refreshAll();
+  }
+
+  function editClientInvoice(r: any) {
+    setEditingClientInvoiceId(r.id);
+    setClientInvoiceForm({ label: r.label || "Facturation client", amount: String(amountHT(r) || ""), tva_rate: String(r.tva_rate ?? 10), billing_date: r.billing_date || "", status: r.status || "facturé", notes: r.notes || "" });
+  }
+
+  async function deleteClientInvoice(r: any) {
+    if (!confirm("Supprimer cette facturation client terrassement ?")) return;
+    const { error } = await supabase.from("earthwork_revenues").delete().eq("id", r.id);
+    if (error) return alert(error.message);
+    await refreshAll();
+  }
+
+  async function saveEarthworkReturn(e: any) {
+    e.preventDefault();
+    if (!returnForm.supplier || !returnForm.amount) return alert("Fournisseur et montant HT obligatoires");
+    const payload = { earthwork_id: item.id, supplier: returnForm.supplier, ...makeTaxPayload(returnForm.amount, returnForm.tva_rate), return_date: returnForm.return_date || null, notes: returnForm.notes };
+    const query = editingReturnId ? supabase.from("earthwork_returns").update(payload).eq("id", editingReturnId) : supabase.from("earthwork_returns").insert(payload);
+    const { error } = await query;
+    if (error) return alert(error.message);
+    setEditingReturnId(null);
+    setReturnForm({ supplier: "", amount: "", tva_rate: "20", return_date: "", notes: "" });
+    await refreshAll();
+  }
+
+  function editEarthworkReturn(r: any) {
+    setEditingReturnId(r.id);
+    setReturnForm({ supplier: r.supplier || "", amount: String(amountHT(r) || ""), tva_rate: String(r.tva_rate ?? 20), return_date: r.return_date || "", notes: r.notes || "" });
+  }
+
+  async function deleteEarthworkReturn(r: any) {
+    if (!confirm("Supprimer ce retour terrassement ?")) return;
+    const { error } = await supabase.from("earthwork_returns").delete().eq("id", r.id);
+    if (error) return alert(error.message);
+    await refreshAll();
   }
 
   async function deleteInvoice(i: any) {
@@ -1893,11 +1966,11 @@ function EarthworkDetail({ item, photos, docs, notes, materials, vigilance, plan
   }
 
   function generateEarthworkReport() {
-    const clientBilling = Number(item.client_billing || 0);
-    const totalCosts = invoicesTotal + rentalsTotal;
-    const margin = clientBilling - totalCosts;
+    const clientBilling = revenuesHT;
+    const totalCosts = netCostsHT;
+    const margin = marginHT;
     const marginRate = clientBilling > 0 ? Math.round((margin / clientBilling) * 100) : 0;
-    const html = `<html><head><title>Rapport terrassement - ${item.name}</title><style>@page{size:A4;margin:14mm}body{font-family:Arial,sans-serif;background:#f1f5f9;color:#0f172a}.page{max-width:980px;margin:auto;background:white;padding:28px}.header{border-bottom:4px solid #92400e;padding-bottom:16px}.logo{height:70px}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:20px}.card{border-radius:20px;padding:14px;background:#f8fafc;border:1px solid #e2e8f0}.value{font-size:24px;font-weight:900}.section{margin-top:24px}table{width:100%;border-collapse:collapse;font-size:13px}th{background:#0f172a;color:white;text-align:left;padding:10px}td{padding:10px;border-bottom:1px solid #e2e8f0}.summary{margin-top:22px;border-radius:24px;padding:20px;background:${margin>=0?'#ecfdf5':'#fef2f2'};border-left:10px solid ${margin>=0?'#10b981':'#ef4444'}}@media print{body{background:white}.page{padding:0}}</style></head><body><div class="page"><div class="header"><img class="logo" src="/logo-asb.png"/><h1>Rapport terrassement / rentabilité</h1><p><b>${item.name}</b> · ${item.client || ''}</p><p>${item.address || ''}</p></div><div class="grid"><div class="card"><b>Facturation client</b><div class="value">${money(clientBilling)}</div></div><div class="card"><b>Factures</b><div class="value">${money(invoicesTotal)}</div></div><div class="card"><b>Locations engins</b><div class="value">${money(rentalsTotal)}</div></div><div class="card"><b>Marge</b><div class="value">${money(margin)} · ${marginRate}%</div></div></div><div class="summary"><b>Synthèse</b><div style="font-size:34px;font-weight:900">${margin>=0?'+':''}${money(margin)}</div><p>Coût total terrassement : ${money(totalCosts)}. À comparer avec la facturation client enregistrée sur la fiche.</p></div><div class="section"><h2>Factures terrassement</h2><table><thead><tr><th>Fournisseur</th><th>Date</th><th>Montant</th><th>Notes</th></tr></thead><tbody>${myInvoices.map((i:any)=>`<tr><td><b>${i.supplier||'Fournisseur'}</b></td><td>${i.invoice_date||''}</td><td>${money(Number(i.amount||0))}</td><td>${i.notes||''}</td></tr>`).join('') || '<tr><td colspan="4">Aucune facture.</td></tr>'}</tbody></table></div><div class="section"><h2>Locations d’engins</h2><table><thead><tr><th>Engin</th><th>Début</th><th>Fin</th><th>Montant</th><th>Notes</th></tr></thead><tbody>${myRentals.map((r:any)=>`<tr><td><b>${r.machine_type||'Engin'}</b></td><td>${r.start_date||''}</td><td>${r.end_date||''}</td><td>${money(Number(r.rental_price||0))}</td><td>${r.notes||''}</td></tr>`).join('') || '<tr><td colspan="5">Aucune location.</td></tr>'}</tbody></table></div><p style="font-size:12px;color:#64748b;margin-top:22px">Document interne ASB — rapport terrassement.</p></div></body></html>`;
+    const html = `<html><head><title>Rapport terrassement - ${item.name}</title><style>@page{size:A4;margin:14mm}body{font-family:Arial,sans-serif;background:#f1f5f9;color:#0f172a}.page{max-width:980px;margin:auto;background:white;padding:28px}.header{border-bottom:4px solid #92400e;padding-bottom:16px}.logo{height:70px}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:20px}.card{border-radius:20px;padding:14px;background:#f8fafc;border:1px solid #e2e8f0}.value{font-size:24px;font-weight:900}.section{margin-top:24px}table{width:100%;border-collapse:collapse;font-size:13px}th{background:#0f172a;color:white;text-align:left;padding:10px}td{padding:10px;border-bottom:1px solid #e2e8f0}.summary{margin-top:22px;border-radius:24px;padding:20px;background:${margin>=0?'#ecfdf5':'#fef2f2'};border-left:10px solid ${margin>=0?'#10b981':'#ef4444'}}@media print{body{background:white}.page{padding:0}}</style></head><body><div class="page"><div class="header"><img class="logo" src="/logo-asb.png"/><h1>Rapport terrassement / rentabilité</h1><p><b>${item.name}</b> · ${item.client || ''}</p><p>${item.address || ''}</p></div><div class="grid"><div class="card"><b>Facturation client</b><div class="value">${money(clientBilling)}</div></div><div class="card"><b>Factures</b><div class="value">${money(invoicesHT)}</div></div><div class="card"><b>Locations engins</b><div class="value">${money(rentalsTotal)}</div></div><div class="card"><b>Marge</b><div class="value">${money(margin)} · ${marginRate}%</div></div></div><div class="summary"><b>Synthèse</b><div style="font-size:34px;font-weight:900">${margin>=0?'+':''}${money(margin)}</div><p>Coût total terrassement : ${money(totalCosts)}. À comparer avec la facturation client enregistrée sur la fiche.</p></div><div class="section"><h2>Factures terrassement</h2><table><thead><tr><th>Fournisseur</th><th>Date</th><th>Montant</th><th>Notes</th></tr></thead><tbody>${myInvoices.map((i:any)=>`<tr><td><b>${i.supplier||'Fournisseur'}</b></td><td>${i.invoice_date||''}</td><td>${money(amountHT(i))}</td><td>${i.notes||''}</td></tr>`).join('') || '<tr><td colspan="4">Aucune facture.</td></tr>'}</tbody></table></div><div class="section"><h2>Locations d’engins</h2><table><thead><tr><th>Engin</th><th>Début</th><th>Fin</th><th>Montant</th><th>Notes</th></tr></thead><tbody>${myRentals.map((r:any)=>`<tr><td><b>${r.machine_type||'Engin'}</b></td><td>${r.start_date||''}</td><td>${r.end_date||''}</td><td>${money(Number(r.rental_price||0))}</td><td>${r.notes||''}</td></tr>`).join('') || '<tr><td colspan="5">Aucune location.</td></tr>'}</tbody></table></div><p style="font-size:12px;color:#64748b;margin-top:22px">Document interne ASB — rapport terrassement.</p></div></body></html>`;
     const w = window.open("", "_blank");
     if (!w) return alert("Popup bloquée. Autorise les popups pour générer le rapport.");
     w.document.write(html); w.document.close(); w.focus(); setTimeout(() => w.print(), 300);
@@ -1915,24 +1988,58 @@ function EarthworkDetail({ item, photos, docs, notes, materials, vigilance, plan
         </div>
         {item.description && <p className="mt-3 rounded-2xl bg-slate-50 p-3 text-sm">{item.description}</p>}
         <div className="mt-4 grid gap-3 md:grid-cols-4">
-          <div className="rounded-2xl bg-emerald-50 p-3"><p className="text-xs font-bold uppercase text-emerald-700">Facturé client</p><p className="text-xl font-black text-emerald-700">{money(Number(item.client_billing || 0))}</p></div>
-          <div className="rounded-2xl bg-red-50 p-3"><p className="text-xs font-bold uppercase text-red-700">Factures</p><p className="text-xl font-black text-red-700">{money(invoicesTotal)}</p></div>
+          <div className="rounded-2xl bg-emerald-50 p-3"><p className="text-xs font-bold uppercase text-emerald-700">Facturé client</p><p className="text-xl font-black text-emerald-700">{money(revenuesHT)}</p></div>
+          <div className="rounded-2xl bg-red-50 p-3"><p className="text-xs font-bold uppercase text-red-700">Factures</p><p className="text-xl font-black text-red-700">{money(invoicesHT)}</p></div>
           <div className="rounded-2xl bg-orange-50 p-3"><p className="text-xs font-bold uppercase text-orange-700">Locations engins</p><p className="text-xl font-black text-orange-700">{money(rentalsTotal)}</p></div>
-          <div className="rounded-2xl bg-blue-50 p-3"><p className="text-xs font-bold uppercase text-blue-700">Solde estimé</p><p className="text-xl font-black text-blue-700">{money(Number(item.client_billing || 0) - invoicesTotal - rentalsTotal)}</p></div>
+          <div className="rounded-2xl bg-blue-50 p-3"><p className="text-xs font-bold uppercase text-blue-700">Solde estimé</p><p className="text-xl font-black text-blue-700">{money(marginHT)}</p></div>
         </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          <div className="rounded-2xl bg-white p-3"><p className="text-xs font-bold uppercase text-slate-500">TVA collectée client</p><p className="text-xl font-black">{money(revenuesTVA)}</p></div>
+          <div className="rounded-2xl bg-white p-3"><p className="text-xs font-bold uppercase text-slate-500">TVA déductible nette</p><p className="text-xl font-black">{money(Math.max(0, invoicesTVA - returnsTVA))}</p></div>
+          <div className="rounded-2xl bg-white p-3"><p className="text-xs font-bold uppercase text-slate-500">Solde TVA estimatif</p><p className="text-xl font-black">{money(tvaBalance)}</p></div>
+        </div>
+      </Card>
+
+      <Card className="border-l-8 border-blue-500 bg-blue-50">
+        <h3 className="mb-3 text-xl font-black text-blue-950">🧾 Facturation client terrassement</h3>
+        <form onSubmit={saveClientInvoice} className="grid gap-3 md:grid-cols-6">
+          <Field label="Libellé"><Input value={clientInvoiceForm.label} onChange={(e: any) => setClientInvoiceForm({ ...clientInvoiceForm, label: e.target.value })} /></Field>
+          <Field label="Montant HT"><Input type="number" value={clientInvoiceForm.amount} onChange={(e: any) => setClientInvoiceForm({ ...clientInvoiceForm, amount: e.target.value })} /></Field>
+          <Field label="TVA"><Select value={clientInvoiceForm.tva_rate} onChange={(e: any) => setClientInvoiceForm({ ...clientInvoiceForm, tva_rate: e.target.value })}><option value="0">0%</option><option value="5.5">5,5%</option><option value="10">10%</option><option value="20">20%</option></Select></Field>
+          <Field label="Date"><Input type="date" value={clientInvoiceForm.billing_date} onChange={(e: any) => setClientInvoiceForm({ ...clientInvoiceForm, billing_date: e.target.value })} /></Field>
+          <Field label="Statut"><Select value={clientInvoiceForm.status} onChange={(e: any) => setClientInvoiceForm({ ...clientInvoiceForm, status: e.target.value })}><option value="devis">Devis</option><option value="acompte">Acompte</option><option value="facturé">Facturé</option><option value="payé">Payé</option></Select></Field>
+          <Field label="Notes"><Input value={clientInvoiceForm.notes} onChange={(e: any) => setClientInvoiceForm({ ...clientInvoiceForm, notes: e.target.value })} /></Field>
+          <div className="flex gap-2 md:col-span-6"><Button variant="green">{editingClientInvoiceId ? "Modifier facturation" : "Ajouter facturation"}</Button>{editingClientInvoiceId && <Button type="button" variant="secondary" onClick={() => { setEditingClientInvoiceId(null); setClientInvoiceForm({ label: "Facturation client", amount: "", tva_rate: "10", billing_date: "", status: "facturé", notes: "" }); }}>Annuler</Button>}</div>
+        </form>
+        <div className="mt-4 space-y-2">{myRevenues.map((r: any) => <div key={r.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-white p-3"><span><b>{r.label || "Facturation client"}</b> · HT {money(amountHT(r))} · TVA {money(amountTVA(r))} · TTC {money(amountTTC(r))}</span><div className="flex gap-2"><Button variant="secondary" onClick={() => editClientInvoice(r)}>Modifier</Button><Button variant="danger" onClick={() => deleteClientInvoice(r)}>Supprimer</Button></div></div>)}</div>
+      </Card>
+
+      <Card className="border-l-8 border-purple-500 bg-purple-50">
+        <h3 className="mb-3 text-xl font-black text-purple-950">↩️ Retours terrassement</h3>
+        <form onSubmit={saveEarthworkReturn} className="grid gap-3 md:grid-cols-5">
+          <Field label="Fournisseur"><Input value={returnForm.supplier} onChange={(e: any) => setReturnForm({ ...returnForm, supplier: e.target.value })} /></Field>
+          <Field label="Montant HT"><Input type="number" value={returnForm.amount} onChange={(e: any) => setReturnForm({ ...returnForm, amount: e.target.value })} /></Field>
+          <Field label="TVA"><Select value={returnForm.tva_rate} onChange={(e: any) => setReturnForm({ ...returnForm, tva_rate: e.target.value })}><option value="0">0%</option><option value="5.5">5,5%</option><option value="10">10%</option><option value="20">20%</option></Select></Field>
+          <Field label="Date"><Input type="date" value={returnForm.return_date} onChange={(e: any) => setReturnForm({ ...returnForm, return_date: e.target.value })} /></Field>
+          <Field label="Notes"><Input value={returnForm.notes} onChange={(e: any) => setReturnForm({ ...returnForm, notes: e.target.value })} /></Field>
+          <div className="flex gap-2 md:col-span-5"><Button variant="amber">{editingReturnId ? "Modifier retour" : "Ajouter retour"}</Button>{editingReturnId && <Button type="button" variant="secondary" onClick={() => { setEditingReturnId(null); setReturnForm({ supplier: "", amount: "", tva_rate: "20", return_date: "", notes: "" }); }}>Annuler</Button>}</div>
+        </form>
+        <div className="mt-4 space-y-2">{myReturns.map((r: any) => <div key={r.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-white p-3"><span><b>{r.supplier || "Retour"}</b> · -HT {money(amountHT(r))} · TVA corrigée {money(amountTVA(r))} · TTC {money(amountTTC(r))}</span><div className="flex gap-2"><Button variant="secondary" onClick={() => editEarthworkReturn(r)}>Modifier</Button><Button variant="danger" onClick={() => deleteEarthworkReturn(r)}>Supprimer</Button></div></div>)}</div>
       </Card>
 
       <Card className="border-l-8 border-emerald-500 bg-emerald-50">
         <h3 className="mb-3 text-xl font-black text-emerald-950">💶 Factures terrassement</h3>
         <form onSubmit={saveInvoice} className="grid gap-3 md:grid-cols-5">
           <Field label="Fournisseur"><Input value={invoiceForm.supplier} onChange={(e: any) => setInvoiceForm({ ...invoiceForm, supplier: e.target.value })} /></Field>
-          <Field label="Montant €"><Input type="number" value={invoiceForm.amount} onChange={(e: any) => setInvoiceForm({ ...invoiceForm, amount: e.target.value })} /></Field>
+          <Field label="Catégorie"><Select value={invoiceForm.category} onChange={(e: any) => setInvoiceForm({ ...invoiceForm, category: e.target.value })}><option value="matériaux">Matériaux</option><option value="location engin">Location engin</option><option value="carburant">Carburant</option><option value="transport">Transport</option><option value="évacuation">Évacuation</option><option value="sous-traitance">Sous-traitance</option><option value="autre">Autre</option></Select></Field>
+          <Field label="Montant HT"><Input type="number" value={invoiceForm.amount} onChange={(e: any) => setInvoiceForm({ ...invoiceForm, amount: e.target.value })} /></Field>
+          <Field label="TVA"><Select value={invoiceForm.tva_rate} onChange={(e: any) => setInvoiceForm({ ...invoiceForm, tva_rate: e.target.value })}><option value="0">0%</option><option value="5.5">5,5%</option><option value="10">10%</option><option value="20">20%</option></Select></Field>
           <Field label="Date facture"><Input type="date" value={invoiceForm.invoice_date} onChange={(e: any) => setInvoiceForm({ ...invoiceForm, invoice_date: e.target.value })} /></Field>
           <Field label="Notes"><Input value={invoiceForm.notes} onChange={(e: any) => setInvoiceForm({ ...invoiceForm, notes: e.target.value })} /></Field>
-          <div className="flex gap-2 md:col-span-5"><Button variant="green">{editingInvoiceId ? "Modifier facture" : "Ajouter facture"}</Button>{editingInvoiceId && <Button type="button" variant="secondary" onClick={() => { setEditingInvoiceId(null); setInvoiceForm({ supplier: "", amount: "", invoice_date: "", notes: "" }); }}>Annuler</Button>}</div>
+          <div className="flex gap-2 md:col-span-5"><Button variant="green">{editingInvoiceId ? "Modifier facture" : "Ajouter facture"}</Button>{editingInvoiceId && <Button type="button" variant="secondary" onClick={() => { setEditingInvoiceId(null); setInvoiceForm({ supplier: "", category: "matériaux", amount: "", tva_rate: "20", invoice_date: "", notes: "" }); }}>Annuler</Button>}</div>
         </form>
         <div className="mt-4 space-y-2">
-          {myInvoices.map((i: any) => <div key={i.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-white p-3"><span><b>{i.supplier || "Fournisseur"}</b> · {i.invoice_date || ""} · {money(Number(i.amount || 0))}</span><div className="flex gap-2"><Button variant="secondary" onClick={() => editInvoice(i)}>Modifier</Button><Button variant="danger" onClick={() => deleteInvoice(i)}>Supprimer</Button></div></div>)}
+          {myInvoices.map((i: any) => <div key={i.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-white p-3"><span><b>{i.supplier || "Fournisseur"}</b> · {i.invoice_date || ""} · HT {money(amountHT(i))} · TVA {money(amountTVA(i))} · TTC {money(amountTTC(i))}</span><div className="flex gap-2"><Button variant="secondary" onClick={() => editInvoice(i)}>Modifier</Button><Button variant="danger" onClick={() => deleteInvoice(i)}>Supprimer</Button></div></div>)}
         </div>
       </Card>
 
