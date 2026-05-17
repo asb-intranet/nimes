@@ -1,0 +1,16 @@
+V33 - Correctif TVA factures / retours
+
+Corrections :
+- Création facture client : montant HT + taux TVA + TVA + TTC.
+- Création facture achat : montant HT + taux TVA + TVA + TTC.
+- Création retour : montant HT + taux TVA + TVA corrigée + TTC.
+- Magasinier : création facture et retour avec aperçu HT/TVA/TTC.
+- Chantier : factures clients, factures achats et retours affichés HT/TVA/TTC.
+- Rapport PDF chantier : TVA collectée, TVA déductible nette, solde TVA.
+- Ajout du fichier Supabase : supabase/schema-complet-v32.sql.
+- Correction build : le projet ne plante plus si les variables Supabase ne sont pas présentes pendant le build local.
+
+Important Supabase :
+Si l'application affiche une erreur du type "column amount_ht does not exist", exécuter le fichier :
+supabase/schema-complet-v32.sql
+Dans Supabase > SQL Editor > New query > Run.
