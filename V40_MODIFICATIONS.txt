@@ -1,0 +1,9 @@
+V40 - Améliorations chantier / planning / tableau de bord
+
+- Ajout d’un filtre par salarié dans le planning semaine/mois.
+- Suppression du bouton Rapport chantier PDF dans les fiches chantier.
+- Amélioration visuelle des statuts chantier avec cartes colorées, badge et avancement.
+- Chantiers archivés masqués par défaut avec bouton Voir les archives.
+- Les chantiers archivés ne s’affichent plus dans les affectations visibles des salariés.
+- Les affectations ne peuvent plus être créées sur un chantier archivé depuis Salariés.
+- Suppression de Factures chantier du tableau de bord.

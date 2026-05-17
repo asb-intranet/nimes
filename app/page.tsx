@@ -286,7 +286,7 @@ export default function Page() {
         </header>
 
         <section className="p-5 pb-28 lg:p-8">
-          {active === "dashboard" && userRole === "admin" && <Dashboard projects={projects} photos={photos} docs={docs} requests={requests} materials={materials} invoices={invoices} setActive={setActive} />}
+          {active === "dashboard" && userRole === "admin" && <Dashboard projects={projects} photos={photos} docs={docs} requests={requests} materials={materials} setActive={setActive} />}
           {active === "storekeeper" && userRole === "admin" && <Storekeeper projects={projects} materials={materials} invoices={invoices} returns={returns} refreshAll={refreshAll} />}
           {active === "projects" && <Projects projects={projects} photos={photos} docs={docs} notes={notes} materials={materials} vigilance={vigilance} invoices={invoices} revenues={revenues} returns={returns} employees={employees} links={links} planning={planning} refreshAll={refreshAll} />}
           {active === "earthworks" && <Earthworks earthworks={earthworks} photos={earthworkPhotos} docs={earthworkDocs} notes={earthworkNotes} materials={earthworkMaterials} vigilance={earthworkVigilance} planning={earthworkPlanning} rentals={earthworkRentals} earthworkInvoices={earthworkInvoices} earthworkRevenues={earthworkRevenues} earthworkReturns={earthworkReturns} refreshAll={refreshAll} />}
@@ -304,7 +304,7 @@ export default function Page() {
 
 
 
-function Dashboard({ projects, photos, docs, requests, materials = [], invoices = [], setActive }: any) {
+function Dashboard({ projects, photos, docs, requests, materials = [], setActive }: any) {
   const enCours = projects.filter((p: any) => p.status === "en_cours");
   const materialTodo = materials.filter((m: any) => !m.ready);
   const openRequests = requests.filter((r: any) => !["termine", "traité", "traite", "closed", "fait"].includes(String(r.status || "").toLowerCase()));
@@ -312,15 +312,14 @@ function Dashboard({ projects, photos, docs, requests, materials = [], invoices 
   const dashboardCards = [
     { title: "Chantiers en cours", value: enCours.length, subtitle: enCours.slice(0, 3).map((p: any) => p.name).join(" · ") || "Aucun chantier en cours", tone: "border-emerald-500 bg-emerald-50 text-emerald-700", action: "Voir chantiers", target: "projects" },
     { title: "Matériel à prévoir", value: materialTodo.length, subtitle: materialTodo.slice(0, 3).map((m: any) => m.title || "Matériel").join(" · ") || "Aucun matériel en attente", tone: "border-amber-400 bg-amber-50 text-amber-700", action: "Voir magasinier", target: "storekeeper" },
-    { title: "Demandes internes", value: openRequests.length, subtitle: openRequests.slice(0, 3).map((r: any) => r.title || r.message || "Demande").join(" · ") || "Aucune demande ouverte", tone: "border-blue-500 bg-blue-50 text-blue-700", action: "Voir demandes", target: "requests" },
-    { title: "Factures chantier", value: invoices.length, subtitle: invoices.slice(0, 3).map((i: any) => i.supplier || "Facture").join(" · ") || "Aucune facture enregistrée", tone: "border-purple-500 bg-purple-50 text-purple-700", action: "Voir gestion", target: "management" }
+    { title: "Demandes internes", value: openRequests.length, subtitle: openRequests.slice(0, 3).map((r: any) => r.title || r.message || "Demande").join(" · ") || "Aucune demande ouverte", tone: "border-blue-500 bg-blue-50 text-blue-700", action: "Voir demandes", target: "requests" }
   ];
 
   return (
     <div>
       <Section title="Tableau de bord" subtitle="Vue synthétique sans détail long, optimisée mobile." />
 
-      <div className="grid grid-cols-2 gap-3 md:gap-4 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 md:gap-4 xl:grid-cols-3">
         {dashboardCards.map((card: any) => (
           <Card key={card.title} className={`border-l-8 ${card.tone}`}>
             <p className="text-xs font-black uppercase opacity-80">{card.title}</p>
@@ -389,6 +388,7 @@ function Projects({ projects, photos, docs, notes, materials, vigilance, invoice
   const [form, setForm] = useState({ name: "", client: "", address: "", description: "", status: "en_cours", color: "#0f172a", progress: 0 });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showCreateProject, setShowCreateProject] = useState(false);
+  const [showArchives, setShowArchives] = useState(false);
 
   async function saveProject(e: any) {
     e.preventDefault();
@@ -480,38 +480,54 @@ function Projects({ projects, photos, docs, notes, materials, vigilance, invoice
         <div className="space-y-4">
           <h3 className="text-lg font-black">Chantiers actifs</h3>
 
-          {activeProjects.map((p: any) => (
-            <Card key={p.id} className={`border-l-8 ${current?.id === p.id ? "ring-2 ring-slate-900" : ""}`} style={{ borderLeftColor: p.color || "#0f172a" }}>
-              <div className="flex items-start justify-between gap-3">
-                <div><h3 className="font-black">{p.name}</h3><p className="text-sm text-slate-500">{p.client}</p><p className="text-sm text-slate-500">{p.address}</p></div>
-                <Badge tone={statusTone[p.status] || "slate"}>{statusLabels[p.status] || p.status}</Badge>
-              </div>
-              <p className="mt-3 text-xs text-slate-500">
-                Photos : <b>{photos.filter((x: any) => x.project_id === p.id).length}</b> · Documents : <b>{docs.filter((x: any) => x.project_id === p.id).length}</b> · Notes : <b>{notes.filter((x: any) => x.project_id === p.id).length}</b>
-              </p>
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <Button onClick={() => openProject(p.id)}>Accéder</Button>
-                <Button variant="secondary" onClick={() => editProject(p)}>Modifier</Button>
-                <Button variant="amber" onClick={() => archiveProject(p)}>Archiver</Button>
-                <Button variant="danger" onClick={() => deleteProject(p)}>Supprimer</Button>
-              </div>
-            </Card>
-          ))}
+          {activeProjects.map((p: any) => {
+            const progress = Math.min(100, Number(p.progress || 0));
+            const tone = statusTone[p.status] || "slate";
+            const statusClass: any = {
+              preparation: "from-amber-50 to-white border-amber-300",
+              en_cours: "from-emerald-50 to-white border-emerald-300",
+              termine: "from-blue-50 to-white border-blue-300",
+              archive: "from-slate-50 to-white border-slate-300"
+            };
+            return (
+              <Card key={p.id} className={`border-l-8 bg-gradient-to-br ${statusClass[p.status] || "from-white to-slate-50 border-slate-200"} ${current?.id === p.id ? "ring-2 ring-slate-900" : ""}`} style={{ borderLeftColor: p.color || "#0f172a" }}>
+                <div className="flex items-start justify-between gap-3">
+                  <div><h3 className="font-black">{p.name}</h3><p className="text-sm text-slate-500">{p.client || "Client non renseigné"}</p><p className="text-sm text-slate-500">{p.address || "Adresse non renseignée"}</p></div>
+                  <Badge tone={tone}>{statusLabels[p.status] || p.status}</Badge>
+                </div>
+                <div className="mt-3 flex items-center gap-2"><div className="h-2 flex-1 rounded-full bg-slate-100"><div className="h-2 rounded-full" style={{ width: `${progress}%`, background: p.color || "#0f172a" }} /></div><span className="text-xs font-black text-slate-500">{progress}%</span></div>
+                <p className="mt-3 text-xs text-slate-500">
+                  Photos : <b>{photos.filter((x: any) => x.project_id === p.id).length}</b> · Documents : <b>{docs.filter((x: any) => x.project_id === p.id).length}</b> · Notes : <b>{notes.filter((x: any) => x.project_id === p.id).length}</b>
+                </p>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <Button onClick={() => openProject(p.id)}>Accéder</Button>
+                  <Button variant="secondary" onClick={() => editProject(p)}>Modifier</Button>
+                  <Button variant="amber" onClick={() => archiveProject(p)}>Archiver</Button>
+                  <Button variant="danger" onClick={() => deleteProject(p)}>Supprimer</Button>
+                </div>
+              </Card>
+            );
+          })}
 
           {activeProjects.length === 0 && <Card><p className="text-sm text-slate-500">Aucun chantier actif.</p></Card>}
 
-          <h3 className="pt-4 text-lg font-black">Chantiers archivés</h3>
-          {archivedProjects.map((p: any) => (
-            <Card key={p.id} className="border-l-8 opacity-75" style={{ borderLeftColor: p.color || "#0f172a" }}>
-              <div className="flex items-start justify-between gap-3"><div><h3 className="font-black">{p.name}</h3><p className="text-sm text-slate-500">{p.client}</p></div><Badge>Archivé</Badge></div>
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <Button variant="secondary" onClick={() => openProject(p.id)}>Consulter</Button>
-                <Button variant="green" onClick={() => restoreProject(p)}>Réactiver</Button>
-                <Button variant="danger" className="col-span-2" onClick={() => deleteProject(p)}>Supprimer définitivement</Button>
-              </div>
-            </Card>
-          ))}
-          {archivedProjects.length === 0 && <Card><p className="text-sm text-slate-500">Aucun chantier archivé.</p></Card>}
+          <div className="pt-4 flex flex-wrap items-center justify-between gap-3">
+            <div><h3 className="text-lg font-black">Archives chantiers</h3><p className="text-sm text-slate-500">Masquées par défaut pour alléger l’affichage.</p></div>
+            <Button variant="secondary" onClick={() => setShowArchives(!showArchives)}>{showArchives ? "Masquer les archives" : `Voir les archives (${archivedProjects.length})`}</Button>
+          </div>
+          {showArchives && <div className="space-y-3">
+            {archivedProjects.map((p: any) => (
+              <Card key={p.id} className="border-l-8 opacity-75" style={{ borderLeftColor: p.color || "#0f172a" }}>
+                <div className="flex items-start justify-between gap-3"><div><h3 className="font-black">{p.name}</h3><p className="text-sm text-slate-500">{p.client}</p></div><Badge>Archivé</Badge></div>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <Button variant="secondary" onClick={() => openProject(p.id)}>Consulter</Button>
+                  <Button variant="green" onClick={() => restoreProject(p)}>Réactiver</Button>
+                  <Button variant="danger" className="col-span-2" onClick={() => deleteProject(p)}>Supprimer définitivement</Button>
+                </div>
+              </Card>
+            ))}
+            {archivedProjects.length === 0 && <Card><p className="text-sm text-slate-500">Aucun chantier archivé.</p></Card>}
+          </div>}
         </div>
 
         <Card><h3 className="text-xl font-black">Sélection chantier</h3><p className="mt-2 text-sm text-slate-500">Clique sur “Accéder” pour ouvrir la fiche chantier en pleine page.</p></Card>
@@ -832,7 +848,7 @@ function ProjectDetail({ project, photos, docs, notes, materials, vigilance, inv
               <h2 className="text-3xl font-black">{project.name}</h2>
               <p className="mt-1 text-sm text-slate-300">{project.client || "Client non renseigné"} · {project.address || "Adresse non renseignée"}</p>
             </div>
-            <div className="flex flex-wrap gap-2"><Button variant="secondary" onClick={generateProjectDetailReport}>Rapport chantier PDF</Button><Badge tone={statusTone[project.status] || "slate"}>{statusLabels[project.status] || project.status}</Badge></div>
+            <div className="flex flex-wrap gap-2"><Badge tone={statusTone[project.status] || "slate"}>{statusLabels[project.status] || project.status}</Badge></div>
           </div>
         </div>
 
@@ -1186,6 +1202,7 @@ function Planning({ projects, employees, links, planning, refreshAll }: any) {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [form, setForm] = useState<any>(emptyForm);
+  const [employeeFilter, setEmployeeFilter] = useState("all");
 
   const assignedIds = form.project_id
     ? links.filter((l: any) => l.project_id === form.project_id).map((l: any) => l.employee_id)
@@ -1283,7 +1300,7 @@ function Planning({ projects, employees, links, planning, refreshAll }: any) {
 
   function eventsForDate(date: Date) {
     const key = formatDate(date);
-    return planning.filter((p: any) => (p.start_date || "") <= key && (p.end_date || p.start_date || "") >= key);
+    return planning.filter((p: any) => (p.start_date || "") <= key && (p.end_date || p.start_date || "") >= key && (employeeFilter === "all" || p.employee_id === employeeFilter));
   }
 
   const weekStart = startOfWeek(cursor);
@@ -1341,9 +1358,12 @@ function Planning({ projects, employees, links, planning, refreshAll }: any) {
       )}
 
       <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-end gap-2">
           <Button variant={view === "week" ? "primary" : "secondary"} onClick={() => setView("week")}>Semaine</Button>
           <Button variant={view === "month" ? "primary" : "secondary"} onClick={() => setView("month")}>Mois</Button>
+          <div className="min-w-56">
+            <Field label="Filtrer par salarié"><Select value={employeeFilter} onChange={(e: any) => setEmployeeFilter(e.target.value)}><option value="all">Tous les salariés</option>{employees.map((e: any) => <option key={e.id} value={e.id}>{e.firstname} {e.lastname}</option>)}</Select></Field>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="secondary" onClick={() => setCursor(view === "week" ? addDays(cursor, -7) : new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))}>Précédent</Button>
@@ -1449,9 +1469,9 @@ function Employees({ employees, projects, refreshAll }: any) {
           <Field label="Coût journée €"><Input type="number" value={form.daily_cost} onChange={(e: any) => setForm({ ...form, daily_cost: e.target.value })} /></Field>
           <div className="flex gap-2"><Button>{editingId ? "Enregistrer" : "Ajouter salarié"}</Button>{editingId && <Button type="button" variant="secondary" onClick={() => { setEditingId(null); setForm({ firstname: "", lastname: "", position: "", role: "terrain", phone: "", email: "", daily_cost: "" }); }}>Annuler</Button>}</div>
         </form></Card>}
-        <Card><h3 className="mb-4 font-black">Affecter un salarié à un chantier</h3><form onSubmit={assign} className="space-y-3"><Field label="Salarié"><Select value={employeeId} onChange={(e: any) => setEmployeeId(e.target.value)}><option value="">Choisir salarié</option>{employees.map((e: any) => <option key={e.id} value={e.id}>{e.firstname} {e.lastname} — {e.position || e.role}</option>)}</Select></Field><Field label="Chantier"><Select value={projectId} onChange={(e: any) => setProjectId(e.target.value)}><option value="">Choisir chantier</option>{projects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field><Button>Affecter au chantier</Button><p className="text-xs text-slate-500">Les affectations détaillées restent visibles dans chaque fiche chantier pour garder cette page légère.</p></form></Card>
+        <Card><h3 className="mb-4 font-black">Affecter un salarié à un chantier</h3><form onSubmit={assign} className="space-y-3"><Field label="Salarié"><Select value={employeeId} onChange={(e: any) => setEmployeeId(e.target.value)}><option value="">Choisir salarié</option>{employees.map((e: any) => <option key={e.id} value={e.id}>{e.firstname} {e.lastname} — {e.position || e.role}</option>)}</Select></Field><Field label="Chantier"><Select value={projectId} onChange={(e: any) => setProjectId(e.target.value)}><option value="">Choisir chantier actif</option>{activeProjects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field><Button>Affecter au chantier</Button><p className="text-xs text-slate-500">Les affectations détaillées restent visibles dans chaque fiche chantier pour garder cette page légère.</p></form></Card>
       </div>
-      <div className="mt-6 grid gap-4 md:grid-cols-3">{employees.map((e: any) => { const employeeAssignments = activeAssignments.filter((a: any) => a.employee_id === e.id); return <Card key={e.id}><div className="flex items-start justify-between gap-3"><div><h3 className="font-black">{e.firstname} {e.lastname}</h3><p className="text-sm text-slate-500">{e.position}</p><p className="text-sm font-bold text-slate-700">{e.daily_cost ? `${e.daily_cost} €/jour` : "Coût journée non renseigné"}</p></div><Badge>{e.role}</Badge></div><div className="mt-4 space-y-1"><p className="text-xs font-bold uppercase text-slate-500">Chantiers affectés</p>{employeeAssignments.map((a: any) => <div key={a.id} className="rounded-xl bg-slate-50 px-3 py-2 text-xs font-bold">{projectNameLocal(a.project_id)}</div>)}</div><div className="mt-4 grid grid-cols-2 gap-2"><Button variant="secondary" onClick={() => editEmployee(e)}>Modifier</Button><Button variant="danger" onClick={() => deleteEmployee(e)}>Supprimer</Button></div></Card>; })}</div>
+      <div className="mt-6 grid gap-4 md:grid-cols-3">{employees.map((e: any) => { const employeeAssignments = activeAssignments.filter((a: any) => a.employee_id === e.id); return <Card key={e.id}><div className="flex items-start justify-between gap-3"><div><h3 className="font-black">{e.firstname} {e.lastname}</h3><p className="text-sm text-slate-500">{e.position}</p><p className="text-sm font-bold text-slate-700">{e.daily_cost ? `${e.daily_cost} €/jour` : "Coût journée non renseigné"}</p></div><Badge>{e.role}</Badge></div><div className="mt-4 space-y-1"><p className="text-xs font-bold uppercase text-slate-500">Chantiers affectés</p>{employeeAssignments.map((a: any) => <div key={a.id} className="rounded-xl bg-slate-50 px-3 py-2 text-xs font-bold">{projectNameLocal(a.project_id)}</div>)}{employeeAssignments.length === 0 && <p className="text-xs text-slate-400">Aucune affectation active.</p>}</div><div className="mt-4 grid grid-cols-2 gap-2"><Button variant="secondary" onClick={() => editEmployee(e)}>Modifier</Button><Button variant="danger" onClick={() => deleteEmployee(e)}>Supprimer</Button></div></Card>; })}</div>
     </div>
   );
 }
