@@ -545,11 +545,11 @@ function ProjectDetail({ project, photos, docs, notes, materials, vigilance, inv
   const [editingClientInvoiceId, setEditingClientInvoiceId] = useState<string | null>(null);
   const [editingReturnId, setEditingReturnId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState<any>(null);
-  const money = (v: number) => new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(v || 0);
+  const money = (v: number) => new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v || 0);
   function amountHT(x: any) { return Number(x.amount_ht ?? x.amount ?? 0); }
   function amountTVA(x: any) { return Number(x.amount_tva ?? (amountHT(x) * Number(x.tva_rate || 0) / 100)); }
   function amountTTC(x: any) { return Number(x.amount_ttc ?? (amountHT(x) + amountTVA(x))); }
-  function makeTaxPayload(amount: string, rate: string) { const ht = Number(amount || 0); const tva = Math.round(ht * Number(rate || 0)) / 100; return { amount: ht, amount_ht: ht, tva_rate: Number(rate || 0), amount_tva: tva, amount_ttc: ht + tva }; }
+  function makeTaxPayload(amount: string, rate: string) { const ht = Math.round(Number(amount || 0) * 100) / 100; const tva = Math.round((ht * Number(rate || 0) / 100) * 100) / 100; const ttc = Math.round((ht + tva) * 100) / 100; return { amount: ht, amount_ht: ht, tva_rate: Number(rate || 0), amount_tva: tva, amount_ttc: ttc }; }
   const invoicesHT = projectInvoices.reduce((sum: number, i: any) => sum + amountHT(i), 0);
   const invoicesTVA = projectInvoices.reduce((sum: number, i: any) => sum + amountTVA(i), 0);
   const returnsHT = projectReturns.reduce((sum: number, r: any) => sum + amountHT(r), 0);
@@ -894,13 +894,13 @@ function ProjectDetail({ project, photos, docs, notes, materials, vigilance, inv
 
         <Card className="border-l-8 border-purple-500 bg-purple-50">
           <h3 className="mb-3 text-xl font-black text-purple-950">↩️ Retours chantier avec TVA déductible</h3>
-          <form onSubmit={saveProjectReturn} className="grid gap-3 md:grid-cols-5">
+          <form onSubmit={saveProjectReturn} className="grid gap-3 md:grid-cols-6">
             <Field label="Fournisseur"><Input value={returnForm.supplier} onChange={(e: any) => setReturnForm({ ...returnForm, supplier: e.target.value })} /></Field>
             <Field label="Montant HT"><Input type="number" value={returnForm.amount} onChange={(e: any) => setReturnForm({ ...returnForm, amount: e.target.value })} /></Field>
             <Field label="TVA"><Select value={returnForm.tva_rate} onChange={(e: any) => setReturnForm({ ...returnForm, tva_rate: e.target.value })}><option value="0">0%</option><option value="5.5">5,5%</option><option value="10">10%</option><option value="20">20%</option></Select></Field>
             <Field label="Date"><Input type="date" value={returnForm.return_date} onChange={(e: any) => setReturnForm({ ...returnForm, return_date: e.target.value })} /></Field>
             <Field label="Notes"><Input value={returnForm.notes} onChange={(e: any) => setReturnForm({ ...returnForm, notes: e.target.value })} /></Field>
-            <div className="flex gap-2 md:col-span-5"><Button variant="amber">{editingReturnId ? "Modifier retour" : "Ajouter retour"}</Button>{editingReturnId && <Button type="button" variant="secondary" onClick={() => { setEditingReturnId(null); setReturnForm({ supplier: "", amount: "", tva_rate: "20", return_date: "", notes: "" }); }}>Annuler</Button>}</div>
+            <div className="flex gap-2 md:col-span-6"><Button variant="amber">{editingReturnId ? "Modifier retour" : "Ajouter retour"}</Button>{editingReturnId && <Button type="button" variant="secondary" onClick={() => { setEditingReturnId(null); setReturnForm({ supplier: "", amount: "", tva_rate: "20", return_date: "", notes: "" }); }}>Annuler</Button>}</div>
           </form>
           <div className="mt-4 space-y-2">{projectReturns.map((r: any) => <div key={r.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-white p-3"><span><b>{r.supplier || "Retour"}</b> · -HT {money(amountHT(r))} · TVA corrigée {money(amountTVA(r))} · TTC {money(amountTTC(r))}</span><div className="flex gap-2"><Button variant="secondary" onClick={() => editProjectReturn(r)}>Modifier</Button><Button variant="danger" onClick={() => deleteProjectReturn(r)}>Supprimer</Button></div></div>)}</div>
         </Card>
@@ -1819,7 +1819,7 @@ function EarthworkDetail({ item, photos, docs, notes, materials, vigilance, plan
   const [vigTitle, setVigTitle] = useState("");
   const [vigContent, setVigContent] = useState("");
   const [plan, setPlan] = useState({ title: "", start_date: "", end_date: "", start_time: "", end_time: "", color: "#92400e", notes: "" });
-  const [rentalForm, setRentalForm] = useState({ machine_type: "", start_date: "", end_date: "", rental_price: "", notes: "" });
+  const [rentalForm, setRentalForm] = useState({ machine_type: "", start_date: "", end_date: "", rental_price: "", tva_rate: "20", notes: "" });
   const [editingRentalId, setEditingRentalId] = useState<string | null>(null);
   const [invoiceForm, setInvoiceForm] = useState({ supplier: "", category: "matériaux", amount: "", tva_rate: "20", invoice_date: "", notes: "" });
   const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(null);
@@ -1845,11 +1845,11 @@ function EarthworkDetail({ item, photos, docs, notes, materials, vigilance, plan
   const myInvoices = invoices.filter((x: any) => x.earthwork_id === item.id);
   const myRevenues = revenues.filter((x: any) => x.earthwork_id === item.id);
   const myReturns = returns.filter((x: any) => x.earthwork_id === item.id);
-  const money = (v: number) => new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(v || 0);
+  const money = (v: number) => new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v || 0);
   function amountHT(x: any) { return Number(x.amount_ht ?? x.amount ?? 0); }
   function amountTVA(x: any) { return Number(x.amount_tva ?? (amountHT(x) * Number(x.tva_rate || 0) / 100)); }
   function amountTTC(x: any) { return Number(x.amount_ttc ?? (amountHT(x) + amountTVA(x))); }
-  function makeTaxPayload(amount: string, rate: string) { const ht = Number(amount || 0); const tva = Math.round(ht * Number(rate || 0)) / 100; return { amount: ht, amount_ht: ht, tva_rate: Number(rate || 0), amount_tva: tva, amount_ttc: ht + tva }; }
+  function makeTaxPayload(amount: string, rate: string) { const ht = Math.round(Number(amount || 0) * 100) / 100; const tva = Math.round((ht * Number(rate || 0) / 100) * 100) / 100; const ttc = Math.round((ht + tva) * 100) / 100; return { amount: ht, amount_ht: ht, tva_rate: Number(rate || 0), amount_tva: tva, amount_ttc: ttc }; }
   const invoicesHT = myInvoices.reduce((s: number, i: any) => s + amountHT(i), 0);
   const invoicesTVA = myInvoices.reduce((s: number, i: any) => s + amountTVA(i), 0);
   const invoicesTTC = myInvoices.reduce((s: number, i: any) => s + amountTTC(i), 0);
@@ -1857,10 +1857,12 @@ function EarthworkDetail({ item, photos, docs, notes, materials, vigilance, plan
   const returnsTVA = myReturns.reduce((s: number, r: any) => s + amountTVA(r), 0);
   const revenuesHT = myRevenues.reduce((s: number, r: any) => s + amountHT(r), 0) || Number(item.client_billing || 0);
   const revenuesTVA = myRevenues.reduce((s: number, r: any) => s + amountTVA(r), 0);
-  const rentalsTotal = myRentals.reduce((s: number, r: any) => s + Number(r.rental_price || 0), 0);
+  const rentalsTotal = myRentals.reduce((s: number, r: any) => s + amountHT({ amount_ht: r.amount_ht ?? r.rental_price, amount: r.rental_price }), 0);
+  const rentalsTVA = myRentals.reduce((s: number, r: any) => s + amountTVA({ amount_ht: r.amount_ht ?? r.rental_price, amount: r.rental_price, tva_rate: r.tva_rate ?? 20, amount_tva: r.amount_tva }), 0);
+  const rentalsTTC = myRentals.reduce((s: number, r: any) => s + amountTTC({ amount_ht: r.amount_ht ?? r.rental_price, amount: r.rental_price, tva_rate: r.tva_rate ?? 20, amount_tva: r.amount_tva, amount_ttc: r.amount_ttc }), 0);
   const netCostsHT = Math.max(0, invoicesHT - returnsHT) + rentalsTotal;
   const marginHT = revenuesHT - netCostsHT;
-  const tvaBalance = revenuesTVA - Math.max(0, invoicesTVA - returnsTVA);
+  const tvaBalance = revenuesTVA - Math.max(0, invoicesTVA + rentalsTVA - returnsTVA);
 
   async function deleteRow(table: string, id: string) {
     if (!confirm("Supprimer ?")) return;
@@ -1962,18 +1964,19 @@ function EarthworkDetail({ item, photos, docs, notes, materials, vigilance, plan
   async function saveRental(e: any) {
     e.preventDefault();
     if (!rentalForm.machine_type) return alert("Type d'engin obligatoire");
-    const payload = { earthwork_id: item.id, machine_type: rentalForm.machine_type, start_date: rentalForm.start_date || null, end_date: rentalForm.end_date || null, rental_price: Number(rentalForm.rental_price || 0), notes: rentalForm.notes };
+    const rentalTax = makeTaxPayload(rentalForm.rental_price, rentalForm.tva_rate);
+    const payload = { earthwork_id: item.id, machine_type: rentalForm.machine_type, start_date: rentalForm.start_date || null, end_date: rentalForm.end_date || null, rental_price: rentalTax.amount_ht, ...rentalTax, notes: rentalForm.notes };
     const query = editingRentalId ? supabase.from("earthwork_machine_rentals").update(payload).eq("id", editingRentalId) : supabase.from("earthwork_machine_rentals").insert(payload);
     const { error } = await query;
     if (error) return alert(error.message);
     setEditingRentalId(null);
-    setRentalForm({ machine_type: "", start_date: "", end_date: "", rental_price: "", notes: "" });
+    setRentalForm({ machine_type: "", start_date: "", end_date: "", rental_price: "", tva_rate: "20", notes: "" });
     await refreshAll();
   }
 
   function editRental(r: any) {
     setEditingRentalId(r.id);
-    setRentalForm({ machine_type: r.machine_type || "", start_date: r.start_date || "", end_date: r.end_date || "", rental_price: String(r.rental_price || ""), notes: r.notes || "" });
+    setRentalForm({ machine_type: r.machine_type || "", start_date: r.start_date || "", end_date: r.end_date || "", rental_price: String(r.amount_ht ?? r.rental_price ?? ""), tva_rate: String(r.tva_rate ?? 20), notes: r.notes || "" });
   }
 
   async function deleteRental(r: any) {
@@ -2077,7 +2080,7 @@ function EarthworkDetail({ item, photos, docs, notes, materials, vigilance, plan
     const totalCosts = netCostsHT;
     const margin = marginHT;
     const marginRate = clientBilling > 0 ? Math.round((margin / clientBilling) * 100) : 0;
-    const html = `<html><head><title>Rapport terrassement - ${item.name}</title><style>@page{size:A4;margin:14mm}body{font-family:Arial,sans-serif;background:#f1f5f9;color:#0f172a}.page{max-width:980px;margin:auto;background:white;padding:28px}.header{border-bottom:4px solid #92400e;padding-bottom:16px}.logo{height:70px}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:20px}.card{border-radius:20px;padding:14px;background:#f8fafc;border:1px solid #e2e8f0}.value{font-size:24px;font-weight:900}.section{margin-top:24px}table{width:100%;border-collapse:collapse;font-size:13px}th{background:#0f172a;color:white;text-align:left;padding:10px}td{padding:10px;border-bottom:1px solid #e2e8f0}.summary{margin-top:22px;border-radius:24px;padding:20px;background:${margin>=0?'#ecfdf5':'#fef2f2'};border-left:10px solid ${margin>=0?'#10b981':'#ef4444'}}@media print{body{background:white}.page{padding:0}}</style></head><body><div class="page"><div class="header"><img class="logo" src="/logo-asb.png"/><h1>Rapport terrassement / rentabilité</h1><p><b>${item.name}</b> · ${item.client || ''}</p><p>${item.address || ''}</p></div><div class="grid"><div class="card"><b>Facturation client</b><div class="value">${money(clientBilling)}</div></div><div class="card"><b>Factures</b><div class="value">${money(invoicesHT)}</div></div><div class="card"><b>Locations engins</b><div class="value">${money(rentalsTotal)}</div></div><div class="card"><b>Marge</b><div class="value">${money(margin)} · ${marginRate}%</div></div></div><div class="summary"><b>Synthèse</b><div style="font-size:34px;font-weight:900">${margin>=0?'+':''}${money(margin)}</div><p>Coût total terrassement : ${money(totalCosts)}. À comparer avec la facturation client enregistrée sur la fiche.</p></div><div class="section"><h2>Factures terrassement</h2><table><thead><tr><th>Fournisseur</th><th>Date</th><th>HT</th><th>TVA</th><th>TTC</th><th>Notes</th></tr></thead><tbody>${myInvoices.map((i:any)=>`<tr><td><b>${i.supplier||'Fournisseur'}</b></td><td>${i.invoice_date||''}</td><td>${money(amountHT(i))}</td><td>${i.notes||''}</td></tr>`).join('') || '<tr><td colspan="4">Aucune facture.</td></tr>'}</tbody></table></div><div class="section"><h2>Locations d’engins</h2><table><thead><tr><th>Engin</th><th>Début</th><th>Fin</th><th>HT</th><th>TVA</th><th>TTC</th><th>Notes</th></tr></thead><tbody>${myRentals.map((r:any)=>`<tr><td><b>${r.machine_type||'Engin'}</b></td><td>${r.start_date||''}</td><td>${r.end_date||''}</td><td>${money(Number(r.rental_price||0))}</td><td>${r.notes||''}</td></tr>`).join('') || '<tr><td colspan="5">Aucune location.</td></tr>'}</tbody></table></div><p style="font-size:12px;color:#64748b;margin-top:22px">Document interne ASB — rapport terrassement.</p></div></body></html>`;
+    const html = `<html><head><title>Rapport terrassement - ${item.name}</title><style>@page{size:A4;margin:14mm}body{font-family:Arial,sans-serif;background:#f1f5f9;color:#0f172a}.page{max-width:980px;margin:auto;background:white;padding:28px}.header{border-bottom:4px solid #92400e;padding-bottom:16px}.logo{height:70px}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:20px}.card{border-radius:20px;padding:14px;background:#f8fafc;border:1px solid #e2e8f0}.value{font-size:24px;font-weight:900}.section{margin-top:24px}table{width:100%;border-collapse:collapse;font-size:13px}th{background:#0f172a;color:white;text-align:left;padding:10px}td{padding:10px;border-bottom:1px solid #e2e8f0}.summary{margin-top:22px;border-radius:24px;padding:20px;background:${margin>=0?'#ecfdf5':'#fef2f2'};border-left:10px solid ${margin>=0?'#10b981':'#ef4444'}}@media print{body{background:white}.page{padding:0}}</style></head><body><div class="page"><div class="header"><img class="logo" src="/logo-asb.png"/><h1>Rapport terrassement / rentabilité</h1><p><b>${item.name}</b> · ${item.client || ''}</p><p>${item.address || ''}</p></div><div class="grid"><div class="card"><b>Facturation client</b><div class="value">${money(clientBilling)}</div></div><div class="card"><b>Factures</b><div class="value">${money(invoicesHT)}</div></div><div class="card"><b>Locations engins HT</b><div class="value">${money(rentalsTotal)}</div><p>TVA ${money(rentalsTVA)} · TTC ${money(rentalsTTC)}</p></div><div class="card"><b>Marge</b><div class="value">${money(margin)} · ${marginRate}%</div></div></div><div class="summary"><b>Synthèse</b><div style="font-size:34px;font-weight:900">${margin>=0?'+':''}${money(margin)}</div><p>Coût total terrassement HT : ${money(totalCosts)}. TVA collectée : ${money(revenuesTVA)} · TVA déductible achats + locations : ${money(invoicesTVA + rentalsTVA - returnsTVA)} · Solde TVA : ${money(tvaBalance)}.</p></div><div class="section"><h2>Factures terrassement</h2><table><thead><tr><th>Fournisseur</th><th>Date</th><th>HT</th><th>TVA</th><th>TTC</th><th>Notes</th></tr></thead><tbody>${myInvoices.map((i:any)=>`<tr><td><b>${i.supplier||'Fournisseur'}</b></td><td>${i.invoice_date||''}</td><td>${money(amountHT(i))}</td><td>${i.notes||''}</td></tr>`).join('') || '<tr><td colspan="4">Aucune facture.</td></tr>'}</tbody></table></div><div class="section"><h2>Locations d’engins</h2><table><thead><tr><th>Engin</th><th>Début</th><th>Fin</th><th>HT</th><th>TVA</th><th>TTC</th><th>Notes</th></tr></thead><tbody>${myRentals.map((r:any)=>`<tr><td><b>${r.machine_type||'Engin'}</b></td><td>${r.start_date||''}</td><td>${r.end_date||''}</td><td>${money(amountHT({ amount_ht: r.amount_ht ?? r.rental_price, amount: r.rental_price }))}</td><td>${money(amountTVA({ amount_ht: r.amount_ht ?? r.rental_price, amount: r.rental_price, tva_rate: r.tva_rate ?? 20, amount_tva: r.amount_tva }))}</td><td>${money(amountTTC({ amount_ht: r.amount_ht ?? r.rental_price, amount: r.rental_price, tva_rate: r.tva_rate ?? 20, amount_tva: r.amount_tva, amount_ttc: r.amount_ttc }))}</td><td>${r.notes||''}</td></tr>`).join('') || '<tr><td colspan="7">Aucune location.</td></tr>'}</tbody></table></div><p style="font-size:12px;color:#64748b;margin-top:22px">Document interne ASB — rapport terrassement.</p></div></body></html>`;
     const w = window.open("", "_blank");
     if (!w) return alert("Popup bloquée. Autorise les popups pour générer le rapport.");
     w.document.write(html); w.document.close(); w.focus(); setTimeout(() => w.print(), 300);
@@ -2152,16 +2155,17 @@ function EarthworkDetail({ item, photos, docs, notes, materials, vigilance, plan
 
       <Card className="border-l-8 border-orange-500 bg-orange-50">
         <h3 className="mb-3 text-xl font-black text-orange-950">🚜 Location engin</h3>
-        <form onSubmit={saveRental} className="grid gap-3 md:grid-cols-5">
+        <form onSubmit={saveRental} className="grid gap-3 md:grid-cols-6">
           <Field label="Type d'engin"><Input value={rentalForm.machine_type} onChange={(e: any) => setRentalForm({ ...rentalForm, machine_type: e.target.value })} /></Field>
           <Field label="Début"><Input type="date" value={rentalForm.start_date} onChange={(e: any) => setRentalForm({ ...rentalForm, start_date: e.target.value })} /></Field>
           <Field label="Fin"><Input type="date" value={rentalForm.end_date} onChange={(e: any) => setRentalForm({ ...rentalForm, end_date: e.target.value })} /></Field>
-          <Field label="Prix location €"><Input type="number" value={rentalForm.rental_price} onChange={(e: any) => setRentalForm({ ...rentalForm, rental_price: e.target.value })} /></Field>
+          <Field label="Prix location HT €"><Input type="number" step="0.01" value={rentalForm.rental_price} onChange={(e: any) => setRentalForm({ ...rentalForm, rental_price: e.target.value })} /></Field>
+          <Field label="TVA"><Select value={rentalForm.tva_rate} onChange={(e: any) => setRentalForm({ ...rentalForm, tva_rate: e.target.value })}><option value="0">0%</option><option value="5.5">5,5%</option><option value="10">10%</option><option value="20">20%</option></Select></Field>
           <Field label="Notes"><Input value={rentalForm.notes} onChange={(e: any) => setRentalForm({ ...rentalForm, notes: e.target.value })} /></Field>
-          <div className="flex gap-2 md:col-span-5"><Button>{editingRentalId ? "Modifier location" : "Ajouter location"}</Button>{editingRentalId && <Button type="button" variant="secondary" onClick={() => { setEditingRentalId(null); setRentalForm({ machine_type: "", start_date: "", end_date: "", rental_price: "", notes: "" }); }}>Annuler</Button>}</div>
+          <div className="flex gap-2 md:col-span-6"><Button>{editingRentalId ? "Modifier location" : "Ajouter location"}</Button>{editingRentalId && <Button type="button" variant="secondary" onClick={() => { setEditingRentalId(null); setRentalForm({ machine_type: "", start_date: "", end_date: "", rental_price: "", tva_rate: "20", notes: "" }); }}>Annuler</Button>}</div>
         </form>
         <div className="mt-4 space-y-2">
-          {myRentals.map((r: any) => <div key={r.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-white p-3"><span><b>{r.machine_type}</b> · {r.start_date || ""} → {r.end_date || ""} · {new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(Number(r.rental_price || 0))}</span><div className="flex gap-2"><Button variant="secondary" onClick={() => editRental(r)}>Modifier</Button><Button variant="danger" onClick={() => deleteRental(r)}>Supprimer</Button></div></div>)}
+          {myRentals.map((r: any) => <div key={r.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-white p-3"><span><b>{r.machine_type}</b> · {r.start_date || ""} → {r.end_date || ""} · HT {money(amountHT({ amount_ht: r.amount_ht ?? r.rental_price, amount: r.rental_price }))} · TVA {money(amountTVA({ amount_ht: r.amount_ht ?? r.rental_price, amount: r.rental_price, tva_rate: r.tva_rate ?? 20, amount_tva: r.amount_tva }))} · TTC {money(amountTTC({ amount_ht: r.amount_ht ?? r.rental_price, amount: r.rental_price, tva_rate: r.tva_rate ?? 20, amount_tva: r.amount_tva, amount_ttc: r.amount_ttc }))}</span><div className="flex gap-2"><Button variant="secondary" onClick={() => editRental(r)}>Modifier</Button><Button variant="danger" onClick={() => deleteRental(r)}>Supprimer</Button></div></div>)}
         </div>
       </Card>
 
@@ -2194,7 +2198,7 @@ function Storekeeper({ projects, materials, invoices = [], returns = [], refresh
     return projects.find((p: any) => p.id === id)?.name || "Chantier inconnu";
   }
 
-  const money = (v: number) => new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(v || 0);
+  const money = (v: number) => new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v || 0);
 
   async function createMaterial(e: any) {
     e.preventDefault();
@@ -2281,7 +2285,7 @@ function Storekeeper({ projects, materials, invoices = [], returns = [], refresh
   function amountHTLocal(x: any) { return Number(x.amount_ht ?? x.amount ?? 0); }
   function amountTVALocal(x: any) { return Number(x.amount_tva ?? (amountHTLocal(x) * Number(x.tva_rate || 0) / 100)); }
   function amountTTCLocal(x: any) { return Number(x.amount_ttc ?? (amountHTLocal(x) + amountTVALocal(x))); }
-  function makeTaxPayloadLocal(amount: string, rate: string) { const ht = Number(amount || 0); const tva = Math.round(ht * Number(rate || 0)) / 100; return { amount: ht, amount_ht: ht, tva_rate: Number(rate || 0), amount_tva: tva, amount_ttc: ht + tva }; }
+  function makeTaxPayloadLocal(amount: string, rate: string) { const ht = Math.round(Number(amount || 0) * 100) / 100; const tva = Math.round((ht * Number(rate || 0) / 100) * 100) / 100; const ttc = Math.round((ht + tva) * 100) / 100; return { amount: ht, amount_ht: ht, tva_rate: Number(rate || 0), amount_tva: tva, amount_ttc: ttc }; }
 
   async function addStoreInvoice(e: any) {
     e.preventDefault();
@@ -2576,11 +2580,11 @@ function Management({ projects, employees, planning, invoices, revenues, returns
   const [showRevenueForm, setShowRevenueForm] = useState(false);
   function daysBetween(start: string, end: string) { if (!start) return 0; const s = new Date(start); const e = new Date(end || start); return Math.max(0, Math.round((e.getTime() - s.getTime()) / 86400000)) + 1; }
   function employeeCost(employeeId: string) { const e = employees.find((x: any) => x.id === employeeId); return Number(e?.daily_cost || 0); }
-  function money(v: number) { return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(v || 0); }
+  function money(v: number) { return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v || 0); }
   function amountHTLocal(x: any) { return Number(x.amount_ht ?? x.amount ?? 0); }
   function amountTVALocal(x: any) { return Number(x.amount_tva ?? (amountHTLocal(x) * Number(x.tva_rate || 0) / 100)); }
   function amountTTCLocal(x: any) { return Number(x.amount_ttc ?? (amountHTLocal(x) + amountTVALocal(x))); }
-  function makeTaxPayloadLocal(amount: string, rate: string) { const ht = Number(amount || 0); const tva = Math.round(ht * Number(rate || 0)) / 100; return { amount: ht, amount_ht: ht, tva_rate: Number(rate || 0), amount_tva: tva, amount_ttc: ht + tva }; }
+  function makeTaxPayloadLocal(amount: string, rate: string) { const ht = Math.round(Number(amount || 0) * 100) / 100; const tva = Math.round((ht * Number(rate || 0) / 100) * 100) / 100; const ttc = Math.round((ht + tva) * 100) / 100; return { amount: ht, amount_ht: ht, tva_rate: Number(rate || 0), amount_tva: tva, amount_ttc: ttc }; }
   function projectStats(projectId: string) { const myInvoices = invoices.filter((i: any) => i.project_id === projectId); const myReturns = returns.filter((r: any) => r.project_id === projectId); const myRevenues = revenues.filter((r: any) => r.project_id === projectId); const grossSupplierTotal = myInvoices.reduce((s: number, i: any) => s + amountHTLocal(i), 0); const supplierTVA = myInvoices.reduce((s: number, i: any) => s + amountTVALocal(i), 0); const returnsTotal = myReturns.reduce((s: number, r: any) => s + amountHTLocal(r), 0); const returnsTVA = myReturns.reduce((s: number, r: any) => s + amountTVALocal(r), 0); const supplierTotal = Math.max(0, grossSupplierTotal - returnsTotal); const revenueTotal = myRevenues.reduce((s: number, r: any) => s + amountHTLocal(r), 0); const revenueTVA = myRevenues.reduce((s: number, r: any) => s + amountTVALocal(r), 0); const netDeductibleTVA = Math.max(0, supplierTVA - returnsTVA); const tvaBalance = revenueTVA - netDeductibleTVA; const laborTotal = planning.filter((p: any) => p.project_id === projectId).reduce((s: number, p: any) => s + daysBetween(p.start_date, p.end_date) * employeeCost(p.employee_id), 0); const totalCosts = supplierTotal + laborTotal; const margin = revenueTotal - totalCosts; const marginRate = revenueTotal > 0 ? Math.round((margin / revenueTotal) * 100) : 0; return { supplierTotal, grossSupplierTotal, returnsTotal, revenueTotal, supplierTVA, returnsTVA, revenueTVA, netDeductibleTVA, tvaBalance, laborTotal, totalCosts, margin, marginRate }; }
   async function addRevenue(e: any) { e.preventDefault(); if (!form.project_id || !form.amount) return alert("Chantier et montant HT obligatoires"); const payload = { project_id: form.project_id, label: form.label || "Facturation client", ...makeTaxPayloadLocal(form.amount, form.tva_rate), billing_date: form.billing_date || null, notes: form.notes }; const query = editingRevenueId ? supabase.from("project_revenues").update(payload).eq("id", editingRevenueId) : supabase.from("project_revenues").insert(payload); const { error } = await query; if (error) return alert(error.message); setForm({ project_id: form.project_id, label: "", amount: "", tva_rate: "10", billing_date: "", notes: "" }); setEditingRevenueId(null); setShowRevenueForm(false); await refreshAll(); }
   function editRevenue(item: any) {

@@ -1,0 +1,8 @@
+V35 - TVA terrassement + décimales + rapports
+
+- Ajout TVA sur les locations d'engins terrassement : HT, taux TVA, TVA, TTC.
+- Ajout migration Supabase schema-complet-v35.sql pour earthwork_machine_rentals.
+- Tous les affichages monétaires respectent 2 décimales.
+- Calcul TVA terrassement : facturation client - TVA déductible achats + locations - retours.
+- Rapport terrassement : locations d'engins affichées en HT / TVA / TTC.
+- Préparation des rapports pour intégration détaillée des jeux de TVA et graphiques.
