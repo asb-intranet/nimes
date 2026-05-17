@@ -1,0 +1,15 @@
+V38 - Gestion & Pilotage global
+
+Ajouts :
+- Nouveau tableau de bord Gestion & pilotage global.
+- Charges entreprise modifiables/supprimables : fixes, variables, salaires fixes, véhicules, carburant, assurances, loyer, emprunts/leasing, comptable, logiciels, autres.
+- Fréquence des charges : mensuelle, hebdomadaire, annuelle, ponctuelle.
+- Calcul proratisé des charges sur la période choisie.
+- Filtres période : semaine, mois, trimestre, année, dates personnalisées.
+- Rentabilité globale : CA HT, achats nets, main-d'œuvre, charges entreprise, marge nette entreprise.
+- TVA globale : TVA collectée, TVA déductible, solde TVA estimatif.
+- Camemberts visuels : rentabilité globale et jeu de TVA.
+- Détail des charges par catégorie.
+- Conservation des rapports chantier V37.
+
+Migration Supabase : lancer supabase/schema-complet-v38.sql

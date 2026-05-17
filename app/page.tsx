@@ -112,6 +112,7 @@ export default function Page() {
   const [earthworkInvoices, setEarthworkInvoices] = useState<any[]>([]);
   const [earthworkRevenues, setEarthworkRevenues] = useState<any[]>([]);
   const [earthworkReturns, setEarthworkReturns] = useState<any[]>([]);
+  const [companyExpenses, setCompanyExpenses] = useState<any[]>([]);
   
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -131,7 +132,7 @@ export default function Page() {
   }, []);
 
   async function refreshAll() {
-    const [p, ph, d, e, l, n, v, r, pl, mat, vig, inv, rev, ret, ew, ewph, ewd, ewn, ewm, ewv, ewp, ewr, ewi, ewrev, ewret] = await Promise.all([
+    const [p, ph, d, e, l, n, v, r, pl, mat, vig, inv, rev, ret, ew, ewph, ewd, ewn, ewm, ewv, ewp, ewr, ewi, ewrev, ewret, ce] = await Promise.all([
       supabase.from("projects").select("*").order("created_at", { ascending: false }),
       supabase.from("chantier_photos").select("*").order("created_at", { ascending: false }),
       supabase.from("chantier_documents").select("*").order("created_at", { ascending: false }),
@@ -156,7 +157,8 @@ export default function Page() {
       supabase.from("earthwork_machine_rentals").select("*").order("start_date", { ascending: true }),
       supabase.from("earthwork_invoices").select("*").order("invoice_date", { ascending: false }),
       supabase.from("earthwork_revenues").select("*").order("billing_date", { ascending: false }),
-      supabase.from("earthwork_returns").select("*").order("return_date", { ascending: false })
+      supabase.from("earthwork_returns").select("*").order("return_date", { ascending: false }),
+      supabase.from("company_expenses").select("*").order("expense_date", { ascending: false })
     ]);
 
     setProjects(p.data || []);
@@ -184,6 +186,7 @@ export default function Page() {
     setEarthworkInvoices(ewi.data || []);
     setEarthworkRevenues(ewrev.data || []);
     setEarthworkReturns(ewret.data || []);
+    setCompanyExpenses(ce.data || []);
   }
 
   async function signIn(e: any) {
@@ -288,7 +291,7 @@ export default function Page() {
           {active === "vehicles" && userRole === "admin" && <Vehicles vehicles={vehicles} refreshAll={refreshAll} />}
           {active === "requests" && userRole === "admin" && <Requests requests={requests} projects={projects} employees={employees} refreshAll={refreshAll} projectName={projectName} />}
           {active === "mobile" && userRole === "admin" && <Mobile projects={projects} refreshAll={refreshAll} />}
-          {active === "management" && userRole === "admin" && <Management projects={projects} employees={employees} planning={planning} invoices={invoices} revenues={revenues} returns={returns} refreshAll={refreshAll} />}
+          {active === "management" && userRole === "admin" && <Management projects={projects} employees={employees} planning={planning} invoices={invoices} revenues={revenues} returns={returns} companyExpenses={companyExpenses} refreshAll={refreshAll} />}
         </section>
       </main>
     </div>
@@ -2574,10 +2577,16 @@ function Storekeeper({ projects, materials, invoices = [], returns = [], refresh
 }
 
 
-function Management({ projects, employees, planning, invoices, revenues, returns = [], refreshAll }: any) {
+function Management({ projects, employees, planning, invoices, revenues, returns = [], companyExpenses = [], refreshAll }: any) {
   const [form, setForm] = useState({ project_id: "", label: "", amount: "", tva_rate: "10", billing_date: "", notes: "" });
   const [editingRevenueId, setEditingRevenueId] = useState<string | null>(null);
   const [showRevenueForm, setShowRevenueForm] = useState(false);
+  const [pilotageMode, setPilotageMode] = useState("month");
+  const [periodStart, setPeriodStart] = useState(formatDate(new Date(new Date().getFullYear(), new Date().getMonth(), 1)));
+  const [periodEnd, setPeriodEnd] = useState(formatDate(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0)));
+  const [expenseForm, setExpenseForm] = useState({ name: "", category: "Charges fixes", amount: "", tva_rate: "20", frequency: "mensuelle", expense_date: formatDate(new Date()), notes: "", active: true });
+  const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
+  const [showExpenseForm, setShowExpenseForm] = useState(false);
   function daysBetween(start: string, end: string) { if (!start) return 0; const s = new Date(start); const e = new Date(end || start); return Math.max(0, Math.round((e.getTime() - s.getTime()) / 86400000)) + 1; }
   function employeeCost(employeeId: string) { const e = employees.find((x: any) => x.id === employeeId); return Number(e?.daily_cost || 0); }
   function money(v: number) { return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v || 0); }
@@ -2720,13 +2729,116 @@ function Management({ projects, employees, planning, invoices, revenues, returns
   }
 
   async function deleteRevenue(item: any) { if (!confirm("Supprimer cette facturation client ?")) return; const { error } = await supabase.from("project_revenues").delete().eq("id", item.id); if (error) return alert(error.message); await refreshAll(); }
-  return <div><Section title="Gestion" subtitle="V37 — rapports premium avec camemberts, TVA collectée/déductible et salariés nominatifs." />
-    <Button className="mb-4" onClick={() => { if (showRevenueForm && !editingRevenueId) { setShowRevenueForm(false); } else { setShowRevenueForm(true); setEditingRevenueId(null); setForm({ project_id: "", label: "", amount: "", tva_rate: "10", billing_date: "", notes: "" }); } }}>
+
+  function inPeriod(dateValue: string) {
+    if (!dateValue) return false;
+    return dateValue >= periodStart && dateValue <= periodEnd;
+  }
+  function setQuickPeriod(mode: string) {
+    const now = new Date();
+    setPilotageMode(mode);
+    if (mode === "week") {
+      const start = startOfWeek(now); const end = addDays(start, 6);
+      setPeriodStart(formatDate(start)); setPeriodEnd(formatDate(end));
+    } else if (mode === "month") {
+      setPeriodStart(formatDate(new Date(now.getFullYear(), now.getMonth(), 1)));
+      setPeriodEnd(formatDate(new Date(now.getFullYear(), now.getMonth() + 1, 0)));
+    } else if (mode === "quarter") {
+      const q = Math.floor(now.getMonth() / 3) * 3;
+      setPeriodStart(formatDate(new Date(now.getFullYear(), q, 1)));
+      setPeriodEnd(formatDate(new Date(now.getFullYear(), q + 3, 0)));
+    } else if (mode === "year") {
+      setPeriodStart(formatDate(new Date(now.getFullYear(), 0, 1)));
+      setPeriodEnd(formatDate(new Date(now.getFullYear(), 11, 31)));
+    }
+  }
+  function expenseMonthlyFactor(frequency: string) {
+    if (frequency === "hebdomadaire") return 4.33;
+    if (frequency === "annuelle") return 1 / 12;
+    return 1;
+  }
+  function periodMonthRatio() {
+    const start = new Date(periodStart); const end = new Date(periodEnd);
+    const days = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000) + 1);
+    return days / 30.44;
+  }
+  function expenseForPeriod(expense: any) {
+    if (expense.active === false) return 0;
+    const ht = amountHTLocal(expense);
+    if (expense.frequency === "ponctuelle") return inPeriod(expense.expense_date) ? ht : 0;
+    return ht * expenseMonthlyFactor(expense.frequency || "mensuelle") * periodMonthRatio();
+  }
+  function expenseTvaForPeriod(expense: any) {
+    const base = expenseForPeriod(expense);
+    return Math.round(base * Number(expense.tva_rate || 0)) / 100;
+  }
+  const periodRevenues = revenues.filter((r: any) => inPeriod(r.billing_date));
+  const periodInvoices = invoices.filter((i: any) => inPeriod(i.invoice_date));
+  const periodReturns = returns.filter((r: any) => inPeriod(r.return_date));
+  const periodPlanning = planning.filter((pl: any) => inPeriod(pl.start_date) || inPeriod(pl.end_date));
+  const globalCA = periodRevenues.reduce((s: number, r: any) => s + amountHTLocal(r), 0);
+  const globalTvaCollectee = periodRevenues.reduce((s: number, r: any) => s + amountTVALocal(r), 0);
+  const globalPurchases = periodInvoices.reduce((s: number, i: any) => s + amountHTLocal(i), 0);
+  const globalPurchaseTva = periodInvoices.reduce((s: number, i: any) => s + amountTVALocal(i), 0);
+  const globalReturns = periodReturns.reduce((s: number, r: any) => s + amountHTLocal(r), 0);
+  const globalReturnsTva = periodReturns.reduce((s: number, r: any) => s + amountTVALocal(r), 0);
+  const globalLabor = periodPlanning.reduce((s: number, pl: any) => s + daysBetween(pl.start_date, pl.end_date) * employeeCost(pl.employee_id), 0);
+  const globalCompanyCharges = companyExpenses.reduce((s: number, ex: any) => s + expenseForPeriod(ex), 0);
+  const globalCompanyChargesTva = companyExpenses.reduce((s: number, ex: any) => s + expenseTvaForPeriod(ex), 0);
+  const globalDeductibleTva = Math.max(0, globalPurchaseTva - globalReturnsTva + globalCompanyChargesTva);
+  const globalCosts = Math.max(0, globalPurchases - globalReturns) + globalLabor + globalCompanyCharges;
+  const globalMargin = globalCA - globalCosts;
+  const globalMarginRate = globalCA > 0 ? Math.round((globalMargin / globalCA) * 100) : 0;
+  const globalTvaBalance = globalTvaCollectee - globalDeductibleTva;
+  const chargeCategories = Array.from(new Set(companyExpenses.map((e: any) => e.category || "Autres"))).map((category: any) => ({ category, total: companyExpenses.filter((e: any) => (e.category || "Autres") === category).reduce((s: number, e: any) => s + expenseForPeriod(e), 0) })).filter((x: any) => x.total > 0);
+  function pieStyle(values: number[], colors: string[]) {
+    const total = values.reduce((s, v) => s + Math.max(0, v), 0) || 1;
+    let acc = 0;
+    const parts = values.map((v, i) => { const start = acc; acc += Math.max(0, v) / total * 100; return `${colors[i]} ${start}% ${acc}%`; });
+    return { background: `conic-gradient(${parts.join(",")})` };
+  }
+  async function saveCompanyExpense(e: any) {
+    e.preventDefault();
+    if (!expenseForm.name || !expenseForm.amount) return alert("Nom et montant HT obligatoires");
+    const tax = makeTaxPayloadLocal(expenseForm.amount, expenseForm.tva_rate);
+    const payload = { name: expenseForm.name, category: expenseForm.category, ...tax, frequency: expenseForm.frequency, expense_date: expenseForm.expense_date || null, notes: expenseForm.notes, active: expenseForm.active };
+    const query = editingExpenseId ? supabase.from("company_expenses").update(payload).eq("id", editingExpenseId) : supabase.from("company_expenses").insert(payload);
+    const { error } = await query;
+    if (error) return alert(error.message);
+    setEditingExpenseId(null); setShowExpenseForm(false); setExpenseForm({ name: "", category: "Charges fixes", amount: "", tva_rate: "20", frequency: "mensuelle", expense_date: formatDate(new Date()), notes: "", active: true });
+    await refreshAll();
+  }
+  function editCompanyExpense(expense: any) {
+    setEditingExpenseId(expense.id); setShowExpenseForm(true);
+    setExpenseForm({ name: expense.name || "", category: expense.category || "Charges fixes", amount: String(amountHTLocal(expense) || ""), tva_rate: String(expense.tva_rate ?? 20), frequency: expense.frequency || "mensuelle", expense_date: expense.expense_date || formatDate(new Date()), notes: expense.notes || "", active: expense.active !== false });
+  }
+  async function deleteCompanyExpense(expense: any) {
+    if (!confirm("Supprimer cette charge entreprise ?")) return;
+    const { error } = await supabase.from("company_expenses").delete().eq("id", expense.id);
+    if (error) return alert(error.message);
+    await refreshAll();
+  }
+
+  return <div><Section title="Gestion & pilotage global" subtitle="V38 — charges entreprise, pilotage semaine/mois, TVA globale et rentabilité nette." />
+    <div className="mb-6 flex flex-wrap gap-2"><Button variant={pilotageMode === "week" ? "primary" : "secondary"} onClick={() => setQuickPeriod("week")}>Semaine</Button><Button variant={pilotageMode === "month" ? "primary" : "secondary"} onClick={() => setQuickPeriod("month")}>Mois</Button><Button variant={pilotageMode === "quarter" ? "primary" : "secondary"} onClick={() => setQuickPeriod("quarter")}>Trimestre</Button><Button variant={pilotageMode === "year" ? "primary" : "secondary"} onClick={() => setQuickPeriod("year")}>Année</Button><Field label="Début"><Input type="date" value={periodStart} onChange={(e: any) => { setPilotageMode("custom"); setPeriodStart(e.target.value); }} /></Field><Field label="Fin"><Input type="date" value={periodEnd} onChange={(e: any) => { setPilotageMode("custom"); setPeriodEnd(e.target.value); }} /></Field></div>
+    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <Card className="border-l-8 border-emerald-500 bg-emerald-50"><p className="text-xs font-bold uppercase text-emerald-700">CA HT période</p><p className="text-3xl font-black text-emerald-700">{money(globalCA)}</p><p className="text-xs text-slate-500">TVA collectée : {money(globalTvaCollectee)}</p></Card>
+      <Card className="border-l-8 border-red-500 bg-red-50"><p className="text-xs font-bold uppercase text-red-700">Coûts HT globaux</p><p className="text-3xl font-black text-red-700">{money(globalCosts)}</p><p className="text-xs text-slate-500">Achats nets + MO + charges</p></Card>
+      <Card className={globalMargin >= 0 ? "border-l-8 border-blue-500 bg-blue-50" : "border-l-8 border-red-600 bg-red-100"}><p className="text-xs font-bold uppercase">Marge nette entreprise</p><p className="text-3xl font-black">{money(globalMargin)}</p><p className="text-xs text-slate-500">{globalMarginRate}% sur la période</p></Card>
+      <Card className="border-l-8 border-purple-500 bg-purple-50"><p className="text-xs font-bold uppercase text-purple-700">Solde TVA estimatif</p><p className="text-3xl font-black text-purple-700">{money(globalTvaBalance)}</p><p className="text-xs text-slate-500">Collectée - déductible</p></Card>
+    </div>
+    <div className="mt-6 grid gap-4 xl:grid-cols-2">
+      <Card><h3 className="text-xl font-black">Camembert rentabilité globale</h3><div className="mx-auto my-4 h-56 w-56 rounded-full shadow-inner" style={pieStyle([Math.max(0, globalPurchases - globalReturns), globalLabor, globalCompanyCharges, Math.max(0, globalMargin)], ["#ef4444", "#f59e0b", "#8b5cf6", "#10b981"])} /><div className="grid gap-2 text-sm"><p>🔴 Achats nets : <b>{money(Math.max(0, globalPurchases - globalReturns))}</b></p><p>🟠 Main-d’œuvre : <b>{money(globalLabor)}</b></p><p>🟣 Charges entreprise : <b>{money(globalCompanyCharges)}</b></p><p>🟢 Marge nette : <b>{money(globalMargin)}</b></p></div></Card>
+      <Card><h3 className="text-xl font-black">Camembert TVA globale</h3><div className="mx-auto my-4 h-56 w-56 rounded-full shadow-inner" style={pieStyle([globalTvaCollectee, globalDeductibleTva], ["#0ea5e9", "#10b981"])} /><div className="grid gap-2 text-sm"><p>🔵 TVA collectée : <b>{money(globalTvaCollectee)}</b></p><p>🟢 TVA déductible : <b>{money(globalDeductibleTva)}</b></p><p><b>Solde :</b> {money(globalTvaBalance)}</p></div></Card>
+    </div>
+    <Card className="mt-6 border-l-8 border-slate-900"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-xl font-black">Charges fixes / variables entreprise</h3><p className="text-sm text-slate-500">Création, modification, suppression. Les charges récurrentes sont proratisées sur la période affichée.</p></div><Button variant="green" onClick={() => { setShowExpenseForm(!showExpenseForm); setEditingExpenseId(null); }}>+ Charge entreprise</Button></div>{showExpenseForm && <form onSubmit={saveCompanyExpense} className="mt-5 grid gap-3 md:grid-cols-6"><Field label="Nom"><Input value={expenseForm.name} onChange={(e: any) => setExpenseForm({ ...expenseForm, name: e.target.value })} /></Field><Field label="Catégorie"><Select value={expenseForm.category} onChange={(e: any) => setExpenseForm({ ...expenseForm, category: e.target.value })}><option>Charges fixes</option><option>Charges variables</option><option>Salaires fixes</option><option>Véhicules</option><option>Carburant</option><option>Assurances</option><option>Loyer</option><option>Emprunts / leasing</option><option>Comptable</option><option>Logiciels</option><option>Autres</option></Select></Field><Field label="Montant HT"><Input type="number" step="0.01" value={expenseForm.amount} onChange={(e: any) => setExpenseForm({ ...expenseForm, amount: e.target.value })} /></Field><Field label="TVA"><Select value={expenseForm.tva_rate} onChange={(e: any) => setExpenseForm({ ...expenseForm, tva_rate: e.target.value })}><option value="0">0%</option><option value="5.5">5,5%</option><option value="10">10%</option><option value="20">20%</option></Select></Field><Field label="Fréquence"><Select value={expenseForm.frequency} onChange={(e: any) => setExpenseForm({ ...expenseForm, frequency: e.target.value })}><option value="mensuelle">Mensuelle</option><option value="hebdomadaire">Hebdomadaire</option><option value="annuelle">Annuelle</option><option value="ponctuelle">Ponctuelle</option></Select></Field><Field label="Date"><Input type="date" value={expenseForm.expense_date} onChange={(e: any) => setExpenseForm({ ...expenseForm, expense_date: e.target.value })} /></Field><Field label="Notes"><Input value={expenseForm.notes} onChange={(e: any) => setExpenseForm({ ...expenseForm, notes: e.target.value })} /></Field><label className="mt-5 flex items-center gap-2 text-sm font-bold"><input type="checkbox" checked={expenseForm.active} onChange={(e: any) => setExpenseForm({ ...expenseForm, active: e.target.checked })} /> Active</label><div className="md:col-span-6"><Button variant="green">{editingExpenseId ? "Modifier la charge" : "Ajouter la charge"}</Button></div></form>}<div className="mt-5 grid gap-3">{companyExpenses.map((ex: any) => <div key={ex.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-slate-50 p-3"><div><b>{ex.name}</b> · {ex.category} · HT {money(amountHTLocal(ex))} · TVA {Number(ex.tva_rate || 0).toFixed(2).replace('.', ',')}% · {ex.frequency}</div><div className="flex gap-2"><Button variant="secondary" onClick={() => editCompanyExpense(ex)}>Modifier</Button><Button variant="danger" onClick={() => deleteCompanyExpense(ex)}>Supprimer</Button></div></div>)}{companyExpenses.length === 0 && <p className="text-sm text-slate-500">Aucune charge entreprise enregistrée.</p>}</div></Card>
+    <Card className="mt-6"><h3 className="text-xl font-black">Détail des charges par catégorie</h3><div className="mt-3 grid gap-2">{chargeCategories.map((c: any) => <div key={c.category} className="flex justify-between rounded-2xl bg-slate-50 p-3 text-sm"><span>{c.category}</span><b>{money(c.total)}</b></div>)}{chargeCategories.length === 0 && <p className="text-sm text-slate-500">Aucune charge sur la période.</p>}</div></Card>
+    <div className="mt-8"><Button className="mb-4" onClick={() => { if (showRevenueForm && !editingRevenueId) { setShowRevenueForm(false); } else { setShowRevenueForm(true); setEditingRevenueId(null); setForm({ project_id: "", label: "", amount: "", tva_rate: "10", billing_date: "", notes: "" }); } }}>
       {showRevenueForm ? (editingRevenueId ? "Formulaire facturation ouvert" : "Fermer création facturation client") : "+ Créer facturation client"}
     </Button>
     {showRevenueForm && <Card className="border-l-8 border-emerald-500 bg-emerald-50"><h3 className="mb-4 text-xl font-black">Ajouter facture client avec TVA</h3><form onSubmit={addRevenue} className="grid gap-3 md:grid-cols-6"><Field label="Chantier"><Select value={form.project_id} onChange={(e: any) => setForm({ ...form, project_id: e.target.value })}><option value="">Choisir chantier</option>{projects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field><Field label="Libellé"><Input value={form.label} onChange={(e: any) => setForm({ ...form, label: e.target.value })} /></Field><Field label="Montant HT €"><Input type="number" step="0.01" value={form.amount} onChange={(e: any) => setForm({ ...form, amount: e.target.value })} /></Field><Field label="TVA"><Select value={form.tva_rate} onChange={(e: any) => setForm({ ...form, tva_rate: e.target.value })}><option value="0">0%</option><option value="5.5">5,5%</option><option value="10">10%</option><option value="20">20%</option></Select></Field><Field label="Date"><Input type="date" value={form.billing_date} onChange={(e: any) => setForm({ ...form, billing_date: e.target.value })} /></Field><Field label="Notes"><Input value={form.notes} onChange={(e: any) => setForm({ ...form, notes: e.target.value })} /></Field><div className="rounded-2xl bg-white p-3 text-sm md:col-span-6"><b>Aperçu facture client</b> · HT {money(Number(form.amount || 0))} · TVA {money(Math.round(Number(form.amount || 0) * Number(form.tva_rate || 0)) / 100)} · TTC {money(Number(form.amount || 0) + Math.round(Number(form.amount || 0) * Number(form.tva_rate || 0)) / 100)}</div><div className="flex gap-2 md:col-span-6"><Button variant="green">{editingRevenueId ? "Enregistrer modification" : "Ajouter facturation client"}</Button>{editingRevenueId && <Button type="button" variant="secondary" onClick={() => { setEditingRevenueId(null); setForm({ project_id: "", label: "", amount: "", tva_rate: "10", billing_date: "", notes: "" }); }}>Annuler</Button>}</div></form></Card>}
     <div className="mt-6 grid gap-4 xl:grid-cols-2">{projects.map((p: any) => { const s = projectStats(p.id); return <Card key={p.id} className="border-l-8" style={{ borderLeftColor: s.margin >= 0 ? "#10b981" : "#ef4444" }}><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-xl font-black">{p.name}</h3><p className="text-sm text-slate-500">{p.client}</p></div><div className="flex flex-wrap gap-2"><Badge tone={s.margin >= 0 ? "green" : "red"}>{s.margin >= 0 ? "Rentable" : "À surveiller"}</Badge><Button variant="secondary" onClick={() => generateProjectReport(p)}>Rapport PDF</Button></div></div><div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><div className="rounded-2xl bg-emerald-50 p-3"><p className="text-xs font-bold uppercase text-emerald-700">Facturé client</p><p className="text-xl font-black text-emerald-700">{money(s.revenueTotal)}</p><p className="text-[11px] text-slate-500">TVA collectée : {money(s.revenueTVA || 0)}</p></div><div className="rounded-2xl bg-red-50 p-3"><p className="text-xs font-bold uppercase text-red-700">Factures - retours</p><p className="text-xl font-black text-red-700">{money(s.supplierTotal)}</p><p className="text-[11px] text-slate-500">Retours déduits : {money(s.returnsTotal || 0)}</p><p className="text-[11px] text-slate-500">TVA nette déductible : {money(s.netDeductibleTVA || 0)}</p></div><div className="rounded-2xl bg-amber-50 p-3"><p className="text-xs font-bold uppercase text-amber-700">Coût salariés</p><p className="text-xl font-black text-amber-700">{money(s.laborTotal)}</p></div><div className={s.margin >= 0 ? "rounded-2xl bg-blue-50 p-3" : "rounded-2xl bg-red-100 p-3"}><p className="text-xs font-bold uppercase">Marge estimée</p><p className="text-xl font-black">{money(s.margin)} · {s.marginRate}%</p></div></div><div className="mt-4 space-y-2">{revenues.filter((r: any) => r.project_id === p.id).map((r: any) => <div key={r.id} className="flex items-center justify-between gap-3 rounded-2xl bg-slate-50 p-3 text-sm"><span><b>{r.label}</b> · HT {money(amountHTLocal(r))} · TVA {money(amountTVALocal(r))} · TTC {money(amountTTCLocal(r))} · {r.billing_date || "date non renseignée"}</span><div className="flex gap-2"><Button variant="secondary" onClick={() => editRevenue(r)}>Modifier</Button><Button variant="danger" onClick={() => deleteRevenue(r)}>Supprimer</Button></div></div>)}</div></Card>; })}</div>
-  </div>;
+  </div></div>;
 }
 
 function Mobile({ projects, refreshAll }: any) {
