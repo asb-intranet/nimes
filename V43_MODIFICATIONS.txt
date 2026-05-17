@@ -1,0 +1,8 @@
+V43 - Facturation client dans Gestion uniquement
+
+- Suppression visuelle complète du bloc d'information financière client dans les fiches Chantiers.
+- La partie Chantiers conserve uniquement les achats fournisseurs, retours, photos, documents, intervenants, vigilance, notes et planning.
+- Ajout dans Gestion d'une présentation premium par chantier : synthèse HT / TVA / TTC, TVA collectée, TVA déductible nette, solde TVA estimatif.
+- Ajout d'un tableau clair des factures clients par chantier dans Gestion avec colonnes HT, TVA, montant TVA, TTC, date, notes et actions.
+- Conservation du bouton Rapport PDF dans Gestion uniquement.
+- Build Next.js vérifié OK.
