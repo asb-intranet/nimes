@@ -1,0 +1,8 @@
+V41 - Priorités demandes internes + planning
+
+- Amélioration visuelle des badges priorité pour éviter les gros pavés rouges.
+- Tableau de bord : bloc "Priorités demandes internes" avec badges Urgente/Haute/Normale/Basse.
+- Planning : les demandes internes planifiées apparaissent directement dans la vue semaine/mois.
+- Planning : filtre salarié appliqué aussi aux demandes internes attribuées.
+- Demande interne : si une date de planification est renseignée, le statut passe automatiquement en "planifiée".
+- UI badges renforcée : compact, une seule ligne, meilleure lisibilité mobile.

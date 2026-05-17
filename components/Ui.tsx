@@ -43,5 +43,5 @@ export function Badge({ children, tone = "slate" }: any) {
     amber: "bg-amber-100 text-amber-700",
     blue: "bg-blue-100 text-blue-700"
   };
-  return <span className={`rounded-full px-2 py-1 text-xs font-bold ${tones[tone]}`}>{children}</span>;
+  return <span className={`inline-flex w-fit max-w-max items-center gap-1 whitespace-nowrap rounded-full px-3 py-1 text-xs font-black leading-none ${tones[tone]}`}>{children}</span>;
 }

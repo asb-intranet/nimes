@@ -290,7 +290,7 @@ export default function Page() {
           {active === "storekeeper" && userRole === "admin" && <Storekeeper projects={projects} materials={materials} invoices={invoices} returns={returns} refreshAll={refreshAll} />}
           {active === "projects" && <Projects projects={projects} photos={photos} docs={docs} notes={notes} materials={materials} vigilance={vigilance} invoices={invoices} revenues={revenues} returns={returns} employees={employees} links={links} planning={planning} refreshAll={refreshAll} />}
           {active === "earthworks" && <Earthworks earthworks={earthworks} photos={earthworkPhotos} docs={earthworkDocs} notes={earthworkNotes} materials={earthworkMaterials} vigilance={earthworkVigilance} planning={earthworkPlanning} rentals={earthworkRentals} earthworkInvoices={earthworkInvoices} earthworkRevenues={earthworkRevenues} earthworkReturns={earthworkReturns} refreshAll={refreshAll} />}
-          {active === "planning" && <Planning projects={projects} employees={employees} links={links} planning={planning} refreshAll={refreshAll} />}
+          {active === "planning" && <Planning projects={projects} employees={employees} links={links} planning={planning} requests={requests} refreshAll={refreshAll} />}
           {active === "employees" && userRole === "admin" && <Employees employees={employees} projects={projects} refreshAll={refreshAll} />}
           {active === "vehicles" && userRole === "admin" && <Vehicles vehicles={vehicles} refreshAll={refreshAll} />}
           {active === "requests" && userRole === "admin" && <Requests requests={requests} projects={projects} employees={employees} refreshAll={refreshAll} projectName={projectName} />}
@@ -308,6 +308,15 @@ function Dashboard({ projects, photos, docs, requests, materials = [], setActive
   const enCours = projects.filter((p: any) => p.status === "en_cours");
   const materialTodo = materials.filter((m: any) => !m.ready);
   const openRequests = requests.filter((r: any) => !["termine", "traité", "traite", "closed", "fait"].includes(String(r.status || "").toLowerCase()));
+  const priorityRank: any = { urgente: 0, haute: 1, normale: 2, basse: 3 };
+  const priorityRequests = [...openRequests].sort((a: any, b: any) => (priorityRank[String(a.priority || "normale").toLowerCase()] ?? 2) - (priorityRank[String(b.priority || "normale").toLowerCase()] ?? 2)).slice(0, 6);
+  function priorityUi(priority: string) {
+    const p = String(priority || "normale").toLowerCase();
+    if (p === "urgente") return { label: "Urgente", tone: "red", card: "border-red-200 bg-red-50", text: "text-red-800", dot: "bg-red-500" };
+    if (p === "haute") return { label: "Haute", tone: "amber", card: "border-orange-200 bg-orange-50", text: "text-orange-800", dot: "bg-orange-500" };
+    if (p === "basse") return { label: "Basse", tone: "green", card: "border-emerald-200 bg-emerald-50", text: "text-emerald-800", dot: "bg-emerald-500" };
+    return { label: "Normale", tone: "blue", card: "border-blue-200 bg-blue-50", text: "text-blue-800", dot: "bg-blue-500" };
+  }
 
   const dashboardCards = [
     { title: "Chantiers en cours", value: enCours.length, subtitle: enCours.slice(0, 3).map((p: any) => p.name).join(" · ") || "Aucun chantier en cours", tone: "border-emerald-500 bg-emerald-50 text-emerald-700", action: "Voir chantiers", target: "projects" },
@@ -358,14 +367,25 @@ function Dashboard({ projects, photos, docs, requests, materials = [], setActive
         </Card>
 
         <Card className="border-l-8 border-blue-500">
-          <h3 className="text-lg font-black">💬 Demandes internes</h3>
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-lg font-black">💬 Priorités demandes internes</h3>
+            <Button variant="secondary" className="text-xs" onClick={() => setActive("requests")}>Voir tout</Button>
+          </div>
           <div className="mt-4 space-y-2">
-            {openRequests.slice(0, 5).map((r: any) => (
-              <div key={r.id} className="rounded-2xl bg-blue-50 p-3">
-                <div className="font-black">{r.title || r.message || "Demande interne"}</div>
-                <div className="text-xs text-slate-500">{projects.find((p: any) => p.id === r.project_id)?.name || "Sans chantier"}</div>
-              </div>
-            ))}
+            {priorityRequests.map((r: any) => {
+              const ui = priorityUi(r.priority);
+              return (
+                <div key={r.id} className={`rounded-2xl border p-3 ${ui.card}`}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="font-black line-clamp-1">{r.title || r.message || "Demande interne"}</div>
+                      <div className="text-xs text-slate-500">{projects.find((p: any) => p.id === r.project_id)?.name || "Sans chantier"}{r.planned_date ? ` · ${r.planned_date}` : ""}</div>
+                    </div>
+                    <Badge tone={ui.tone}><span className={`h-2 w-2 rounded-full ${ui.dot}`}></span>{ui.label}</Badge>
+                  </div>
+                </div>
+              );
+            })}
             {openRequests.length === 0 && <p className="text-sm text-slate-500">Aucune demande ouverte.</p>}
           </div>
         </Card>
@@ -1184,7 +1204,7 @@ function ProjectDetail({ project, photos, docs, notes, materials, vigilance, inv
   );
 }
 
-function Planning({ projects, employees, links, planning, refreshAll }: any) {
+function Planning({ projects, employees, links, planning, requests = [], refreshAll }: any) {
   const emptyForm = {
     project_id: "",
     employee_ids: [] as string[],
@@ -1298,6 +1318,23 @@ function Planning({ projects, employees, links, planning, refreshAll }: any) {
     await refreshAll();
   }
 
+  function requestPriorityMeta(priority: string) {
+    const p = String(priority || "normale").toLowerCase();
+    if (p === "urgente") return { label: "Urgente", icon: "🚨", bg: "bg-red-50 border-red-200 text-red-800", dot: "bg-red-500" };
+    if (p === "haute") return { label: "Haute", icon: "⚠️", bg: "bg-orange-50 border-orange-200 text-orange-800", dot: "bg-orange-500" };
+    if (p === "basse") return { label: "Basse", icon: "⬇️", bg: "bg-emerald-50 border-emerald-200 text-emerald-800", dot: "bg-emerald-500" };
+    return { label: "Normale", icon: "•", bg: "bg-blue-50 border-blue-200 text-blue-800", dot: "bg-blue-500" };
+  }
+
+  function plannedRequestsForDate(date: Date) {
+    const key = formatDate(date);
+    return requests.filter((r: any) => {
+      const status = String(r.status || "").toLowerCase();
+      const open = !["termine", "traité", "traite", "closed", "fait"].includes(status);
+      return open && r.planned_date === key && (employeeFilter === "all" || r.assigned_to === employeeFilter);
+    });
+  }
+
   function eventsForDate(date: Date) {
     const key = formatDate(date);
     return planning.filter((p: any) => (p.start_date || "") <= key && (p.end_date || p.start_date || "") >= key && (employeeFilter === "all" || p.employee_id === employeeFilter));
@@ -1391,6 +1428,19 @@ function Planning({ projects, employees, links, planning, refreshAll }: any) {
                     </div>
                   </div>
                 ))}
+                {plannedRequestsForDate(day).map((r: any) => {
+                  const meta = requestPriorityMeta(r.priority);
+                  return (
+                    <div key={`request-${r.id}`} className={`rounded-2xl border p-2 text-xs font-bold ${meta.bg}`}>
+                      <div className="mb-1 flex items-center justify-between gap-2">
+                        <span className="inline-flex items-center gap-1"><span className={`h-2 w-2 rounded-full ${meta.dot}`}></span>Demande interne</span>
+                        <span>{meta.icon} {meta.label}</span>
+                      </div>
+                      <div>{r.message || "Demande planifiée"}</div>
+                      <div className="mt-1 text-[10px] opacity-75">{r.assigned_to ? employeeName(r.assigned_to) : "Non attribuée"} · {projectNameLocal(r.project_id)}</div>
+                    </div>
+                  );
+                })}
               </div>
             </Card>
           ))}
@@ -1407,7 +1457,11 @@ function Planning({ projects, employees, links, planning, refreshAll }: any) {
                     {employeeName(e.employee_id).split(" ")[0]} · {e.title}
                   </button>
                 ))}
-                {eventsForDate(day).length > 3 && <div className="text-[10px] text-slate-500">+{eventsForDate(day).length - 3} autre(s)</div>}
+                {plannedRequestsForDate(day).slice(0, 2).map((r: any) => {
+                  const meta = requestPriorityMeta(r.priority);
+                  return <div key={`request-month-${r.id}`} className={`rounded-lg border px-2 py-1 text-[10px] font-bold ${meta.bg}`}>DI · {r.message || "Demande"}</div>;
+                })}
+                {eventsForDate(day).length + plannedRequestsForDate(day).length > 5 && <div className="text-[10px] text-slate-500">+{eventsForDate(day).length + plannedRequestsForDate(day).length - 5} autre(s)</div>}
               </div>
             </div>
           ))}
@@ -1591,7 +1645,7 @@ function Requests({ requests, projects, employees = [], refreshAll, projectName 
       requester: form.requester,
       message: form.message,
       priority: form.priority,
-      status: form.status || "nouvelle"
+      status: form.planned_date ? "planifiee" : (form.status || "nouvelle")
     };
     if (form.assigned_to) payload.assigned_to = form.assigned_to;
     if (form.planned_date) payload.planned_date = form.planned_date;
@@ -1625,7 +1679,7 @@ function Requests({ requests, projects, employees = [], refreshAll, projectName 
       requester: editForm.requester,
       message: editForm.message,
       priority: editForm.priority,
-      status: editForm.status || "nouvelle"
+      status: editForm.planned_date ? "planifiee" : (editForm.status || "nouvelle")
     };
     if (editForm.assigned_to) payload.assigned_to = editForm.assigned_to;
     if (editForm.planned_date) payload.planned_date = editForm.planned_date;
