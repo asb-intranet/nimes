@@ -1,3 +1,0 @@
-1261:   const [form, setForm] = useState<any>({ name: "", client: "", address: "", description: "", status: "en_cours", color: "#92400e", linked_project: "" });
-1270:     setForm({ name: "", client: "", address: "", description: "", status: "en_cours", color: "#92400e", linked_project: "" });
-1274:   function editEarthwork(item: any) { setEditingId(item.id); setSelectedId(item.id); setForm({ name: item.name || "", client: item.client || "", address: item.address || "", description: item.description || "", status: item.status || "en_cours", color: item.color || "#92400e", linked_project: item.linked_project || "" }); window.scrollTo({ top: 0, behavior: "smooth" }); }
