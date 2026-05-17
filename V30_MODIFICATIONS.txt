@@ -1,9 +1,0 @@
-ASB Intranet V30
-
-- Gestion TVA chantier : ajout HT / taux TVA / TVA / TTC sur factures fournisseurs, facturation client et retours.
-- Magasinier : les retours restent déductibles des dépenses chantier et disposent maintenant de champs TVA via migration.
-- Gestion : base prête pour rapport TVA et calculs HT/TVA/TTC.
-- Terrassement : gestion autonome avec facturation client, factures fournisseurs, retours, TVA collectée, TVA déductible, solde TVA estimatif, marge HT.
-- Terrassement : rapport PDF enrichi sur la base HT / TVA / rentabilité.
-- Terrassement : conservation du planning général et modification en pleine page, sans pop-up.
-- Base Supabase : ajouter/exécuter supabase/schema-complet-v30.sql après V29.
