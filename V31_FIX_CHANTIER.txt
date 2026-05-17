@@ -1,0 +1,1 @@
+V31 FIX - Chantier aligné sur Terrassement : rapport PDF, facturation client, factures fournisseur TVA, retours chantier, synthèse HT/TVA/TTC. Remplacer notamment app/page.tsx et exécuter supabase/schema-complet-v31.sql si pas déjà fait.
