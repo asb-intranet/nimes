@@ -1,0 +1,15 @@
+VERSION V30 DEPLOIEMENT PROPRE
+
+Cette version corrige le probleme Vercel/npm :
+- package-lock.json nettoye : plus aucune URL packages.applied-caas...
+- .npmrc force le registre officiel npmjs.org
+- vercel.json force npm install avec registry npmjs.org
+- tsconfig.tsbuildinfo supprime
+
+A faire dans GitHub :
+1. Televerser tous les fichiers de ce ZIP a la racine du depot.
+2. Accepter le remplacement de package-lock.json, package.json, .npmrc et vercel.json.
+3. Commit.
+4. Dans Vercel : Redeploy without build cache.
+
+Si GitHub affiche encore un ancien package-lock.json, l'ecraser avec celui de ce ZIP.
