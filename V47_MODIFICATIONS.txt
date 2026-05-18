@@ -1,0 +1,8 @@
+V47 - Gestion premium
+- Recherche chantier remontée en haut de Gestion.
+- Chantiers archivés retirés visuellement des actifs et placés dans une section dédiée.
+- Chantiers archivés conservés dans toutes les données de gestion, CA, marge, TVA et graphiques.
+- Nouvel onglet Paiements clients selon le fichier Excel : date, client, n° facture, montant TTC, moyen de paiement, chantier lié, notes.
+- TVA collectée, TVA déductible et solde TVA affichés clairement.
+- Solde TVA rouge si TVA due, vert si TVA récupérable.
+- Accès par code PIN à Gestion et Salariés. Code par défaut : 1234. Personnalisable dans localStorage : asb_pin_management / asb_pin_employees.

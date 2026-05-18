@@ -113,6 +113,7 @@ export default function Page() {
   const [earthworkRevenues, setEarthworkRevenues] = useState<any[]>([]);
   const [earthworkReturns, setEarthworkReturns] = useState<any[]>([]);
   const [companyExpenses, setCompanyExpenses] = useState<any[]>([]);
+  const [clientPayments, setClientPayments] = useState<any[]>([]);
   const [dataWarning, setDataWarning] = useState<string>("");
   
   useEffect(() => {
@@ -133,7 +134,7 @@ export default function Page() {
   }, []);
 
   async function refreshAll() {
-    const [p, ph, d, e, l, n, v, r, pl, mat, vig, inv, rev, ret, ew, ewph, ewd, ewn, ewm, ewv, ewp, ewr, ewi, ewrev, ewret, ce] = await Promise.all([
+    const [p, ph, d, e, l, n, v, r, pl, mat, vig, inv, rev, ret, ew, ewph, ewd, ewn, ewm, ewv, ewp, ewr, ewi, ewrev, ewret, ce, cp] = await Promise.all([
       supabase.from("projects").select("*").order("created_at", { ascending: false }),
       supabase.from("chantier_photos").select("*").order("created_at", { ascending: false }),
       supabase.from("chantier_documents").select("*").order("created_at", { ascending: false }),
@@ -159,10 +160,11 @@ export default function Page() {
       supabase.from("earthwork_invoices").select("*").order("invoice_date", { ascending: false }),
       supabase.from("earthwork_revenues").select("*").order("billing_date", { ascending: false }),
       supabase.from("earthwork_returns").select("*").order("return_date", { ascending: false }),
-      supabase.from("company_expenses").select("*").order("expense_date", { ascending: false })
+      supabase.from("company_expenses").select("*").order("expense_date", { ascending: false }),
+      supabase.from("client_payments").select("*").order("payment_date", { ascending: false })
     ]);
 
-    const errors = [p, ph, d, e, l, n, v, r, pl, mat, vig, inv, rev, ret, ew, ewph, ewd, ewn, ewm, ewv, ewp, ewr, ewi, ewrev, ewret, ce].filter((x: any) => x?.error).map((x: any) => x.error.message);
+    const errors = [p, ph, d, e, l, n, v, r, pl, mat, vig, inv, rev, ret, ew, ewph, ewd, ewn, ewm, ewv, ewp, ewr, ewi, ewrev, ewret, ce, cp].filter((x: any) => x?.error).map((x: any) => x.error.message);
     setDataWarning(errors.length ? errors.join(" | ") : "");
 
     setProjects(p.data || []);
@@ -191,6 +193,7 @@ export default function Page() {
     setEarthworkRevenues(ewrev.data || []);
     setEarthworkReturns(ewret.data || []);
     setCompanyExpenses(ce.data || []);
+    setClientPayments(cp.data || []);
   }
 
   async function signIn(e: any) {
@@ -202,6 +205,20 @@ export default function Page() {
   async function signOut() {
     await supabase.auth.signOut();
     setSession(null);
+  }
+
+  function openModule(id: string) {
+    if (["management", "employees"].includes(id)) {
+      const label = id === "management" ? "Gestion" : "Salariés";
+      const key = id === "management" ? "asb_pin_management" : "asb_pin_employees";
+      const expected = localStorage.getItem(key) || "1234";
+      const code = prompt(`Code d'accès ${label}`);
+      if (code !== expected) {
+        alert("Code incorrect");
+        return;
+      }
+    }
+    setActive(id);
   }
 
   function projectName(id: string) {
@@ -250,7 +267,7 @@ export default function Page() {
           {menu.filter((m) => userRole === "admin" || ["projects", "planning", "earthworks"].includes(m.id)).map((m) => {
             const Icon = m.icon;
             return (
-              <button key={m.id} onClick={() => setActive(m.id)} className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-bold ${active === m.id ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"}`}>
+              <button key={m.id} onClick={() => openModule(m.id)} className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-bold ${active === m.id ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"}`}>
                 <Icon size={18} /> {m.title}
               </button>
             );
@@ -275,7 +292,7 @@ export default function Page() {
                 {menu.filter((m) => userRole === "admin" || ["projects", "planning", "earthworks"].includes(m.id)).map((m) => {
                   const Icon = m.icon;
                   return (
-                    <Button key={m.id} variant={active === m.id ? "primary" : "secondary"} onClick={() => { setActive(m.id); setMobileMenuOpen(false); }}>
+                    <Button key={m.id} variant={active === m.id ? "primary" : "secondary"} onClick={() => { openModule(m.id); setMobileMenuOpen(false); }}>
                       <Icon size={16} className="mr-2" /> {m.title}
                     </Button>
                   );
@@ -295,7 +312,7 @@ export default function Page() {
           {active === "vehicles" && userRole === "admin" && <Vehicles vehicles={vehicles} refreshAll={refreshAll} />}
           {active === "requests" && userRole === "admin" && <Requests requests={requests} projects={projects} employees={employees} refreshAll={refreshAll} projectName={projectName} />}
           {active === "mobile" && userRole === "admin" && <Mobile projects={projects} refreshAll={refreshAll} />}
-          {active === "management" && userRole === "admin" && <Management projects={projects} employees={employees} planning={planning} invoices={invoices} revenues={revenues} returns={returns} companyExpenses={companyExpenses} refreshAll={refreshAll} />}
+          {active === "management" && userRole === "admin" && <Management projects={projects} employees={employees} planning={planning} invoices={invoices} revenues={revenues} returns={returns} companyExpenses={companyExpenses} clientPayments={clientPayments} refreshAll={refreshAll} />}
         </section>
       </main>
     </div>
@@ -2668,309 +2685,132 @@ function Storekeeper({ projects, materials, invoices = [], returns = [], refresh
 }
 
 
-function Management({ projects, employees, planning, invoices, revenues, returns = [], companyExpenses = [], refreshAll }: any) {
-  const [form, setForm] = useState({ project_id: "", label: "", amount: "", tva_rate: "10", billing_date: "", notes: "" });
-  const [editingRevenueId, setEditingRevenueId] = useState<string | null>(null);
-  const [showRevenueForm, setShowRevenueForm] = useState(false);
-  const [pilotageMode, setPilotageMode] = useState("month");
-  const [periodStart, setPeriodStart] = useState(formatDate(new Date(new Date().getFullYear(), new Date().getMonth(), 1)));
-  const [periodEnd, setPeriodEnd] = useState(formatDate(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0)));
-  const [expenseForm, setExpenseForm] = useState({ name: "", category: "Charges fixes", amount: "", tva_rate: "20", frequency: "mensuelle", expense_date: formatDate(new Date()), notes: "", active: true });
-  const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
-  const [showExpenseForm, setShowExpenseForm] = useState(false);
+function Management({ projects, employees, planning, invoices, revenues, returns = [], companyExpenses = [], clientPayments = [], refreshAll }: any) {
+  const [tab, setTab] = useState("pilotage");
   const [projectSearch, setProjectSearch] = useState("");
   const [selectedProjectFilter, setSelectedProjectFilter] = useState("");
+  const [showRevenueForm, setShowRevenueForm] = useState(false);
+  const [editingRevenueId, setEditingRevenueId] = useState<string | null>(null);
+  const [revenueForm, setRevenueForm] = useState({ project_id: "", label: "", amount: "", tva_rate: "10", billing_date: formatDate(new Date()), notes: "" });
+  const [showExpenseForm, setShowExpenseForm] = useState(false);
+  const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
+  const [expenseForm, setExpenseForm] = useState({ name: "", category: "Charges fixes", amount: "", tva_rate: "20", frequency: "mensuelle", expense_date: formatDate(new Date()), notes: "", active: true });
+  const [showPaymentForm, setShowPaymentForm] = useState(false);
+  const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
+  const [paymentForm, setPaymentForm] = useState({ project_id: "", client: "", invoice_number: "", amount_ttc: "", payment_method: "Virement bancaire", payment_date: formatDate(new Date()), notes: "" });
+
+  function money(v: number) { return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(v || 0)); }
+  function amountHT(x: any) { return Number(x.amount_ht ?? x.amount ?? 0); }
+  function amountTVA(x: any) { return Number(x.amount_tva ?? (amountHT(x) * Number(x.tva_rate || 0) / 100)); }
+  function amountTTC(x: any) { return Number(x.amount_ttc ?? (amountHT(x) + amountTVA(x))); }
+  function taxPayload(amount: string, rate: string) { const ht = Math.round(Number(amount || 0) * 100) / 100; const tva = Math.round((ht * Number(rate || 0) / 100) * 100) / 100; const ttc = Math.round((ht + tva) * 100) / 100; return { amount: ht, amount_ht: ht, tva_rate: Number(rate || 0), amount_tva: tva, amount_ttc: ttc }; }
   function daysBetween(start: string, end: string) { if (!start) return 0; const s = new Date(start); const e = new Date(end || start); return Math.max(0, Math.round((e.getTime() - s.getTime()) / 86400000)) + 1; }
-  function employeeCost(employeeId: string) { const e = employees.find((x: any) => x.id === employeeId); return Number(e?.daily_cost || 0); }
-  function money(v: number) { return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v || 0); }
-  function amountHTLocal(x: any) { return Number(x.amount_ht ?? x.amount ?? 0); }
-  function amountTVALocal(x: any) { return Number(x.amount_tva ?? (amountHTLocal(x) * Number(x.tva_rate || 0) / 100)); }
-  function amountTTCLocal(x: any) { return Number(x.amount_ttc ?? (amountHTLocal(x) + amountTVALocal(x))); }
-  function makeTaxPayloadLocal(amount: string, rate: string) { const ht = Math.round(Number(amount || 0) * 100) / 100; const tva = Math.round((ht * Number(rate || 0) / 100) * 100) / 100; const ttc = Math.round((ht + tva) * 100) / 100; return { amount: ht, amount_ht: ht, tva_rate: Number(rate || 0), amount_tva: tva, amount_ttc: ttc }; }
-  function projectStats(projectId: string) { const myInvoices = invoices.filter((i: any) => i.project_id === projectId); const myReturns = returns.filter((r: any) => r.project_id === projectId); const myRevenues = revenues.filter((r: any) => r.project_id === projectId); const grossSupplierTotal = myInvoices.reduce((s: number, i: any) => s + amountHTLocal(i), 0); const supplierTVA = myInvoices.reduce((s: number, i: any) => s + amountTVALocal(i), 0); const returnsTotal = myReturns.reduce((s: number, r: any) => s + amountHTLocal(r), 0); const returnsTVA = myReturns.reduce((s: number, r: any) => s + amountTVALocal(r), 0); const supplierTotal = Math.max(0, grossSupplierTotal - returnsTotal); const revenueTotal = myRevenues.reduce((s: number, r: any) => s + amountHTLocal(r), 0); const revenueTVA = myRevenues.reduce((s: number, r: any) => s + amountTVALocal(r), 0); const netDeductibleTVA = Math.max(0, supplierTVA - returnsTVA); const tvaBalance = revenueTVA - netDeductibleTVA; const laborTotal = planning.filter((p: any) => p.project_id === projectId).reduce((s: number, p: any) => s + daysBetween(p.start_date, p.end_date) * employeeCost(p.employee_id), 0); const totalCosts = supplierTotal + laborTotal; const margin = revenueTotal - totalCosts; const marginRate = revenueTotal > 0 ? Math.round((margin / revenueTotal) * 100) : 0; return { supplierTotal, grossSupplierTotal, returnsTotal, revenueTotal, supplierTVA, returnsTVA, revenueTVA, netDeductibleTVA, tvaBalance, laborTotal, totalCosts, margin, marginRate }; }
-  async function addRevenue(e: any) { e.preventDefault(); if (!form.project_id || !form.amount) return alert("Chantier et montant HT obligatoires"); const payload = { project_id: form.project_id, label: form.label || "Facturation client", ...makeTaxPayloadLocal(form.amount, form.tva_rate), billing_date: form.billing_date || null, notes: form.notes }; const query = editingRevenueId ? supabase.from("project_revenues").update(payload).eq("id", editingRevenueId) : supabase.from("project_revenues").insert(payload); const { error } = await query; if (error) return alert(error.message); setForm({ project_id: form.project_id, label: "", amount: "", tva_rate: "10", billing_date: "", notes: "" }); setEditingRevenueId(null); setShowRevenueForm(false); await refreshAll(); }
-  function editRevenue(item: any) {
-    setEditingRevenueId(item.id);
-    setShowRevenueForm(true);
-    setForm({
-      project_id: item.project_id || "",
-      label: item.label || "",
-      amount: String(amountHTLocal(item) || ""),
-      tva_rate: String(item.tva_rate ?? 10),
-      billing_date: item.billing_date || "",
-      notes: item.notes || ""
-    });
-    window.scrollTo({ top: 0, behavior: "smooth" });
+  function employeeCost(employeeId: string) { const emp = employees.find((e: any) => e.id === employeeId); return Number(emp?.daily_cost || 0); }
+  function projectLabel(id: string) { const p = projects.find((x: any) => x.id === id); return p ? `${p.name}${p.status === "archive" ? " · archivé" : ""}` : "Chantier"; }
+
+  const activeProjects = projects.filter((p: any) => p.status !== "archive");
+  const archivedProjects = projects.filter((p: any) => p.status === "archive");
+  const searchedActiveProjects = activeProjects.filter((p: any) => {
+    const txt = `${p.name || ""} ${p.client || ""} ${p.address || ""}`.toLowerCase();
+    const searchOk = !projectSearch || txt.includes(projectSearch.toLowerCase());
+    const selectOk = !selectedProjectFilter || p.id === selectedProjectFilter;
+    return searchOk && selectOk;
+  });
+
+  function projectStats(projectId: string) {
+    const myInvoices = invoices.filter((i: any) => i.project_id === projectId);
+    const myReturns = returns.filter((r: any) => r.project_id === projectId);
+    const myRevenues = revenues.filter((r: any) => r.project_id === projectId);
+    const grossSupplierTotal = myInvoices.reduce((s: number, i: any) => s + amountHT(i), 0);
+    const supplierTVA = myInvoices.reduce((s: number, i: any) => s + amountTVA(i), 0);
+    const returnsTotal = myReturns.reduce((s: number, r: any) => s + amountHT(r), 0);
+    const returnsTVA = myReturns.reduce((s: number, r: any) => s + amountTVA(r), 0);
+    const supplierTotal = Math.max(0, grossSupplierTotal - returnsTotal);
+    const revenueTotal = myRevenues.reduce((s: number, r: any) => s + amountHT(r), 0);
+    const revenueTVA = myRevenues.reduce((s: number, r: any) => s + amountTVA(r), 0);
+    const netDeductibleTVA = Math.max(0, supplierTVA - returnsTVA);
+    const laborTotal = planning.filter((p: any) => p.project_id === projectId).reduce((s: number, p: any) => s + daysBetween(p.start_date, p.end_date) * employeeCost(p.employee_id), 0);
+    const margin = revenueTotal - supplierTotal - laborTotal;
+    const marginRate = revenueTotal > 0 ? Math.round((margin / revenueTotal) * 100) : 0;
+    return { grossSupplierTotal, supplierTotal, supplierTVA, returnsTotal, returnsTVA, revenueTotal, revenueTVA, netDeductibleTVA, laborTotal, margin, marginRate, tvaBalance: revenueTVA - netDeductibleTVA };
   }
 
-  function generateProjectReport(project: any) {
-    const s = projectStats(project.id);
-    const projectRevenues = revenues.filter((r: any) => r.project_id === project.id);
-    const projectInvoices = invoices.filter((i: any) => i.project_id === project.id);
-    const projectReturns = returns.filter((r: any) => r.project_id === project.id);
-    const projectPlanning = planning.filter((p: any) => p.project_id === project.id);
-    const statusColor = s.margin >= 0 ? "#10b981" : "#ef4444";
-    const statusLabel = s.margin >= 0 ? "Rentable" : "À surveiller";
-    const employeeLabel = (id: string) => {
-      const e = employees.find((x: any) => x.id === id);
-      return e ? `${e.firstname || ""} ${e.lastname || ""}`.trim() || "Salarié" : "Salarié non défini";
-    };
-    const pct = (value: number, total: number) => total > 0 ? Math.max(0, Math.round((value / total) * 100)) : 0;
-    const revenueTTC = projectRevenues.reduce((sum: number, r: any) => sum + amountTTCLocal(r), 0);
-    const purchasesTTC = projectInvoices.reduce((sum: number, i: any) => sum + amountTTCLocal(i), 0);
-    const returnsTTC = projectReturns.reduce((sum: number, r: any) => sum + amountTTCLocal(r), 0);
-    const tvaTotal = Math.max(1, s.revenueTVA + s.netDeductibleTVA);
-    const costTotalForPie = Math.max(1, s.supplierTotal + s.laborTotal + Math.max(0, s.margin));
-    const pSupplier = pct(s.supplierTotal, costTotalForPie);
-    const pLabor = pct(s.laborTotal, costTotalForPie);
-    const pMargin = Math.max(0, 100 - pSupplier - pLabor);
-    const pCollectee = pct(s.revenueTVA, tvaTotal);
-    const pDeductible = Math.max(0, 100 - pCollectee);
-    const html = `
-      <html>
-        <head>
-          <title>Rapport gestion ASB - ${project.name}</title>
-          <style>
-            @page{size:A4;margin:10mm}
-            *{box-sizing:border-box}
-            body{font-family:Arial,sans-serif;background:#e5e7eb;color:#0f172a;margin:0}
-            .page{max-width:980px;margin:auto;background:white;padding:28px}
-            .header{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;border-bottom:4px solid #0f172a;padding-bottom:18px}
-            .logo{height:66px;object-fit:contain}.title{margin:0;font-size:30px;letter-spacing:-.04em}.muted{color:#64748b}.badge{display:inline-block;border-radius:999px;padding:8px 14px;background:${statusColor};color:white;font-weight:900}
-            .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:18px}.card{border-radius:20px;padding:14px;background:#f8fafc;border:1px solid #e2e8f0}.card b{font-size:11px;text-transform:uppercase;color:#475569}.value{font-size:22px;font-weight:900;margin-top:6px}.small{font-size:12px;color:#64748b;margin-top:4px}
-            .summary{margin-top:20px;border-radius:24px;padding:20px;background:${s.margin>=0?'#ecfdf5':'#fef2f2'};border-left:10px solid ${statusColor}}
-            .big{font-size:38px;font-weight:900;letter-spacing:-.04em}.section{margin-top:24px;break-inside:avoid}h2{font-size:18px;margin:0 0 10px}table{width:100%;border-collapse:collapse;font-size:12px}th{background:#0f172a;color:white;text-align:left;padding:9px}td{padding:9px;border-bottom:1px solid #e2e8f0;vertical-align:top}.num{text-align:right;white-space:nowrap}
-            .charts{display:grid;grid-template-columns:repeat(2,1fr);gap:18px;margin-top:22px}.chartbox{border:1px solid #e2e8f0;border-radius:24px;padding:18px;background:#f8fafc}.pie{width:190px;height:190px;border-radius:50%;margin:10px auto;border:10px solid white;box-shadow:0 10px 24px rgba(15,23,42,.12)}.legend{display:grid;gap:7px;font-size:12px}.legend span{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:6px}.c1{background:#0ea5e9}.c2{background:#f59e0b}.c3{background:#10b981}.c4{background:#ef4444}.note{margin-top:22px;font-size:11px;color:#64748b}.pagebreak{break-before:page}
-            @media print{body{background:white}.page{padding:0}.charts{break-inside:avoid}}
-          </style>
-        </head>
-        <body>
-          <div class="page">
-            <div class="header">
-              <div>
-                <img class="logo" src="/logo-asb.png" />
-                <h1 class="title">Rapport gestion / rentabilité V37</h1>
-                <p><b>${project.name}</b> · ${project.client || ""}</p>
-                <p class="muted">${project.address || ""}</p>
-              </div>
-              <div style="text-align:right"><div class="badge">${statusLabel}</div><p class="muted">Généré depuis ASB Intranet</p></div>
-            </div>
-            <div class="grid">
-              <div class="card"><b>CA client HT</b><div class="value">${money(s.revenueTotal)}</div><div class="small">TTC ${money(revenueTTC)}</div></div>
-              <div class="card"><b>Achats - retours HT</b><div class="value">${money(s.supplierTotal)}</div><div class="small">Achats TTC ${money(purchasesTTC)} · retours TTC ${money(returnsTTC)}</div></div>
-              <div class="card"><b>Main d'œuvre</b><div class="value">${money(s.laborTotal)}</div><div class="small">${projectPlanning.length} ligne(s) planning</div></div>
-              <div class="card"><b>Marge estimée HT</b><div class="value">${money(s.margin)}</div><div class="small">${s.marginRate}% du CA HT</div></div>
-            </div>
-            <div class="grid">
-              <div class="card"><b>TVA collectée</b><div class="value">${money(s.revenueTVA)}</div><div class="small">Sur factures clients</div></div>
-              <div class="card"><b>TVA déductible</b><div class="value">${money(s.netDeductibleTVA)}</div><div class="small">Achats - TVA retours</div></div>
-              <div class="card"><b>Solde TVA estimatif</b><div class="value">${money(s.tvaBalance)}</div><div class="small">Collectée - déductible</div></div>
-              <div class="card"><b>Total coûts HT</b><div class="value">${money(s.totalCosts)}</div><div class="small">Achats nets + main d'œuvre</div></div>
-            </div>
-            <div class="summary">
-              <div style="font-size:13px;font-weight:900;text-transform:uppercase;color:#475569">Synthèse décisionnelle</div>
-              <div class="big">${s.margin >= 0 ? "+" : ""}${s.marginRate}%</div>
-              <div style="font-weight:900">${s.margin >= 0 ? "Chantier rentable à ce stade." : "Chantier en dérive ou marge négative."}</div>
-              <p style="margin-bottom:0;color:#475569">Jeux de TVA intégrés : TVA collectée client, TVA déductible achats, TVA corrigée par les retours et solde TVA estimatif.</p>
-            </div>
-            <div class="charts">
-              <div class="chartbox">
-                <h2>Camembert rentabilité HT</h2>
-                <div class="pie" style="background:conic-gradient(#ef4444 0 ${pSupplier}%, #f59e0b ${pSupplier}% ${pSupplier+pLabor}%, #10b981 ${pSupplier+pLabor}% 100%)"></div>
-                <div class="legend"><div><span class="c4"></span>Achats nets : ${money(s.supplierTotal)} (${pSupplier}%)</div><div><span class="c2"></span>Main d'œuvre : ${money(s.laborTotal)} (${pLabor}%)</div><div><span class="c3"></span>Marge : ${money(Math.max(0, s.margin))} (${pMargin}%)</div></div>
-              </div>
-              <div class="chartbox">
-                <h2>Camembert jeu de TVA</h2>
-                <div class="pie" style="background:conic-gradient(#0ea5e9 0 ${pCollectee}%, #10b981 ${pCollectee}% 100%)"></div>
-                <div class="legend"><div><span class="c1"></span>TVA collectée : ${money(s.revenueTVA)} (${pCollectee}%)</div><div><span class="c3"></span>TVA déductible nette : ${money(s.netDeductibleTVA)} (${pDeductible}%)</div><div><b>Solde TVA :</b> ${money(s.tvaBalance)}</div></div>
-              </div>
-            </div>
-            <div class="section pagebreak">
-              <h2>Facturation client — détail TVA collectée</h2>
-              <table><thead><tr><th>Libellé</th><th>Date</th><th class="num">HT</th><th class="num">Taux</th><th class="num">TVA collectée</th><th class="num">TTC</th><th>Notes</th></tr></thead><tbody>
-                ${projectRevenues.map((r: any) => `<tr><td><b>${r.label || "Facturation client"}</b></td><td>${r.billing_date || ""}</td><td class="num">${money(amountHTLocal(r))}</td><td class="num">${Number(r.tva_rate ?? 0).toFixed(2).replace('.', ',')}%</td><td class="num">${money(amountTVALocal(r))}</td><td class="num">${money(amountTTCLocal(r))}</td><td>${r.notes || ""}</td></tr>`).join("") || `<tr><td colspan="7">Aucune facturation client enregistrée.</td></tr>`}
-              </tbody></table>
-            </div>
-            <div class="section">
-              <h2>Factures fournisseurs — détail TVA déductible</h2>
-              <table><thead><tr><th>Fournisseur</th><th>Date</th><th class="num">HT</th><th class="num">Taux</th><th class="num">TVA déductible</th><th class="num">TTC</th><th>Notes</th></tr></thead><tbody>
-                ${projectInvoices.map((i: any) => `<tr><td><b>${i.supplier || "Fournisseur"}</b></td><td>${i.invoice_date || ""}</td><td class="num">${money(amountHTLocal(i))}</td><td class="num">${Number(i.tva_rate ?? 0).toFixed(2).replace('.', ',')}%</td><td class="num">${money(amountTVALocal(i))}</td><td class="num">${money(amountTTCLocal(i))}</td><td>${i.notes || ""}</td></tr>`).join("") || `<tr><td colspan="7">Aucune facture fournisseur enregistrée.</td></tr>`}
-              </tbody></table>
-            </div>
-            <div class="section">
-              <h2>Retours marchandise — TVA déductible corrigée</h2>
-              <table><thead><tr><th>Fournisseur</th><th>Date</th><th class="num">HT déduit</th><th class="num">Taux</th><th class="num">TVA corrigée</th><th class="num">TTC déduit</th><th>Notes</th></tr></thead><tbody>
-                ${projectReturns.map((r: any) => `<tr><td><b>${r.supplier || "Retour"}</b></td><td>${r.return_date || ""}</td><td class="num">-${money(amountHTLocal(r))}</td><td class="num">${Number(r.tva_rate ?? 0).toFixed(2).replace('.', ',')}%</td><td class="num">-${money(amountTVALocal(r))}</td><td class="num">-${money(amountTTCLocal(r))}</td><td>${r.notes || ""}</td></tr>`).join("") || `<tr><td colspan="7">Aucun retour marchandise.</td></tr>`}
-              </tbody></table>
-            </div>
-            <div class="section">
-              <h2>Temps salariés / planning</h2>
-              <table><thead><tr><th>Salarié</th><th>Début</th><th>Fin</th><th class="num">Jours</th><th class="num">Coût jour</th><th class="num">Coût estimé</th></tr></thead><tbody>
-                ${projectPlanning.map((pl: any) => { const days = daysBetween(pl.start_date, pl.end_date); const cost = employeeCost(pl.employee_id); return `<tr><td><b>${employeeLabel(pl.employee_id)}</b></td><td>${pl.start_date || ""}</td><td>${pl.end_date || ""}</td><td class="num">${days}</td><td class="num">${money(cost)}</td><td class="num">${money(days * cost)}</td></tr>`; }).join("") || `<tr><td colspan="6">Aucun temps salarié lié au chantier.</td></tr>`}
-              </tbody></table>
-            </div>
-            <p class="note">Document interne ASB — rapport de gestion et rentabilité. Ne pas transmettre au client sans validation.</p>
-          </div>
-        </body>
-      </html>`;
-    const w = window.open("", "_blank");
-    if (!w) return alert("Popup bloquée. Autorise les popups pour générer le rapport.");
-    w.document.write(html);
-    w.document.close();
-    w.focus();
-    setTimeout(() => w.print(), 500);
-  }
+  const allStats = projects.reduce((a: any, p: any) => {
+    const s = projectStats(p.id);
+    a.revenue += s.revenueTotal; a.revenueTVA += s.revenueTVA; a.purchases += s.supplierTotal; a.deductibleTVA += s.netDeductibleTVA; a.labor += s.laborTotal; a.margin += s.margin; return a;
+  }, { revenue: 0, revenueTVA: 0, purchases: 0, deductibleTVA: 0, labor: 0, margin: 0 });
+  const activeExpenses = companyExpenses.filter((e: any) => e.active !== false);
+  const expensesHT = activeExpenses.reduce((s: number, e: any) => s + amountHT(e), 0);
+  const expensesTVA = activeExpenses.reduce((s: number, e: any) => s + amountTVA(e), 0);
+  const tvaDeductibleGlobal = allStats.deductibleTVA + expensesTVA;
+  const tvaBalanceGlobal = allStats.revenueTVA - tvaDeductibleGlobal;
+  const paidTTC = clientPayments.reduce((s: number, p: any) => s + Number(p.amount_ttc || 0), 0);
 
-  async function deleteRevenue(item: any) { if (!confirm("Supprimer cette facturation client ?")) return; const { error } = await supabase.from("project_revenues").delete().eq("id", item.id); if (error) return alert(error.message); await refreshAll(); }
-  async function setProjectArchivedFromManagement(project: any, archived: boolean) {
-    const label = archived ? "archiver" : "réactiver";
-    if (!confirm(`Confirmer : ${label} le chantier ${project.name || ""} ?`)) return;
+  async function archiveProject(project: any, archived: boolean) {
     const { error } = await supabase.from("projects").update({ status: archived ? "archive" : "termine" }).eq("id", project.id);
     if (error) return alert(error.message);
     await refreshAll();
   }
+  async function saveRevenue(e: any) {
+    e.preventDefault(); if (!revenueForm.project_id || !revenueForm.amount) return alert("Chantier et montant HT obligatoires");
+    const payload = { project_id: revenueForm.project_id, label: revenueForm.label || "Facturation client", ...taxPayload(revenueForm.amount, revenueForm.tva_rate), billing_date: revenueForm.billing_date || null, notes: revenueForm.notes };
+    const query = editingRevenueId ? supabase.from("project_revenues").update(payload).eq("id", editingRevenueId) : supabase.from("project_revenues").insert(payload);
+    const { error } = await query; if (error) return alert(error.message);
+    setEditingRevenueId(null); setShowRevenueForm(false); setRevenueForm({ project_id: revenueForm.project_id, label: "", amount: "", tva_rate: "10", billing_date: formatDate(new Date()), notes: "" }); await refreshAll();
+  }
+  function editRevenue(item: any) { setEditingRevenueId(item.id); setShowRevenueForm(true); setTab("factures"); setRevenueForm({ project_id: item.project_id || "", label: item.label || "", amount: String(amountHT(item) || ""), tva_rate: String(item.tva_rate ?? 10), billing_date: item.billing_date || "", notes: item.notes || "" }); window.scrollTo({ top: 0, behavior: "smooth" }); }
+  async function deleteRevenue(item: any) { if (!confirm("Supprimer cette facture client ?")) return; const { error } = await supabase.from("project_revenues").delete().eq("id", item.id); if (error) return alert(error.message); await refreshAll(); }
+  async function saveExpense(e: any) { e.preventDefault(); if (!expenseForm.name || !expenseForm.amount) return alert("Nom et montant obligatoires"); const payload = { ...expenseForm, ...taxPayload(expenseForm.amount, expenseForm.tva_rate), active: expenseForm.active }; const query = editingExpenseId ? supabase.from("company_expenses").update(payload).eq("id", editingExpenseId) : supabase.from("company_expenses").insert(payload); const { error } = await query; if (error) return alert(error.message); setEditingExpenseId(null); setShowExpenseForm(false); setExpenseForm({ name: "", category: "Charges fixes", amount: "", tva_rate: "20", frequency: "mensuelle", expense_date: formatDate(new Date()), notes: "", active: true }); await refreshAll(); }
+  function editExpense(item: any) { setEditingExpenseId(item.id); setShowExpenseForm(true); setTab("charges"); setExpenseForm({ name: item.name || "", category: item.category || "Charges fixes", amount: String(amountHT(item) || ""), tva_rate: String(item.tva_rate ?? 20), frequency: item.frequency || "mensuelle", expense_date: item.expense_date || formatDate(new Date()), notes: item.notes || "", active: item.active !== false }); }
+  async function deleteExpense(item: any) { if (!confirm("Supprimer cette charge ?")) return; const { error } = await supabase.from("company_expenses").delete().eq("id", item.id); if (error) return alert(error.message); await refreshAll(); }
+  async function savePayment(e: any) { e.preventDefault(); if (!paymentForm.client || !paymentForm.amount_ttc) return alert("Client et montant obligatoires"); const payload = { project_id: paymentForm.project_id || null, client: paymentForm.client, invoice_number: paymentForm.invoice_number, amount_ttc: Math.round(Number(paymentForm.amount_ttc || 0) * 100) / 100, payment_method: paymentForm.payment_method, payment_date: paymentForm.payment_date || null, notes: paymentForm.notes }; const query = editingPaymentId ? supabase.from("client_payments").update(payload).eq("id", editingPaymentId) : supabase.from("client_payments").insert(payload); const { error } = await query; if (error) return alert(error.message); setEditingPaymentId(null); setShowPaymentForm(false); setPaymentForm({ project_id: "", client: "", invoice_number: "", amount_ttc: "", payment_method: "Virement bancaire", payment_date: formatDate(new Date()), notes: "" }); await refreshAll(); }
+  function editPayment(item: any) { setEditingPaymentId(item.id); setShowPaymentForm(true); setTab("paiements"); setPaymentForm({ project_id: item.project_id || "", client: item.client || "", invoice_number: item.invoice_number || "", amount_ttc: String(item.amount_ttc || ""), payment_method: item.payment_method || "Virement bancaire", payment_date: item.payment_date || "", notes: item.notes || "" }); }
+  async function deletePayment(item: any) { if (!confirm("Supprimer ce paiement client ?")) return; const { error } = await supabase.from("client_payments").delete().eq("id", item.id); if (error) return alert(error.message); await refreshAll(); }
 
-  function inPeriod(dateValue: string) {
-    if (!dateValue) return false;
-    return dateValue >= periodStart && dateValue <= periodEnd;
-  }
-  function setQuickPeriod(mode: string) {
-    const now = new Date();
-    setPilotageMode(mode);
-    if (mode === "week") {
-      const start = startOfWeek(now); const end = addDays(start, 6);
-      setPeriodStart(formatDate(start)); setPeriodEnd(formatDate(end));
-    } else if (mode === "month") {
-      setPeriodStart(formatDate(new Date(now.getFullYear(), now.getMonth(), 1)));
-      setPeriodEnd(formatDate(new Date(now.getFullYear(), now.getMonth() + 1, 0)));
-    } else if (mode === "quarter") {
-      const q = Math.floor(now.getMonth() / 3) * 3;
-      setPeriodStart(formatDate(new Date(now.getFullYear(), q, 1)));
-      setPeriodEnd(formatDate(new Date(now.getFullYear(), q + 3, 0)));
-    } else if (mode === "year") {
-      setPeriodStart(formatDate(new Date(now.getFullYear(), 0, 1)));
-      setPeriodEnd(formatDate(new Date(now.getFullYear(), 11, 31)));
-    }
-  }
-  function expenseMonthlyFactor(frequency: string) {
-    if (frequency === "hebdomadaire") return 4.33;
-    if (frequency === "annuelle") return 1 / 12;
-    return 1;
-  }
-  function periodMonthRatio() {
-    const start = new Date(periodStart); const end = new Date(periodEnd);
-    const days = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000) + 1);
-    return days / 30.44;
-  }
-  function expenseForPeriod(expense: any) {
-    if (expense.active === false) return 0;
-    const ht = amountHTLocal(expense);
-    if (expense.frequency === "ponctuelle") return inPeriod(expense.expense_date) ? ht : 0;
-    return ht * expenseMonthlyFactor(expense.frequency || "mensuelle") * periodMonthRatio();
-  }
-  function expenseTvaForPeriod(expense: any) {
-    const base = expenseForPeriod(expense);
-    return Math.round(base * Number(expense.tva_rate || 0)) / 100;
-  }
-  const periodRevenues = revenues.filter((r: any) => inPeriod(r.billing_date));
-  const periodInvoices = invoices.filter((i: any) => inPeriod(i.invoice_date));
-  const periodReturns = returns.filter((r: any) => inPeriod(r.return_date));
-  const periodPlanning = planning.filter((pl: any) => inPeriod(pl.start_date) || inPeriod(pl.end_date));
-  const globalCA = periodRevenues.reduce((s: number, r: any) => s + amountHTLocal(r), 0);
-  const globalTvaCollectee = periodRevenues.reduce((s: number, r: any) => s + amountTVALocal(r), 0);
-  const globalPurchases = periodInvoices.reduce((s: number, i: any) => s + amountHTLocal(i), 0);
-  const globalPurchaseTva = periodInvoices.reduce((s: number, i: any) => s + amountTVALocal(i), 0);
-  const globalReturns = periodReturns.reduce((s: number, r: any) => s + amountHTLocal(r), 0);
-  const globalReturnsTva = periodReturns.reduce((s: number, r: any) => s + amountTVALocal(r), 0);
-  const globalLabor = periodPlanning.reduce((s: number, pl: any) => s + daysBetween(pl.start_date, pl.end_date) * employeeCost(pl.employee_id), 0);
-  const globalCompanyCharges = companyExpenses.reduce((s: number, ex: any) => s + expenseForPeriod(ex), 0);
-  const globalCompanyChargesTva = companyExpenses.reduce((s: number, ex: any) => s + expenseTvaForPeriod(ex), 0);
-  const globalDeductibleTva = Math.max(0, globalPurchaseTva - globalReturnsTva + globalCompanyChargesTva);
-  const globalCosts = Math.max(0, globalPurchases - globalReturns) + globalLabor + globalCompanyCharges;
-  const globalMargin = globalCA - globalCosts;
-  const globalMarginRate = globalCA > 0 ? Math.round((globalMargin / globalCA) * 100) : 0;
-  const globalTvaBalance = globalTvaCollectee - globalDeductibleTva;
-  const tvaIsDue = globalTvaBalance >= 0;
-  const tvaSoldeLabel = tvaIsDue ? "TVA due à reverser" : "Crédit TVA récupérable";
-  const tvaSoldeAmount = Math.abs(globalTvaBalance);
-  const filteredProjects = projects.filter((p: any) => {
-    const q = projectSearch.trim().toLowerCase();
-    const matchesSearch = !q || `${p.name || ""} ${p.client || ""} ${p.address || ""}`.toLowerCase().includes(q);
-    const matchesSelect = !selectedProjectFilter || p.id === selectedProjectFilter;
-    return matchesSearch && matchesSelect;
-  });
-  const chargeCategories = Array.from(new Set(companyExpenses.map((e: any) => e.category || "Autres"))).map((category: any) => ({ category, total: companyExpenses.filter((e: any) => (e.category || "Autres") === category).reduce((s: number, e: any) => s + expenseForPeriod(e), 0) })).filter((x: any) => x.total > 0);
-  function pieStyle(values: number[], colors: string[]) {
-    const total = values.reduce((s, v) => s + Math.max(0, v), 0) || 1;
+  function SimplePie({ values }: any) {
+    const total = values.reduce((s: number, v: any) => s + Math.max(0, Number(v.value || 0)), 0) || 1;
     let acc = 0;
-    const parts = values.map((v, i) => { const start = acc; acc += Math.max(0, v) / total * 100; return `${colors[i]} ${start}% ${acc}%`; });
-    return { background: `conic-gradient(${parts.join(",")})` };
-  }
-  async function saveCompanyExpense(e: any) {
-    e.preventDefault();
-    if (!expenseForm.name || !expenseForm.amount) return alert("Nom et montant HT obligatoires");
-    const tax = makeTaxPayloadLocal(expenseForm.amount, expenseForm.tva_rate);
-    const payload = { name: expenseForm.name, category: expenseForm.category, ...tax, frequency: expenseForm.frequency, expense_date: expenseForm.expense_date || null, notes: expenseForm.notes, active: expenseForm.active };
-    const query = editingExpenseId ? supabase.from("company_expenses").update(payload).eq("id", editingExpenseId) : supabase.from("company_expenses").insert(payload);
-    const { error } = await query;
-    if (error) {
-      console.error("Erreur company_expenses", error);
-      return alert("Impossible d’enregistrer la charge : " + error.message + "\n\nSi le message parle de permission, lance le SQL V39 dans Supabase.");
-    }
-    setEditingExpenseId(null); setShowExpenseForm(false); setExpenseForm({ name: "", category: "Charges fixes", amount: "", tva_rate: "20", frequency: "mensuelle", expense_date: formatDate(new Date()), notes: "", active: true });
-    await refreshAll();
-  }
-  function editCompanyExpense(expense: any) {
-    setEditingExpenseId(expense.id); setShowExpenseForm(true);
-    setExpenseForm({ name: expense.name || "", category: expense.category || "Charges fixes", amount: String(amountHTLocal(expense) || ""), tva_rate: String(expense.tva_rate ?? 20), frequency: expense.frequency || "mensuelle", expense_date: expense.expense_date || formatDate(new Date()), notes: expense.notes || "", active: expense.active !== false });
-  }
-  async function deleteCompanyExpense(expense: any) {
-    if (!confirm("Supprimer cette charge entreprise ?")) return;
-    const { error } = await supabase.from("company_expenses").delete().eq("id", expense.id);
-    if (error) return alert(error.message);
-    await refreshAll();
+    const colors = ["#10b981", "#ef4444", "#8b5cf6", "#0f172a", "#f59e0b"];
+    const stops = values.map((v: any, i: number) => { const from = acc; acc += (Math.max(0, Number(v.value || 0)) / total) * 100; return `${colors[i % colors.length]} ${from}% ${acc}%`; }).join(", ");
+    return <div className="flex flex-wrap items-center gap-4"><div className="h-36 w-36 rounded-full shadow-inner" style={{ background: `conic-gradient(${stops})` }} /> <div className="space-y-2">{values.map((v: any, i: number) => <div key={v.label} className="flex items-center gap-2 text-sm font-bold"><span className="h-3 w-3 rounded-full" style={{ backgroundColor: colors[i % colors.length] }} />{v.label} · {money(v.value)}</div>)}</div></div>;
   }
 
-  return (
-    <div><Section title="Gestion & pilotage global" subtitle="V43 — facturation client uniquement dans Gestion, synthèse chantier premium et chantier allégé." />
-    <div className="mb-6 flex flex-wrap gap-2"><Button variant={pilotageMode === "week" ? "primary" : "secondary"} onClick={() => setQuickPeriod("week")}>Semaine</Button><Button variant={pilotageMode === "month" ? "primary" : "secondary"} onClick={() => setQuickPeriod("month")}>Mois</Button><Button variant={pilotageMode === "quarter" ? "primary" : "secondary"} onClick={() => setQuickPeriod("quarter")}>Trimestre</Button><Button variant={pilotageMode === "year" ? "primary" : "secondary"} onClick={() => setQuickPeriod("year")}>Année</Button><Field label="Début"><Input type="date" value={periodStart} onChange={(e: any) => { setPilotageMode("custom"); setPeriodStart(e.target.value); }} /></Field><Field label="Fin"><Input type="date" value={periodEnd} onChange={(e: any) => { setPilotageMode("custom"); setPeriodEnd(e.target.value); }} /></Field></div>
-    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-      <Card className="border-l-8 border-emerald-500 bg-emerald-50"><p className="text-xs font-bold uppercase text-emerald-700">CA HT période</p><p className="text-3xl font-black text-emerald-700">{money(globalCA)}</p><p className="text-xs text-slate-500">TVA collectée : {money(globalTvaCollectee)}</p></Card>
-      <Card className="border-l-8 border-red-500 bg-red-50"><p className="text-xs font-bold uppercase text-red-700">Coûts HT globaux</p><p className="text-3xl font-black text-red-700">{money(globalCosts)}</p><p className="text-xs text-slate-500">Achats nets + MO + charges</p></Card>
-      <Card className={globalMargin >= 0 ? "border-l-8 border-blue-500 bg-blue-50" : "border-l-8 border-red-600 bg-red-100"}><p className="text-xs font-bold uppercase">Marge nette entreprise</p><p className="text-3xl font-black">{money(globalMargin)}</p><p className="text-xs text-slate-500">{globalMarginRate}% sur la période</p></Card>
-      <Card className={tvaIsDue ? "border-l-8 border-red-500 bg-red-50" : "border-l-8 border-emerald-500 bg-emerald-50"}>
-        <p className={tvaIsDue ? "text-xs font-bold uppercase text-red-700" : "text-xs font-bold uppercase text-emerald-700"}>{tvaSoldeLabel}</p>
-        <p className={tvaIsDue ? "text-3xl font-black text-red-700" : "text-3xl font-black text-emerald-700"}>{money(tvaSoldeAmount)}</p>
-        <p className="text-xs text-slate-500">Collectée {money(globalTvaCollectee)} - déductible {money(globalDeductibleTva)}</p>
-      </Card>
-    </div>
-    <div className="mt-6 grid gap-4 xl:grid-cols-2">
-      <Card><h3 className="text-xl font-black">Camembert rentabilité globale</h3><div className="mx-auto my-4 h-56 w-56 rounded-full shadow-inner" style={pieStyle([Math.max(0, globalPurchases - globalReturns), globalLabor, globalCompanyCharges, Math.max(0, globalMargin)], ["#ef4444", "#f59e0b", "#8b5cf6", "#10b981"])} /><div className="grid gap-2 text-sm"><p>🔴 Achats nets : <b>{money(Math.max(0, globalPurchases - globalReturns))}</b></p><p>🟠 Main-d’œuvre : <b>{money(globalLabor)}</b></p><p>🟣 Charges entreprise : <b>{money(globalCompanyCharges)}</b></p><p>🟢 Marge nette : <b>{money(globalMargin)}</b></p></div></Card>
-      <Card><h3 className="text-xl font-black">Camembert TVA globale</h3><div className="mx-auto my-4 h-56 w-56 rounded-full shadow-inner" style={pieStyle([globalTvaCollectee, globalDeductibleTva], ["#0ea5e9", "#10b981"])} /><div className="grid gap-2 text-sm"><p>🔵 TVA collectée client : <b>{money(globalTvaCollectee)}</b></p><p>🟢 TVA déductible achats + charges : <b>{money(globalDeductibleTva)}</b></p><div className={tvaIsDue ? "rounded-2xl bg-red-50 p-3 font-black text-red-700" : "rounded-2xl bg-emerald-50 p-3 font-black text-emerald-700"}>{tvaSoldeLabel} : {money(tvaSoldeAmount)}</div></div></Card>
-    </div>
-    <Card className="mt-6 border-l-8 border-slate-900"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-xl font-black">Charges fixes / variables entreprise</h3><p className="text-sm text-slate-500">Création, modification, suppression. Les charges récurrentes sont proratisées sur la période affichée.</p></div><Button variant="green" onClick={() => { setShowExpenseForm(!showExpenseForm); setEditingExpenseId(null); }}>+ Charge entreprise</Button></div>{showExpenseForm && <form onSubmit={saveCompanyExpense} className="mt-5 grid gap-3 md:grid-cols-6"><Field label="Nom"><Input value={expenseForm.name} onChange={(e: any) => setExpenseForm({ ...expenseForm, name: e.target.value })} /></Field><Field label="Catégorie"><Select value={expenseForm.category} onChange={(e: any) => setExpenseForm({ ...expenseForm, category: e.target.value })}><option>Charges fixes</option><option>Charges variables</option><option>Salaires fixes</option><option>Véhicules</option><option>Carburant</option><option>Assurances</option><option>Loyer</option><option>Emprunts / leasing</option><option>Comptable</option><option>Logiciels</option><option>Autres</option></Select></Field><Field label="Montant HT"><Input type="number" step="0.01" value={expenseForm.amount} onChange={(e: any) => setExpenseForm({ ...expenseForm, amount: e.target.value })} /></Field><Field label="TVA"><Select value={expenseForm.tva_rate} onChange={(e: any) => setExpenseForm({ ...expenseForm, tva_rate: e.target.value })}><option value="0">0%</option><option value="5.5">5,5%</option><option value="10">10%</option><option value="20">20%</option></Select></Field><Field label="Fréquence"><Select value={expenseForm.frequency} onChange={(e: any) => setExpenseForm({ ...expenseForm, frequency: e.target.value })}><option value="mensuelle">Mensuelle</option><option value="hebdomadaire">Hebdomadaire</option><option value="annuelle">Annuelle</option><option value="ponctuelle">Ponctuelle</option></Select></Field><Field label="Date"><Input type="date" value={expenseForm.expense_date} onChange={(e: any) => setExpenseForm({ ...expenseForm, expense_date: e.target.value })} /></Field><Field label="Notes"><Input value={expenseForm.notes} onChange={(e: any) => setExpenseForm({ ...expenseForm, notes: e.target.value })} /></Field><label className="mt-5 flex items-center gap-2 text-sm font-bold"><input type="checkbox" checked={expenseForm.active} onChange={(e: any) => setExpenseForm({ ...expenseForm, active: e.target.checked })} /> Active</label><div className="md:col-span-6"><Button variant="green">{editingExpenseId ? "Modifier la charge" : "Ajouter la charge"}</Button></div></form>}<div className="mt-5 grid gap-3">{companyExpenses.map((ex: any) => <div key={ex.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-slate-50 p-3"><div><b>{ex.name}</b> · {ex.category} · HT {money(amountHTLocal(ex))} · TVA {Number(ex.tva_rate || 0).toFixed(2).replace('.', ',')}% · {ex.frequency}</div><div className="flex gap-2"><Button variant="secondary" onClick={() => editCompanyExpense(ex)}>Modifier</Button><Button variant="danger" onClick={() => deleteCompanyExpense(ex)}>Supprimer</Button></div></div>)}{companyExpenses.length === 0 && <p className="text-sm text-slate-500">Aucune charge entreprise enregistrée.</p>}</div></Card>
-    <Card className="mt-6"><h3 className="text-xl font-black">Détail des charges par catégorie</h3><div className="mt-3 grid gap-2">{chargeCategories.map((c: any) => <div key={c.category} className="flex justify-between rounded-2xl bg-slate-50 p-3 text-sm"><span>{c.category}</span><b>{money(c.total)}</b></div>)}{chargeCategories.length === 0 && <p className="text-sm text-slate-500">Aucune charge sur la période.</p>}</div></Card>
-    <div className="mt-8 space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-black text-slate-950">📊 Synthèse chantier HT / TVA / TTC</h2>
-          <p className="text-sm font-bold text-slate-500">Facturation client centralisée dans Gestion uniquement. Les chantiers archivés restent intégrés aux stats.</p>
-        </div>
-        <Button className="mb-0" variant="green" onClick={() => { if (showRevenueForm && !editingRevenueId) { setShowRevenueForm(false); } else { setShowRevenueForm(true); setEditingRevenueId(null); setForm({ project_id: "", label: "", amount: "", tva_rate: "10", billing_date: "", notes: "" }); } }}>
-          {showRevenueForm ? (editingRevenueId ? "Formulaire facturation ouvert" : "Fermer création facturation client") : "+ Ajouter une facturation"}
-        </Button>
+  const tabButton = (id: string, label: string) => <Button variant={tab === id ? "primary" : "secondary"} onClick={() => setTab(id)}>{label}</Button>;
+
+  return <div>
+    <Section title="Gestion & pilotage global V47" subtitle="Recherche rapide, archives séparées, paiements clients et TVA lisible." />
+
+    <Card className="mb-5 border-l-8 border-blue-500 bg-white">
+      <h3 className="text-xl font-black">🔎 Recherche chantier</h3>
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
+        <Field label="Recherche rapide"><Input placeholder="Nom chantier, client, adresse..." value={projectSearch} onChange={(e: any) => setProjectSearch(e.target.value)} /></Field>
+        <Field label="Liste déroulante"><Select value={selectedProjectFilter} onChange={(e: any) => setSelectedProjectFilter(e.target.value)}><option value="">Tous les chantiers actifs</option>{activeProjects.map((p: any) => <option key={p.id} value={p.id}>{p.name} · {p.client || "Client"}</option>)}</Select></Field>
       </div>
-      <Card className="border-l-8 border-blue-500 bg-blue-50">
-        <div className="grid gap-3 md:grid-cols-3">
-          <Field label="Recherche rapide chantier"><Input placeholder="Nom, client, adresse..." value={projectSearch} onChange={(e: any) => setProjectSearch(e.target.value)} /></Field>
-          <Field label="Liste déroulante chantier"><Select value={selectedProjectFilter} onChange={(e: any) => setSelectedProjectFilter(e.target.value)}><option value="">Tous les chantiers</option>{projects.map((p: any) => <option key={p.id} value={p.id}>{p.name} {p.status === "archive" ? "— archivé" : ""}</option>)}</Select></Field>
-          <div className="flex items-end"><Button type="button" variant="secondary" onClick={() => { setProjectSearch(""); setSelectedProjectFilter(""); }}>Réinitialiser filtre</Button></div>
-        </div>
-      </Card>
-      {showRevenueForm && <Card className="border-l-8 border-emerald-500 bg-emerald-50"><h3 className="mb-4 text-xl font-black">Ajouter facture client avec TVA</h3><form onSubmit={addRevenue} className="grid gap-3 md:grid-cols-6"><Field label="Chantier"><Select value={form.project_id} onChange={(e: any) => setForm({ ...form, project_id: e.target.value })}><option value="">Choisir chantier</option>{projects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field><Field label="Libellé"><Input value={form.label} onChange={(e: any) => setForm({ ...form, label: e.target.value })} /></Field><Field label="Montant HT €"><Input type="number" step="0.01" value={form.amount} onChange={(e: any) => setForm({ ...form, amount: e.target.value })} /></Field><Field label="TVA"><Select value={form.tva_rate} onChange={(e: any) => setForm({ ...form, tva_rate: e.target.value })}><option value="0">0%</option><option value="5.5">5,5%</option><option value="10">10%</option><option value="20">20%</option></Select></Field><Field label="Date"><Input type="date" value={form.billing_date} onChange={(e: any) => setForm({ ...form, billing_date: e.target.value })} /></Field><Field label="Notes"><Input value={form.notes} onChange={(e: any) => setForm({ ...form, notes: e.target.value })} /></Field><div className="rounded-2xl bg-white p-3 text-sm md:col-span-6"><b>Aperçu facture client</b> · HT {money(Number(form.amount || 0))} · TVA {money(Math.round(Number(form.amount || 0) * Number(form.tva_rate || 0)) / 100)} · TTC {money(Number(form.amount || 0) + Math.round(Number(form.amount || 0) * Number(form.tva_rate || 0)) / 100)}</div><div className="flex gap-2 md:col-span-6"><Button variant="green">{editingRevenueId ? "Enregistrer modification" : "Ajouter facturation client"}</Button>{editingRevenueId && <Button type="button" variant="secondary" onClick={() => { setEditingRevenueId(null); setForm({ project_id: "", label: "", amount: "", tva_rate: "10", billing_date: "", notes: "" }); }}>Annuler</Button>}</div></form></Card>}
-      <div className="grid gap-6">{filteredProjects.map((p: any) => { const s = projectStats(p.id); const projectRevenues = revenues.filter((r: any) => r.project_id === p.id); const ttc = projectRevenues.reduce((sum: number, r: any) => sum + amountTTCLocal(r), 0); const projectTvaDue = s.tvaBalance >= 0; return <Card key={p.id} className={p.status === "archive" ? "overflow-hidden border border-slate-300 bg-slate-50 p-0 shadow-sm" : "overflow-hidden border border-slate-200 p-0 shadow-sm"}><div className="flex flex-wrap items-center justify-between gap-3 bg-slate-950 px-5 py-4 text-white"><div><p className="text-xs font-black uppercase text-slate-300">Gestion chantier · données financières privées</p><h3 className="text-2xl font-black">{p.name}</h3><p className="text-sm text-slate-300">{p.client || "Client non renseigné"}</p></div><div className="flex flex-wrap gap-2"><Badge tone={p.status === "archive" ? "slate" : (s.margin >= 0 ? "green" : "red")}>{p.status === "archive" ? "Archivé / terminé" : (s.margin >= 0 ? "Rentable" : "À surveiller")}</Badge><Button variant="secondary" onClick={() => generateProjectReport(p)}>Rapport PDF</Button>{p.status === "archive" ? <Button variant="green" onClick={() => setProjectArchivedFromManagement(p, false)}>Réactiver</Button> : <Button variant="amber" onClick={() => setProjectArchivedFromManagement(p, true)}>Archiver</Button>}</div></div><div className="p-5"><div className="grid gap-4 md:grid-cols-4"><div className="rounded-3xl bg-emerald-50 p-4"><p className="text-xs font-black uppercase text-emerald-700">Facturé client HT</p><p className="mt-2 text-3xl font-black text-emerald-700">{money(s.revenueTotal)}</p><p className="text-xs font-bold text-slate-500">TTC {money(ttc)}</p></div><div className="rounded-3xl bg-red-50 p-4"><p className="text-xs font-black uppercase text-red-700">Factures HT</p><p className="mt-2 text-3xl font-black text-red-700">{money(s.grossSupplierTotal)}</p><p className="text-xs font-bold text-slate-500">Retours -{money(s.returnsTotal)}</p></div><div className="rounded-3xl bg-purple-50 p-4"><p className="text-xs font-black uppercase text-purple-700">Retours HT</p><p className="mt-2 text-3xl font-black text-purple-700">-{money(s.returnsTotal)}</p><p className="text-xs font-bold text-slate-500">TVA corrigée {money(s.returnsTVA)}</p></div><div className={s.margin >= 0 ? "rounded-3xl bg-blue-50 p-4" : "rounded-3xl bg-red-100 p-4"}><p className="text-xs font-black uppercase">Marge HT</p><p className="mt-2 text-3xl font-black">{money(s.margin)}</p><p className="text-xs font-bold text-slate-500">{s.marginRate}%</p></div></div><div className="mt-5 grid gap-3 rounded-3xl border border-slate-200 bg-white p-4 md:grid-cols-3"><div className="rounded-2xl bg-blue-50 p-3"><p className="text-xs font-black uppercase text-blue-700">TVA collectée client</p><p className="text-2xl font-black text-blue-700">{money(s.revenueTVA)}</p><p className="text-xs text-slate-500">TVA sur facturation client</p></div><div className="rounded-2xl bg-emerald-50 p-3"><p className="text-xs font-black uppercase text-emerald-700">TVA déductible</p><p className="text-2xl font-black text-emerald-700">{money(s.netDeductibleTVA)}</p><p className="text-xs text-slate-500">Achats - retours</p></div><div className={projectTvaDue ? "rounded-2xl bg-red-50 p-3" : "rounded-2xl bg-emerald-50 p-3"}><p className={projectTvaDue ? "text-xs font-black uppercase text-red-700" : "text-xs font-black uppercase text-emerald-700"}>{projectTvaDue ? "TVA due" : "TVA récupérée"}</p><p className={projectTvaDue ? "text-2xl font-black text-red-700" : "text-2xl font-black text-emerald-700"}>{money(Math.abs(s.tvaBalance))}</p><p className="text-xs text-slate-500">Collectée - déductible</p></div></div><div className="mt-6 overflow-hidden rounded-3xl border border-slate-200"><div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 px-4 py-3"><h4 className="text-lg font-black">🧾 Factures clients chantiers avec TVA</h4><Badge>{projectRevenues.length} ligne(s)</Badge></div><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-white text-xs uppercase text-slate-500"><tr><th className="px-4 py-3">Libellé</th><th className="px-4 py-3">HT</th><th className="px-4 py-3">TVA</th><th className="px-4 py-3">Montant TVA</th><th className="px-4 py-3">TTC</th><th className="px-4 py-3">Date</th><th className="px-4 py-3">Notes</th><th className="px-4 py-3">Actions</th></tr></thead><tbody>{projectRevenues.map((r: any) => <tr key={r.id} className="border-t border-slate-100"><td className="px-4 py-3 font-bold">{r.label || "Facturation client"}</td><td className="px-4 py-3">{money(amountHTLocal(r))}</td><td className="px-4 py-3">{Number(r.tva_rate || 0).toFixed(2).replace('.', ',')}%</td><td className="px-4 py-3">{money(amountTVALocal(r))}</td><td className="px-4 py-3 font-black">{money(amountTTCLocal(r))}</td><td className="px-4 py-3">{r.billing_date || "-"}</td><td className="px-4 py-3">{r.notes || "-"}</td><td className="px-4 py-3"><div className="flex gap-2"><Button variant="secondary" onClick={() => editRevenue(r)}>Modifier</Button><Button variant="danger" onClick={() => deleteRevenue(r)}>Supprimer</Button></div></td></tr>)}{projectRevenues.length === 0 && <tr><td colSpan={8} className="px-4 py-6 text-center text-slate-500">Aucune facturation client enregistrée pour ce chantier.</td></tr>}</tbody></table></div></div></div></Card>; })}</div>
-    </div></div>
-  );
+    </Card>
+
+    <div className="mb-5 flex flex-wrap gap-2">{tabButton("pilotage", "Pilotage global")}{tabButton("factures", "Factures clients chantiers")}{tabButton("paiements", "Paiements clients")}{tabButton("charges", "Charges entreprise")}{tabButton("archives", `Chantiers archivés (${archivedProjects.length})`)}</div>
+
+    <div className="mb-6 grid gap-4 md:grid-cols-4">
+      <Card><p className="text-xs font-black uppercase text-slate-500">CA HT facturé</p><p className="mt-2 text-3xl font-black text-emerald-700">{money(allStats.revenue)}</p></Card>
+      <Card><p className="text-xs font-black uppercase text-slate-500">TVA collectée</p><p className="mt-2 text-3xl font-black text-blue-700">{money(allStats.revenueTVA)}</p><p className="text-xs text-slate-500">Factures clients</p></Card>
+      <Card><p className="text-xs font-black uppercase text-slate-500">TVA déductible</p><p className="mt-2 text-3xl font-black text-emerald-700">{money(tvaDeductibleGlobal)}</p><p className="text-xs text-slate-500">Achats + charges - retours</p></Card>
+      <Card className={tvaBalanceGlobal >= 0 ? "bg-red-50" : "bg-emerald-50"}><p className={tvaBalanceGlobal >= 0 ? "text-xs font-black uppercase text-red-700" : "text-xs font-black uppercase text-emerald-700"}>{tvaBalanceGlobal >= 0 ? "Solde TVA due" : "Solde TVA récupérable"}</p><p className={tvaBalanceGlobal >= 0 ? "mt-2 text-3xl font-black text-red-700" : "mt-2 text-3xl font-black text-emerald-700"}>{money(Math.abs(tvaBalanceGlobal))}</p><p className="text-xs text-slate-500">Collectée - déductible</p></Card>
+    </div>
+
+    {tab === "pilotage" && <div className="grid gap-5 lg:grid-cols-2">
+      <Card><h3 className="mb-4 text-xl font-black">📊 Répartition rentabilité</h3><SimplePie values={[{ label: "CA HT", value: allStats.revenue }, { label: "Achats", value: allStats.purchases }, { label: "Main-d'œuvre", value: allStats.labor }, { label: "Charges", value: expensesHT }, { label: "Marge", value: Math.max(0, allStats.margin - expensesHT) }]} /></Card>
+      <Card><h3 className="mb-4 text-xl font-black">🧾 Jeu de TVA</h3><SimplePie values={[{ label: "TVA collectée", value: allStats.revenueTVA }, { label: "TVA déductible", value: tvaDeductibleGlobal }, { label: tvaBalanceGlobal >= 0 ? "TVA due" : "TVA récupérée", value: Math.abs(tvaBalanceGlobal) }]} /></Card>
+      <Card className="lg:col-span-2"><h3 className="mb-4 text-xl font-black">🏗️ Chantiers actifs</h3><div className="grid gap-4">{searchedActiveProjects.map((p: any) => { const s = projectStats(p.id); return <div key={p.id} className="rounded-3xl border border-slate-200 bg-white p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-black uppercase text-slate-500">Chantier actif</p><h4 className="text-xl font-black">{p.name}</h4><p className="text-sm text-slate-500">{p.client || "Client non renseigné"}</p></div><div className="flex flex-wrap gap-2"><Badge tone={s.margin >= 0 ? "green" : "red"}>{s.margin >= 0 ? "Rentable" : "À surveiller"}</Badge><Button variant="amber" onClick={() => archiveProject(p, true)}>Archiver</Button></div></div><div className="mt-4 grid gap-3 md:grid-cols-5"><div className="rounded-2xl bg-emerald-50 p-3"><b>CA HT</b><br />{money(s.revenueTotal)}</div><div className="rounded-2xl bg-red-50 p-3"><b>Achats HT</b><br />{money(s.supplierTotal)}</div><div className="rounded-2xl bg-purple-50 p-3"><b>Main-d'œuvre</b><br />{money(s.laborTotal)}</div><div className="rounded-2xl bg-blue-50 p-3"><b>Marge</b><br />{money(s.margin)}</div><div className={s.tvaBalance >= 0 ? "rounded-2xl bg-red-50 p-3" : "rounded-2xl bg-emerald-50 p-3"}><b>{s.tvaBalance >= 0 ? "TVA due" : "TVA récupérée"}</b><br />{money(Math.abs(s.tvaBalance))}</div></div></div>; })}{searchedActiveProjects.length === 0 && <p className="text-sm text-slate-500">Aucun chantier actif trouvé.</p>}</div></Card>
+    </div>}
+
+    {tab === "factures" && <div className="space-y-5"><Card><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-xl font-black">🧾 Factures clients chantiers</h3><p className="text-sm text-slate-500">Données financières uniquement dans Gestion.</p></div><Button variant="green" onClick={() => setShowRevenueForm(!showRevenueForm)}>+ Facture client</Button></div>{showRevenueForm && <form onSubmit={saveRevenue} className="mt-4 grid gap-3 md:grid-cols-6"><Field label="Chantier"><Select value={revenueForm.project_id} onChange={(e: any) => setRevenueForm({ ...revenueForm, project_id: e.target.value })}><option value="">Choisir</option>{projects.map((p: any) => <option key={p.id} value={p.id}>{projectLabel(p.id)}</option>)}</Select></Field><Field label="Libellé"><Input value={revenueForm.label} onChange={(e: any) => setRevenueForm({ ...revenueForm, label: e.target.value })} /></Field><Field label="Montant HT"><Input type="number" step="0.01" value={revenueForm.amount} onChange={(e: any) => setRevenueForm({ ...revenueForm, amount: e.target.value })} /></Field><Field label="TVA"><Select value={revenueForm.tva_rate} onChange={(e: any) => setRevenueForm({ ...revenueForm, tva_rate: e.target.value })}><option value="0">0%</option><option value="5.5">5,5%</option><option value="10">10%</option><option value="20">20%</option></Select></Field><Field label="Date"><Input type="date" value={revenueForm.billing_date} onChange={(e: any) => setRevenueForm({ ...revenueForm, billing_date: e.target.value })} /></Field><Field label="Notes"><Input value={revenueForm.notes} onChange={(e: any) => setRevenueForm({ ...revenueForm, notes: e.target.value })} /></Field><div className="md:col-span-6 flex gap-2"><Button variant="green">{editingRevenueId ? "Enregistrer" : "Ajouter"}</Button>{editingRevenueId && <Button type="button" variant="secondary" onClick={() => { setEditingRevenueId(null); setShowRevenueForm(false); }}>Annuler</Button>}</div></form>}</Card><Card><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="text-xs uppercase text-slate-500"><th className="p-3">Chantier</th><th className="p-3">Libellé</th><th className="p-3">HT</th><th className="p-3">TVA collectée</th><th className="p-3">TTC</th><th className="p-3">Date</th><th className="p-3">Actions</th></tr></thead><tbody>{revenues.map((r: any) => <tr key={r.id} className="border-t"><td className="p-3 font-bold">{projectLabel(r.project_id)}</td><td className="p-3">{r.label}</td><td className="p-3">{money(amountHT(r))}</td><td className="p-3 text-blue-700 font-bold">{money(amountTVA(r))}</td><td className="p-3 font-black">{money(amountTTC(r))}</td><td className="p-3">{r.billing_date || "-"}</td><td className="p-3"><div className="flex gap-2"><Button variant="secondary" onClick={() => editRevenue(r)}>Modifier</Button><Button variant="danger" onClick={() => deleteRevenue(r)}>Supprimer</Button></div></td></tr>)}</tbody></table></div></Card></div>}
+
+    {tab === "paiements" && <div className="space-y-5"><Card><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-xl font-black">💳 Paiements clients</h3><p className="text-sm text-slate-500">Onglet créé selon le modèle Excel : date, client, n° facture, montant TTC, moyen de paiement.</p></div><div className="flex gap-2"><Badge>{money(paidTTC)} encaissé</Badge><Button variant="green" onClick={() => setShowPaymentForm(!showPaymentForm)}>+ Paiement</Button></div></div>{showPaymentForm && <form onSubmit={savePayment} className="mt-4 grid gap-3 md:grid-cols-6"><Field label="Date"><Input type="date" value={paymentForm.payment_date} onChange={(e: any) => setPaymentForm({ ...paymentForm, payment_date: e.target.value })} /></Field><Field label="Client"><Input value={paymentForm.client} onChange={(e: any) => setPaymentForm({ ...paymentForm, client: e.target.value })} /></Field><Field label="N° facture"><Input value={paymentForm.invoice_number} onChange={(e: any) => setPaymentForm({ ...paymentForm, invoice_number: e.target.value })} /></Field><Field label="Montant TTC"><Input type="number" step="0.01" value={paymentForm.amount_ttc} onChange={(e: any) => setPaymentForm({ ...paymentForm, amount_ttc: e.target.value })} /></Field><Field label="Moyen"><Select value={paymentForm.payment_method} onChange={(e: any) => setPaymentForm({ ...paymentForm, payment_method: e.target.value })}><option>Virement bancaire</option><option>Virement CIC</option><option>Virement BP</option><option>Chèque</option><option>Espèces</option><option>CB</option></Select></Field><Field label="Chantier"><Select value={paymentForm.project_id} onChange={(e: any) => setPaymentForm({ ...paymentForm, project_id: e.target.value })}><option value="">Non lié</option>{projects.map((p: any) => <option key={p.id} value={p.id}>{projectLabel(p.id)}</option>)}</Select></Field><Field label="Notes"><Input value={paymentForm.notes} onChange={(e: any) => setPaymentForm({ ...paymentForm, notes: e.target.value })} /></Field><div className="md:col-span-5 flex gap-2"><Button variant="green">{editingPaymentId ? "Enregistrer" : "Ajouter paiement"}</Button>{editingPaymentId && <Button type="button" variant="secondary" onClick={() => { setEditingPaymentId(null); setShowPaymentForm(false); }}>Annuler</Button>}</div></form>}</Card><Card><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="text-xs uppercase text-slate-500"><th className="p-3">Date</th><th className="p-3">Client</th><th className="p-3">N° facture</th><th className="p-3">Montant TTC</th><th className="p-3">Moyen</th><th className="p-3">Chantier</th><th className="p-3">Actions</th></tr></thead><tbody>{clientPayments.map((p: any) => <tr key={p.id} className="border-t"><td className="p-3">{p.payment_date || "-"}</td><td className="p-3 font-bold">{p.client}</td><td className="p-3">{p.invoice_number}</td><td className="p-3 font-black">{money(p.amount_ttc)}</td><td className="p-3">{p.payment_method}</td><td className="p-3">{p.project_id ? projectLabel(p.project_id) : "-"}</td><td className="p-3"><div className="flex gap-2"><Button variant="secondary" onClick={() => editPayment(p)}>Modifier</Button><Button variant="danger" onClick={() => deletePayment(p)}>Supprimer</Button></div></td></tr>)}{clientPayments.length === 0 && <tr><td colSpan={7} className="p-6 text-center text-slate-500">Aucun paiement client enregistré.</td></tr>}</tbody></table></div></Card></div>}
+
+    {tab === "charges" && <div className="space-y-5"><Card><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-xl font-black">🏢 Charges entreprise</h3><p className="text-sm text-slate-500">Charges fixes et variables intégrées au pilotage.</p></div><Button variant="green" onClick={() => setShowExpenseForm(!showExpenseForm)}>+ Charge</Button></div>{showExpenseForm && <form onSubmit={saveExpense} className="mt-4 grid gap-3 md:grid-cols-6"><Field label="Nom"><Input value={expenseForm.name} onChange={(e: any) => setExpenseForm({ ...expenseForm, name: e.target.value })} /></Field><Field label="Catégorie"><Select value={expenseForm.category} onChange={(e: any) => setExpenseForm({ ...expenseForm, category: e.target.value })}><option>Charges fixes</option><option>Charges variables</option><option>Véhicules</option><option>Assurances</option><option>Salaires</option><option>Matériel</option><option>Logiciels</option><option>Autres</option></Select></Field><Field label="Montant HT"><Input type="number" step="0.01" value={expenseForm.amount} onChange={(e: any) => setExpenseForm({ ...expenseForm, amount: e.target.value })} /></Field><Field label="TVA"><Select value={expenseForm.tva_rate} onChange={(e: any) => setExpenseForm({ ...expenseForm, tva_rate: e.target.value })}><option value="0">0%</option><option value="5.5">5,5%</option><option value="10">10%</option><option value="20">20%</option></Select></Field><Field label="Fréquence"><Select value={expenseForm.frequency} onChange={(e: any) => setExpenseForm({ ...expenseForm, frequency: e.target.value })}><option>mensuelle</option><option>hebdomadaire</option><option>ponctuelle</option><option>annuelle</option></Select></Field><Field label="Date"><Input type="date" value={expenseForm.expense_date} onChange={(e: any) => setExpenseForm({ ...expenseForm, expense_date: e.target.value })} /></Field><Field label="Notes"><Input value={expenseForm.notes} onChange={(e: any) => setExpenseForm({ ...expenseForm, notes: e.target.value })} /></Field><div className="md:col-span-5 flex gap-2"><Button variant="green">{editingExpenseId ? "Enregistrer" : "Ajouter charge"}</Button>{editingExpenseId && <Button type="button" variant="secondary" onClick={() => { setEditingExpenseId(null); setShowExpenseForm(false); }}>Annuler</Button>}</div></form>}</Card><Card><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="text-xs uppercase text-slate-500"><th className="p-3">Nom</th><th className="p-3">Catégorie</th><th className="p-3">HT</th><th className="p-3">TVA déductible</th><th className="p-3">TTC</th><th className="p-3">Fréquence</th><th className="p-3">Actions</th></tr></thead><tbody>{companyExpenses.map((e: any) => <tr key={e.id} className="border-t"><td className="p-3 font-bold">{e.name}</td><td className="p-3">{e.category}</td><td className="p-3">{money(amountHT(e))}</td><td className="p-3 text-emerald-700 font-bold">{money(amountTVA(e))}</td><td className="p-3 font-black">{money(amountTTC(e))}</td><td className="p-3">{e.frequency}</td><td className="p-3"><div className="flex gap-2"><Button variant="secondary" onClick={() => editExpense(e)}>Modifier</Button><Button variant="danger" onClick={() => deleteExpense(e)}>Supprimer</Button></div></td></tr>)}</tbody></table></div></Card></div>}
+
+    {tab === "archives" && <Card><h3 className="mb-4 text-xl font-black">📦 Chantiers archivés</h3><p className="mb-4 text-sm text-slate-500">Ils sont retirés visuellement des chantiers actifs, mais restent comptés dans Gestion, CA, marge, TVA et graphiques.</p><div className="grid gap-4">{archivedProjects.map((p: any) => { const s = projectStats(p.id); return <div key={p.id} className="rounded-3xl border border-slate-200 bg-slate-50 p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><Badge tone="slate">Archivé / terminé</Badge><h4 className="mt-2 text-xl font-black">{p.name}</h4><p className="text-sm text-slate-500">{p.client || "Client non renseigné"}</p></div><Button variant="green" onClick={() => archiveProject(p, false)}>Réactiver</Button></div><div className="mt-4 grid gap-3 md:grid-cols-4"><div className="rounded-2xl bg-white p-3"><b>CA HT</b><br />{money(s.revenueTotal)}</div><div className="rounded-2xl bg-white p-3"><b>Marge</b><br />{money(s.margin)}</div><div className="rounded-2xl bg-white p-3"><b>TVA collectée</b><br />{money(s.revenueTVA)}</div><div className="rounded-2xl bg-white p-3"><b>TVA déductible</b><br />{money(s.netDeductibleTVA)}</div></div></div>; })}{archivedProjects.length === 0 && <p className="text-sm text-slate-500">Aucun chantier archivé.</p>}</div></Card>}
+  </div>;
 }
 
 function Mobile({ projects, refreshAll }: any) {
