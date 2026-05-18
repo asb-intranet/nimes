@@ -1,0 +1,10 @@
+V46 - Gestion archives + recherche + TVA claire
+
+- Gestion : ajout d'un bouton Archiver / Réactiver directement sur chaque chantier.
+- Un chantier archivé reste comptabilisé dans toutes les données de gestion : CA, TVA, marge, graphiques, rapports.
+- Gestion : ajout d'une recherche rapide chantier par nom/client/adresse.
+- Gestion : ajout d'une liste déroulante pour retrouver rapidement un chantier.
+- TVA globale : séparation visuelle TVA collectée / TVA déductible.
+- Solde TVA : rouge si TVA due à reverser, vert si crédit TVA récupérable.
+- TVA par chantier : affichage clair TVA collectée, TVA déductible, TVA due/récupérée.
+- Build Next.js vérifié OK.
