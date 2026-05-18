@@ -1,0 +1,9 @@
+V48 - Gestion / période de pilotage
+
+- Ajout d'un filtre période dans Gestion > Pilotage global.
+- Périodes rapides : Aujourd'hui, Semaine, Mois, Trimestre, Année.
+- Période personnalisée : date début / date fin.
+- Tous les calculs du pilotage suivent la période :
+  CA, achats, retours, main-d'oeuvre, charges entreprise, paiements clients, TVA collectée, TVA déductible, solde TVA et marge.
+- La recherche chantier reste tout en haut de Gestion.
+- Les chantiers archivés restent inclus dans les stats selon la période sélectionnée.
