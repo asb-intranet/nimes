@@ -2736,10 +2736,21 @@ function Management({ projects, employees, planning, invoices, revenues, returns
     return searchOk && selectOk;
   });
 
-  function projectStats(projectId: string) {
-    const myInvoices = invoices.filter((i: any) => i.project_id === projectId && inPeriod(i.invoice_date || i.created_at));
-    const myReturns = returns.filter((r: any) => r.project_id === projectId && inPeriod(r.return_date || r.created_at));
-    const myRevenues = revenues.filter((r: any) => r.project_id === projectId && inPeriod(r.billing_date || r.created_at));
+  function projectStats(projectId: string, usePeriodFilter = true) {
+    const myInvoices = invoices.filter((i: any) =>
+      i.project_id === projectId &&
+      (!usePeriodFilter || inPeriod(i.invoice_date || i.created_at))
+    );
+
+    const myReturns = returns.filter((r: any) =>
+      r.project_id === projectId &&
+      (!usePeriodFilter || inPeriod(r.return_date || r.created_at))
+    );
+
+    const myRevenues = revenues.filter((r: any) =>
+      r.project_id === projectId &&
+      (!usePeriodFilter || inPeriod(r.billing_date || r.created_at))
+    );
     const grossSupplierTotal = myInvoices.reduce((s: number, i: any) => s + amountHT(i), 0);
     const supplierTVA = myInvoices.reduce((s: number, i: any) => s + amountTVA(i), 0);
     const returnsTotal = myReturns.reduce((s: number, r: any) => s + amountHT(r), 0);
@@ -2748,14 +2759,47 @@ function Management({ projects, employees, planning, invoices, revenues, returns
     const revenueTotal = myRevenues.reduce((s: number, r: any) => s + amountHT(r), 0);
     const revenueTVA = myRevenues.reduce((s: number, r: any) => s + amountTVA(r), 0);
     const netDeductibleTVA = Math.max(0, supplierTVA - returnsTVA);
-    const laborTotal = planning.filter((p: any) => p.project_id === projectId && overlapsPeriod(p.start_date, p.end_date)).reduce((s: number, p: any) => s + daysBetween(p.start_date, p.end_date) * employeeCost(p.employee_id), 0);
+    const laborTotal = planning
+      .filter((p: any) =>
+        p.project_id === projectId &&
+        (!usePeriodFilter || overlapsPeriod(p.start_date, p.end_date))
+      )
+      .reduce(
+        (s: number, p: any) =>
+          s + daysBetween(p.start_date, p.end_date) * employeeCost(p.employee_id),
+        0
+      );
     const margin = revenueTotal - supplierTotal - laborTotal;
     const marginRate = revenueTotal > 0 ? Math.round((margin / revenueTotal) * 100) : 0;
     return { grossSupplierTotal, supplierTotal, supplierTVA, returnsTotal, returnsTVA, revenueTotal, revenueTVA, netDeductibleTVA, laborTotal, margin, marginRate, tvaBalance: revenueTVA - netDeductibleTVA };
   }
 
-  const allStats = projects.reduce((a: any, p: any) => {
-    const s = projectStats(p.id);
+  // Vue 1 : Pilotage comptable comptable (filtré par période)
+  const accountingStats = projects.reduce((a: any, p: any) => {
+    const s = projectStats(p.id, true);
+    a.revenue += s.revenueTotal;
+    a.revenueTVA += s.revenueTVA;
+    a.purchases += s.supplierTotal;
+    a.deductibleTVA += s.netDeductibleTVA;
+    a.labor += s.laborTotal;
+    a.margin += s.margin;
+    return a;
+  }, { revenue: 0, revenueTVA: 0, purchases: 0, deductibleTVA: 0, labor: 0, margin: 0 });
+
+  // Vue 2 : Rentabilité chantier chantier (globale chantier, non biaisée par les dates)
+  const chantierStats = projects.reduce((a: any, p: any) => {
+    const s = projectStats(p.id, false);
+    a.revenue += s.revenueTotal;
+    a.revenueTVA += s.revenueTVA;
+    a.purchases += s.supplierTotal;
+    a.deductibleTVA += s.netDeductibleTVA;
+    a.labor += s.laborTotal;
+    a.margin += s.margin;
+    return a;
+  }, { revenue: 0, revenueTVA: 0, purchases: 0, deductibleTVA: 0, labor: 0, margin: 0 });
+
+  const allStats = accountingStats;
+
     a.revenue += s.revenueTotal; a.revenueTVA += s.revenueTVA; a.purchases += s.supplierTotal; a.deductibleTVA += s.netDeductibleTVA; a.labor += s.laborTotal; a.margin += s.margin; return a;
   }, { revenue: 0, revenueTVA: 0, purchases: 0, deductibleTVA: 0, labor: 0, margin: 0 });
   const activeExpenses = companyExpenses.filter((e: any) => e.active !== false && inPeriod(e.expense_date || e.created_at));
@@ -2941,7 +2985,7 @@ function Management({ projects, employees, planning, invoices, revenues, returns
   const tabButton = (id: string, label: string) => <Button variant={tab === id ? "primary" : "secondary"} onClick={() => setTab(id)}>{label}</Button>;
 
   return <div>
-    <Section title="Gestion & pilotage global V49" subtitle="Pilotage période, encours client, paiements partiels et rapports PDF actifs." />
+    <Section title="Gestion & pilotage global V49" subtitle="Pilotage comptable période, encours client, paiements partiels et rapports PDF actifs." />
 
     <Card className="mb-5 border-l-8 border-blue-500 bg-white">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -2972,7 +3016,7 @@ function Management({ projects, employees, planning, invoices, revenues, returns
       </div>
     </Card>
 
-    <div className="mb-5 flex flex-wrap gap-2">{tabButton("pilotage", "Pilotage global")}{tabButton("factures", "Factures clients chantiers")}{tabButton("paiements", "Encours client")}{tabButton("charges", "Charges entreprise")}{tabButton("archives", `Chantiers archivés (${archivedProjects.length})`)}</div>
+    <div className="mb-5 flex flex-wrap gap-2">{tabButton("pilotage", "Pilotage comptable global")}{tabButton("factures", "Factures clients chantiers")}{tabButton("paiements", "Encours client")}{tabButton("charges", "Charges entreprise")}{tabButton("archives", `Chantiers archivés (${archivedProjects.length})`)}</div>
 
     <div className="mb-6 grid gap-4 md:grid-cols-4">
       <Card><p className="text-xs font-black uppercase text-slate-500">CA HT facturé</p><p className="mt-2 text-3xl font-black text-emerald-700">{money(allStats.revenue)}</p></Card>
