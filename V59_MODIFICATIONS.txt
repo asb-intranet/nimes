@@ -1,0 +1,13 @@
+V59 — Gestion visuel cartes + zones pleine page
+
+- Gestion reprise sur le visuel validé.
+- Boutons Gestion fonctionnels :
+  - Créer facturation client ouvre une page pleine dans Gestion.
+  - Charges entreprises ouvre une page pleine dans Gestion.
+  - Récapitulatif des factures d’achats ouvre une page pleine dans Gestion.
+- Suppression du récapitulatif factures d’achats de la page principale Gestion.
+- Chantiers actifs affichés en cartes lisibles au lieu d’une liste/tableau.
+- Charges fixes conservées en pilotage global seulement, non imputées dans les chantiers.
+- Camemberts pilotage conservés.
+- Archives chantiers conservées : un chantier archivé ne s’affiche plus dans les chantiers actifs ni dans Gestion.
+- Supabase conservé.
