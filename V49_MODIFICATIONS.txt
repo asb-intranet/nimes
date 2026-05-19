@@ -1,0 +1,13 @@
+V49 - Gestion encours client / paiements partiels / PDF actifs
+
+- Onglet "Paiements clients" renommé "Encours client".
+- Ajout d'un lien entre les paiements clients et les factures client chantier.
+- Possibilité d'affecter un paiement partiel à une facture.
+- Bouton "Payée" pour solder automatiquement le reste dû d'une facture.
+- Affichage payé / reste à payer / statut dans Factures clients chantiers.
+- Les factures des chantiers archivés ne sont plus affichées dans l'onglet Factures clients chantiers.
+- Les listes de création et d'affectation ne proposent que les chantiers actifs.
+- Bouton Rapport PDF remis pour les chantiers actifs dans Gestion.
+- Les archives restent dans les statistiques globales Gestion, mais sont masquées des listes opérationnelles de facturation.
+
+Migration à lancer : supabase/schema-complet-v49.sql
