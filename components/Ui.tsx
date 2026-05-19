@@ -19,12 +19,12 @@ export function Field({ label, children }: any) {
   return <label className="block"><span className="text-xs font-bold uppercase text-slate-500">{label}</span>{children}</label>;
 }
 
-export function Input(props: any) {
-  return <input className="mt-1 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm focus:border-slate-500" {...props} />;
+export function Input({ className = "", ...props }: any) {
+  return <input className={`mt-1 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm focus:border-slate-500 ${className}`} {...props} />;
 }
 
-export function Select(props: any) {
-  return <select className="mt-1 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm focus:border-slate-500" {...props} />;
+export function Select({ className = "", ...props }: any) {
+  return <select className={`mt-1 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm focus:border-slate-500 ${className}`} {...props} />;
 }
 
 export function Textarea({ className = "", ...props }: any) {
