@@ -2401,7 +2401,7 @@ function Storekeeper({ projects, materials, invoices = [], returns = [], refresh
   async function addStoreInvoice(e: any) {
     e.preventDefault();
     if (!invoiceForm.project_id) return alert("Choisis un chantier");
-    if (!invoiceForm.supplier || !invoiceForm.amount) return alert("Fournisseur et montant obligatoires");
+    if (!invoiceForm.supplier || !invoiceForm.amount || !invoiceForm.invoice_date) return alert("Fournisseur, montant et date obligatoires");
     const { error } = await supabase.from("project_invoices").insert({
       project_id: invoiceForm.project_id,
       supplier: invoiceForm.supplier,
@@ -2428,7 +2428,7 @@ function Storekeeper({ projects, materials, invoices = [], returns = [], refresh
 
   async function addReturn(e: any) {
     e.preventDefault();
-    if (!returnForm.supplier || !returnForm.amount) return alert("Fournisseur et montant obligatoires");
+    if (!returnForm.supplier || !returnForm.amount || !returnForm.return_date) return alert("Fournisseur, montant et date obligatoires");
     const { error } = await supabase.from("merchandise_returns").insert({
       project_id: returnForm.project_id || null,
       supplier: returnForm.supplier,
@@ -2784,6 +2784,11 @@ function Management({ projects, employees, planning, invoices, revenues, returns
   const paidTTC = periodPayments.reduce((s: number, p: any) => s + Number(p.amount_ttc || 0), 0);
   const activeRevenues = revenues.filter((r: any) => projects.find((p: any) => p.id === r.project_id)?.status !== "archive");
   const periodActiveRevenues = activeRevenues.filter((r: any) => inPeriod(r.billing_date || r.created_at));
+  const periodPurchaseInvoices = invoices.filter((i: any) => inPeriod(i.invoice_date || i.created_at));
+  const periodPurchaseHT = periodPurchaseInvoices.reduce((sum: number, i: any) => sum + amountHT(i), 0);
+  const periodPurchaseTVA = periodPurchaseInvoices.reduce((sum: number, i: any) => sum + amountTVA(i), 0);
+  const periodPurchaseTTC = periodPurchaseInvoices.reduce((sum: number, i: any) => sum + amountTTC(i), 0);
+  const fixedChargePerActiveProject = activeProjects.length > 0 ? expensesHT / activeProjects.length : 0;
   function paymentsForRevenue(r: any) { return clientPayments.filter((p: any) => (p.revenue_id && p.revenue_id === r.id) || (!p.revenue_id && p.project_id === r.project_id && p.invoice_number && (p.invoice_number === r.invoice_number || p.invoice_number === r.label))); }
   function paidForRevenue(r: any) { return paymentsForRevenue(r).reduce((s: number, p: any) => s + Number(p.amount_ttc || 0), 0); }
   function remainingForRevenue(r: any) { return Math.max(0, Math.round((amountTTC(r) - paidForRevenue(r)) * 100) / 100); }
@@ -2795,7 +2800,7 @@ function Management({ projects, employees, planning, invoices, revenues, returns
     await refreshAll();
   }
   async function saveRevenue(e: any) {
-    e.preventDefault(); if (!revenueForm.project_id || !revenueForm.amount) return alert("Chantier et montant HT obligatoires");
+    e.preventDefault(); if (!revenueForm.project_id || !revenueForm.amount || !revenueForm.billing_date) return alert("Chantier, montant HT et date obligatoires");
     const payload = { project_id: revenueForm.project_id, label: revenueForm.label || "Facturation client", ...taxPayload(revenueForm.amount, revenueForm.tva_rate), billing_date: revenueForm.billing_date || null, notes: revenueForm.notes };
     const query = editingRevenueId ? supabase.from("project_revenues").update(payload).eq("id", editingRevenueId) : supabase.from("project_revenues").insert(payload);
     const { error } = await query; if (error) return alert(error.message);
@@ -2958,98 +2963,103 @@ function Management({ projects, employees, planning, invoices, revenues, returns
   const tabButton = (id: string, label: string) => <Button variant={tab === id ? "primary" : "secondary"} onClick={() => setTab(id)}>{label}</Button>;
 
   return <div className="space-y-5">
-    <Section title="Gestion V55 — tableau de bord clair" subtitle="Deux lectures séparées : comptabilité par période et rentabilité réelle par chantier." />
+    <Section title="Gestion" />
 
-    <Card className="overflow-hidden border-0 bg-slate-950 text-white shadow-xl">
-      <div className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
+    <Card className="p-6">
+      <div className="grid gap-5 xl:grid-cols-[1.1fr_0.8fr_0.8fr]">
         <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge tone="blue">Période active : {periodLabel}</Badge>
-            <Badge tone="slate">Vue comptable filtrée</Badge>
-            <Badge tone="green">Rentabilité chantier globale</Badge>
+          <h3 className="mb-3 text-sm font-black uppercase text-slate-700">📅 Période comptable & pilotage</h3>
+          <div className="grid gap-3 md:grid-cols-[1fr_auto_1fr_auto]">
+            <Input type="date" value={periodStart} onChange={(e: any) => { setPeriodMode("custom"); setPeriodStart(e.target.value); }} />
+            <div className="hidden items-center justify-center rounded-2xl border border-slate-200 px-3 font-black md:flex">→</div>
+            <Input type="date" value={periodEnd} onChange={(e: any) => { setPeriodMode("custom"); setPeriodEnd(e.target.value); }} />
+            <Button className="px-8 py-4 text-base" onClick={() => setPeriodMode("custom")}>Appliquer</Button>
           </div>
-          <h2 className="mt-4 text-3xl font-black tracking-tight">Pilotage simple, lisible et non biaisé</h2>
-          <p className="mt-2 max-w-3xl text-sm text-slate-300">La partie comptable suit les dates choisies. La rentabilité chantier additionne tout le chantier, même si les achats, la main d’œuvre et les factures clients sont sur plusieurs mois.</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button variant={periodMode === "today" ? "primary" : "secondary"} onClick={() => applyPeriod("today")}>Aujourd’hui</Button>
+            <Button variant={periodMode === "week" ? "primary" : "secondary"} onClick={() => applyPeriod("week")}>Semaine</Button>
+            <Button variant={periodMode === "month" ? "primary" : "secondary"} onClick={() => applyPeriod("month")}>Mois</Button>
+            <Button variant={periodMode === "quarter" ? "primary" : "secondary"} onClick={() => applyPeriod("quarter")}>Trimestre</Button>
+            <Button variant={periodMode === "year" ? "primary" : "secondary"} onClick={() => applyPeriod("year")}>Année</Button>
+          </div>
         </div>
-        <div className="rounded-3xl bg-white/10 p-4">
-          <p className="text-xs font-black uppercase text-slate-300">Recherche rapide chantier</p>
-          <div className="mt-3 grid gap-3">
-            <Input className="bg-white text-slate-900" placeholder="Nom chantier, client, adresse..." value={projectSearch} onChange={(e: any) => setProjectSearch(e.target.value)} />
-            <Select className="bg-white text-slate-900" value={selectedProjectFilter} onChange={(e: any) => setSelectedProjectFilter(e.target.value)}>
-              <option value="">Tous les chantiers actifs</option>{activeProjects.map((p: any) => <option key={p.id} value={p.id}>{p.name} · {p.client || "Client"}</option>)}
-            </Select>
-          </div>
+        <div>
+          <h3 className="mb-3 text-sm font-black uppercase text-slate-700">Recherche chantier</h3>
+          <Input placeholder="Nom chantier, client, adresse..." value={projectSearch} onChange={(e: any) => setProjectSearch(e.target.value)} />
+        </div>
+        <div>
+          <h3 className="mb-3 text-sm font-black uppercase text-slate-700">Liste déroulante</h3>
+          <Select value={selectedProjectFilter} onChange={(e: any) => setSelectedProjectFilter(e.target.value)}>
+            <option value="">Tous les chantiers actifs</option>{activeProjects.map((p: any) => <option key={p.id} value={p.id}>{p.name} · {p.client || "Client"}</option>)}
+          </Select>
         </div>
       </div>
     </Card>
 
-    <Card className="border-slate-200 bg-white">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h3 className="text-xl font-black">📅 Période comptable</h3>
-          <p className="text-sm text-slate-500">Utilisée uniquement pour TVA, trésorerie, CA, dépenses et charges.</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant={periodMode === "today" ? "primary" : "secondary"} onClick={() => applyPeriod("today")}>Aujourd’hui</Button>
-          <Button variant={periodMode === "week" ? "primary" : "secondary"} onClick={() => applyPeriod("week")}>Semaine</Button>
-          <Button variant={periodMode === "month" ? "primary" : "secondary"} onClick={() => applyPeriod("month")}>Mois</Button>
-          <Button variant={periodMode === "quarter" ? "primary" : "secondary"} onClick={() => applyPeriod("quarter")}>Trimestre</Button>
-          <Button variant={periodMode === "year" ? "primary" : "secondary"} onClick={() => applyPeriod("year")}>Année</Button>
-          <Button variant={periodMode === "custom" ? "primary" : "secondary"} onClick={() => setPeriodMode("custom")}>Perso</Button>
-        </div>
+    <div>
+      <h3 className="mb-3 text-xl font-black">Vue 1 — Pilotage comptable <span className="text-sm font-bold text-slate-500">(filtré par période)</span></h3>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <Card className="border-l-4 border-emerald-500"><p className="text-xs font-black uppercase text-slate-500">CA HT</p><p className="mt-2 text-3xl font-black text-emerald-700">{money(allStats.revenue)}</p><p className="mt-1 text-sm text-slate-500">Factures clients</p></Card>
+        <Card className="border-l-4 border-blue-500"><p className="text-xs font-black uppercase text-slate-500">TVA collectée</p><p className="mt-2 text-3xl font-black text-blue-700">{money(allStats.revenueTVA)}</p><p className="mt-1 text-sm text-slate-500">Sur factures clients</p></Card>
+        <Card className="border-l-4 border-orange-500"><p className="text-xs font-black uppercase text-slate-500">Dépenses HT</p><p className="mt-2 text-3xl font-black text-orange-700">{money(allStats.purchases)}</p><p className="mt-1 text-sm text-slate-500">Achats chantier</p></Card>
+        <Card className="border-l-4 border-purple-500"><p className="text-xs font-black uppercase text-slate-500">Charges fixes HT</p><p className="mt-2 text-3xl font-black text-purple-700">{money(expensesHT)}</p><p className="mt-1 text-sm text-slate-500">Imputées sur la période</p></Card>
+        <Card className="border-l-4 border-emerald-500"><p className="text-xs font-black uppercase text-slate-500">Trésorerie estimée</p><p className="mt-2 text-3xl font-black text-emerald-700">{money(allStats.revenue - allStats.purchases - expensesHT)}</p><p className="mt-1 text-sm text-slate-500">CA HT - Dépenses - Charges</p></Card>
       </div>
-      <div className="mt-4 grid gap-3 md:grid-cols-3">
-        <Field label="Date début"><Input type="date" value={periodStart} onChange={(e: any) => { setPeriodMode("custom"); setPeriodStart(e.target.value); }} /></Field>
-        <Field label="Date fin"><Input type="date" value={periodEnd} onChange={(e: any) => { setPeriodMode("custom"); setPeriodEnd(e.target.value); }} /></Field>
-        <div className="rounded-2xl bg-slate-100 p-4"><p className="text-xs font-black uppercase text-slate-500">Période active</p><p className="mt-1 text-lg font-black text-slate-900">{periodLabel}</p></div>
+    </div>
+
+    <div className="grid gap-4 md:grid-cols-3">
+      <button type="button" onClick={() => { setShowRevenueForm(!showRevenueForm); setRevenueForm({ ...revenueForm, billing_date: revenueForm.billing_date || formatDate(new Date()) }); }} className="rounded-3xl border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+        <div className="flex items-center gap-4"><span className="rounded-2xl bg-emerald-600 px-4 py-3 text-lg text-white">🧾</span><div><div className="text-lg font-black">Créer facturation client</div><div className="text-sm text-slate-500">Sur chantiers actifs</div></div></div>
+      </button>
+      <button type="button" onClick={() => setTab("charges")} className="rounded-3xl border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+        <div className="flex items-center gap-4"><span className="rounded-2xl bg-purple-600 px-4 py-3 text-lg text-white">🏢</span><div><div className="text-lg font-black">Charges entreprises</div><div className="text-sm text-slate-500">Gérer les charges fixes</div></div></div>
+      </button>
+      <button type="button" onClick={() => setTab("achats")} className="rounded-3xl border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+        <div className="flex items-center gap-4"><span className="rounded-2xl bg-cyan-600 px-4 py-3 text-lg text-white">📋</span><div><div className="text-lg font-black">Récapitulatif des factures d’achats</div><div className="text-sm text-slate-500">Voir le détail des achats</div></div></div>
+      </button>
+    </div>
+
+    {showRevenueForm && <Card>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-xl font-black">Créer une facturation client</h3><p className="text-sm text-slate-500">La date est obligatoire.</p></div><Button variant="secondary" onClick={() => setShowRevenueForm(false)}>Fermer</Button></div>
+      <form onSubmit={saveRevenue} className="grid gap-3 md:grid-cols-6">
+        <Field label="Chantier"><Select required value={revenueForm.project_id} onChange={(e: any) => setRevenueForm({ ...revenueForm, project_id: e.target.value })}><option value="">Choisir chantier</option>{activeProjects.map((p: any) => <option key={p.id} value={p.id}>{projectLabel(p.id)}</option>)}</Select></Field>
+        <Field label="Libellé"><Input value={revenueForm.label} onChange={(e: any) => setRevenueForm({ ...revenueForm, label: e.target.value })} placeholder="Facturation client" /></Field>
+        <Field label="Montant HT"><Input required type="number" step="0.01" value={revenueForm.amount} onChange={(e: any) => setRevenueForm({ ...revenueForm, amount: e.target.value })} /></Field>
+        <Field label="TVA"><Select value={revenueForm.tva_rate} onChange={(e: any) => setRevenueForm({ ...revenueForm, tva_rate: e.target.value })}><option value="0">0%</option><option value="5.5">5,5%</option><option value="10">10%</option><option value="20">20%</option></Select></Field>
+        <Field label="Date facture obligatoire"><Input required type="date" value={revenueForm.billing_date} onChange={(e: any) => setRevenueForm({ ...revenueForm, billing_date: e.target.value })} /></Field>
+        <Field label="Notes"><Input value={revenueForm.notes} onChange={(e: any) => setRevenueForm({ ...revenueForm, notes: e.target.value })} /></Field>
+        <div className="md:col-span-6"><Button className="px-8 py-4 text-base" variant="green">Enregistrer la facturation</Button></div>
+      </form>
+    </Card>}
+
+    <Card>
+      <h3 className="mb-4 text-xl font-black">Chantiers actifs — Rentabilité <span className="text-sm font-bold text-slate-500">(mise à jour en temps réel)</span></h3>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-sm">
+          <thead><tr className="border-b bg-slate-50 text-xs uppercase text-slate-500"><th className="p-3">Chantier</th><th className="p-3">Client</th><th className="p-3 text-right">CA HT</th><th className="p-3 text-right">Achats HT</th><th className="p-3 text-right">MO</th><th className="p-3 text-right">Charges fixes imputées</th><th className="p-3 text-right">Marge</th><th className="p-3 text-right">TVA récupérée / TVA due</th><th className="p-3 text-right">Rentabilité</th><th className="p-3"></th></tr></thead>
+          <tbody>{searchedActiveProjects.map((p: any) => { const s = projectStats(p.id, false); const fixed = fixedChargePerActiveProject; const realMargin = s.margin - fixed; const realRate = s.revenueTotal > 0 ? Math.round((realMargin / s.revenueTotal) * 10000) / 100 : 0; return <tr key={p.id} className="border-b last:border-0"><td className="p-3 font-black">{p.name}</td><td className="p-3">{p.client || "-"}</td><td className="p-3 text-right font-bold">{money(s.revenueTotal)}</td><td className="p-3 text-right">{money(s.supplierTotal)}</td><td className="p-3 text-right">{money(s.laborTotal)}</td><td className="p-3 text-right">{money(fixed)}</td><td className={realMargin >= 0 ? "p-3 text-right font-black text-slate-900" : "p-3 text-right font-black text-red-700"}>{money(realMargin)}</td><td className="p-3 text-right font-bold">{money(Math.abs(s.tvaBalance))}<br /><span className={s.tvaBalance >= 0 ? "text-xs text-red-700" : "text-xs text-emerald-700"}>{s.tvaBalance >= 0 ? "TVA due" : "TVA récupérée"}</span></td><td className={realRate >= 0 ? "p-3 text-right text-lg font-black text-emerald-700" : "p-3 text-right text-lg font-black text-red-700"}>{realRate.toFixed(2).replace('.', ',')}%</td><td className="p-3 text-right"><Button variant="secondary" onClick={() => generateProjectPdfFromGestion(p)}>PDF</Button></td></tr>; })}{searchedActiveProjects.length === 0 && <tr><td colSpan={10} className="p-6 text-center text-slate-500">Aucun chantier actif trouvé.</td></tr>}</tbody>
+        </table>
       </div>
     </Card>
 
-    <div className="grid gap-5 xl:grid-cols-2">
-      <Card className="border-l-8 border-blue-600 bg-blue-50/50">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <div><p className="text-xs font-black uppercase text-blue-700">Vue 1</p><h3 className="text-2xl font-black">Pilotage comptable</h3><p className="text-sm text-slate-500">Filtré par période.</p></div>
-          <Badge tone="blue">{periodLabel}</Badge>
+    {(tab === "achats" || tab === "pilotage") && <Card>
+      <h3 className="mb-4 text-xl font-black">Récapitulatif des factures d’achats <span className="text-sm font-bold text-slate-500">(filtré par période)</span></h3>
+      <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
+        <div className="overflow-hidden rounded-3xl border border-slate-200">
+          <div className="grid grid-cols-2 border-b"><div className="p-3 text-xs font-black uppercase text-slate-500">Nombre de factures</div><div className="p-3 text-xl font-black">{periodPurchaseInvoices.length}</div></div>
+          <div className="grid grid-cols-2 border-b"><div className="p-3 text-xs font-black uppercase text-slate-500">Total HT</div><div className="p-3 text-lg font-bold">{money(periodPurchaseHT)}</div></div>
+          <div className="grid grid-cols-2 border-b"><div className="p-3 text-xs font-black uppercase text-slate-500">Total TVA</div><div className="p-3 text-lg font-bold">{money(periodPurchaseTVA)}</div></div>
+          <div className="grid grid-cols-2"><div className="p-3 text-xs font-black uppercase text-slate-500">Total TTC</div><div className="p-3 text-lg font-black">{money(periodPurchaseTTC)}</div></div>
         </div>
-        <div className="grid gap-3 md:grid-cols-2">
-          <div className="rounded-3xl bg-white p-4 shadow-sm"><p className="text-xs font-black uppercase text-slate-500">CA période HT</p><p className="mt-1 text-3xl font-black text-emerald-700">{money(allStats.revenue)}</p></div>
-          <div className="rounded-3xl bg-white p-4 shadow-sm"><p className="text-xs font-black uppercase text-slate-500">TVA collectée</p><p className="mt-1 text-3xl font-black text-blue-700">{money(allStats.revenueTVA)}</p></div>
-          <div className="rounded-3xl bg-white p-4 shadow-sm"><p className="text-xs font-black uppercase text-slate-500">Dépenses + charges HT</p><p className="mt-1 text-3xl font-black text-orange-700">{money(allStats.purchases + expensesHT)}</p></div>
-          <div className={tvaBalanceGlobal >= 0 ? "rounded-3xl bg-red-50 p-4 shadow-sm" : "rounded-3xl bg-emerald-50 p-4 shadow-sm"}><p className="text-xs font-black uppercase text-slate-500">{tvaBalanceGlobal >= 0 ? "TVA à payer" : "TVA récupérable"}</p><p className={tvaBalanceGlobal >= 0 ? "mt-1 text-3xl font-black text-red-700" : "mt-1 text-3xl font-black text-emerald-700"}>{money(Math.abs(tvaBalanceGlobal))}</p></div>
+        <div className="overflow-x-auto rounded-3xl border border-slate-200">
+          <table className="w-full text-left text-sm"><thead><tr className="bg-slate-50 text-xs uppercase text-slate-500"><th className="p-3">Date</th><th className="p-3">Fournisseur</th><th className="p-3">Chantier</th><th className="p-3 text-right">Montant HT</th><th className="p-3 text-right">TVA</th><th className="p-3 text-right">Montant TTC</th></tr></thead><tbody>{periodPurchaseInvoices.slice(0, 8).map((i: any) => <tr key={i.id} className="border-t"><td className="p-3">{i.invoice_date || "-"}</td><td className="p-3 font-bold">{i.supplier || "-"}</td><td className="p-3">{projectLabel(i.project_id)}</td><td className="p-3 text-right">{money(amountHT(i))}</td><td className="p-3 text-right">{money(amountTVA(i))}</td><td className="p-3 text-right font-black">{money(amountTTC(i))}</td></tr>)}{periodPurchaseInvoices.length === 0 && <tr><td colSpan={6} className="p-6 text-center text-slate-500">Aucune facture d’achat sur cette période.</td></tr>}</tbody></table>
         </div>
-      </Card>
+      </div>
+    </Card>}
 
-      <Card className="border-l-8 border-emerald-600 bg-emerald-50/50">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <div><p className="text-xs font-black uppercase text-emerald-700">Vue 2</p><h3 className="text-2xl font-black">Rentabilité chantier</h3><p className="text-sm text-slate-500">Non biaisée par les dates.</p></div>
-          <Badge tone="green">Global chantier</Badge>
-        </div>
-        <div className="grid gap-3 md:grid-cols-2">
-          <div className="rounded-3xl bg-white p-4 shadow-sm"><p className="text-xs font-black uppercase text-slate-500">CA total chantier HT</p><p className="mt-1 text-3xl font-black text-emerald-700">{money(chantierStats.revenue)}</p></div>
-          <div className="rounded-3xl bg-white p-4 shadow-sm"><p className="text-xs font-black uppercase text-slate-500">Achats totaux HT</p><p className="mt-1 text-3xl font-black text-red-700">{money(chantierStats.purchases)}</p></div>
-          <div className="rounded-3xl bg-white p-4 shadow-sm"><p className="text-xs font-black uppercase text-slate-500">Main d’œuvre totale</p><p className="mt-1 text-3xl font-black text-purple-700">{money(chantierStats.labor)}</p></div>
-          <div className="rounded-3xl bg-white p-4 shadow-sm"><p className="text-xs font-black uppercase text-slate-500">Marge réelle / taux</p><p className="mt-1 text-3xl font-black text-blue-700">{money(chantierStats.margin)}</p><p className="text-sm font-black text-slate-900">{chantierStats.revenue > 0 ? Math.round((chantierStats.margin / chantierStats.revenue) * 100) : 0}% de marge</p></div>
-        </div>
-      </Card>
-    </div>
+    {tab === "charges" && <div className="space-y-5"><Card><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-xl font-black">🏢 Charges entreprise</h3><p className="text-sm text-slate-500">Charges fixes et variables intégrées au pilotage.</p></div><Button className="px-6 py-3 text-base" variant="green" onClick={() => setShowExpenseForm(!showExpenseForm)}>+ Charge</Button></div>{showExpenseForm && <form onSubmit={saveExpense} className="mt-4 grid gap-3 md:grid-cols-6"><Field label="Nom"><Input value={expenseForm.name} onChange={(e: any) => setExpenseForm({ ...expenseForm, name: e.target.value })} /></Field><Field label="Catégorie"><Select value={expenseForm.category} onChange={(e: any) => setExpenseForm({ ...expenseForm, category: e.target.value })}><option>Charges fixes</option><option>Charges variables</option><option>Véhicules</option><option>Assurances</option><option>Salaires</option><option>Matériel</option><option>Logiciels</option><option>Autres</option></Select></Field><Field label="Montant HT"><Input type="number" step="0.01" value={expenseForm.amount} onChange={(e: any) => setExpenseForm({ ...expenseForm, amount: e.target.value })} /></Field><Field label="TVA"><Select value={expenseForm.tva_rate} onChange={(e: any) => setExpenseForm({ ...expenseForm, tva_rate: e.target.value })}><option value="0">0%</option><option value="5.5">5,5%</option><option value="10">10%</option><option value="20">20%</option></Select></Field><Field label="Fréquence"><Select value={expenseForm.frequency} onChange={(e: any) => setExpenseForm({ ...expenseForm, frequency: e.target.value })}><option>mensuelle</option><option>hebdomadaire</option><option>ponctuelle</option><option>annuelle</option></Select></Field><Field label="Date"><Input type="date" value={expenseForm.expense_date} onChange={(e: any) => setExpenseForm({ ...expenseForm, expense_date: e.target.value })} /></Field><Field label="Notes"><Input value={expenseForm.notes} onChange={(e: any) => setExpenseForm({ ...expenseForm, notes: e.target.value })} /></Field><div className="md:col-span-5 flex gap-2"><Button variant="green">{editingExpenseId ? "Enregistrer" : "Ajouter charge"}</Button>{editingExpenseId && <Button type="button" variant="secondary" onClick={() => { setEditingExpenseId(null); setShowExpenseForm(false); }}>Annuler</Button>}</div></form>}</Card><Card><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="text-xs uppercase text-slate-500"><th className="p-3">Nom</th><th className="p-3">Catégorie</th><th className="p-3">HT</th><th className="p-3">TVA déductible</th><th className="p-3">TTC</th><th className="p-3">Fréquence</th><th className="p-3">Actions</th></tr></thead><tbody>{companyExpenses.map((e: any) => <tr key={e.id} className="border-t"><td className="p-3 font-bold">{e.name}</td><td className="p-3">{e.category}</td><td className="p-3">{money(amountHT(e))}</td><td className="p-3 text-emerald-700 font-bold">{money(amountTVA(e))}</td><td className="p-3 font-black">{money(amountTTC(e))}</td><td className="p-3">{e.frequency}</td><td className="p-3"><div className="flex gap-2"><Button variant="secondary" onClick={() => editExpense(e)}>Modifier</Button><Button variant="danger" onClick={() => deleteExpense(e)}>Supprimer</Button></div></td></tr>)}</tbody></table></div></Card></div>}
 
-    <div className="rounded-3xl border border-slate-200 bg-white p-2 shadow-sm">
-      <div className="flex flex-wrap gap-2">{tabButton("pilotage", "📊 Synthèse")}{tabButton("factures", "🧾 Factures clients")}{tabButton("paiements", "💶 Encours / paiements")}{tabButton("charges", "🏢 Charges entreprise")}{tabButton("archives", `📦 Archives (${archivedProjects.length})`)}</div>
-    </div>
-
-    {tab === "pilotage" && <div className="grid gap-5 lg:grid-cols-2">
-      <Card><h3 className="mb-4 text-xl font-black">📊 Répartition rentabilité</h3><SimplePie values={[{ label: "CA HT", value: allStats.revenue }, { label: "Achats", value: allStats.purchases }, { label: "Main-d'œuvre", value: allStats.labor }, { label: "Charges", value: expensesHT }, { label: "Marge", value: Math.max(0, allStats.margin - expensesHT) }]} /></Card>
-      <Card><h3 className="mb-4 text-xl font-black">🧾 Jeu de TVA</h3><SimplePie values={[{ label: "TVA collectée", value: allStats.revenueTVA }, { label: "TVA déductible", value: tvaDeductibleGlobal }, { label: tvaBalanceGlobal >= 0 ? "TVA due" : "TVA récupérée", value: Math.abs(tvaBalanceGlobal) }]} /></Card>
-      <Card className="lg:col-span-2"><h3 className="mb-4 text-xl font-black">🏗️ Chantiers actifs</h3><div className="grid gap-4">{searchedActiveProjects.map((p: any) => { const s = projectStats(p.id, false); return <div key={p.id} className="rounded-3xl border border-slate-200 bg-white p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-black uppercase text-slate-500">Chantier actif</p><h4 className="text-xl font-black">{p.name}</h4><p className="text-sm text-slate-500">{p.client || "Client non renseigné"}</p></div><div className="flex flex-wrap gap-2"><Badge tone={s.margin >= 0 ? "green" : "red"}>{s.margin >= 0 ? "Rentable" : "À surveiller"}</Badge><Button variant="secondary" onClick={() => generateProjectPdfFromGestion(p)}>Rapport PDF</Button><Button variant="amber" onClick={() => archiveProject(p, true)}>Archiver</Button></div></div><div className="mt-4 grid gap-3 md:grid-cols-5"><div className="rounded-2xl bg-emerald-50 p-3"><b>CA HT</b><br />{money(s.revenueTotal)}</div><div className="rounded-2xl bg-red-50 p-3"><b>Achats HT</b><br />{money(s.supplierTotal)}</div><div className="rounded-2xl bg-purple-50 p-3"><b>Main-d'œuvre</b><br />{money(s.laborTotal)}</div><div className="rounded-2xl bg-blue-50 p-3"><b>Marge</b><br />{money(s.margin)}</div><div className={s.tvaBalance >= 0 ? "rounded-2xl bg-red-50 p-3" : "rounded-2xl bg-emerald-50 p-3"}><b>{s.tvaBalance >= 0 ? "TVA due" : "TVA récupérée"}</b><br />{money(Math.abs(s.tvaBalance))}</div></div></div>; })}{searchedActiveProjects.length === 0 && <p className="text-sm text-slate-500">Aucun chantier actif trouvé.</p>}</div></Card>
-    </div>}
-
-    {tab === "factures" && <div className="space-y-5"><Card><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-xl font-black">🧾 Factures clients chantiers</h3><p className="text-sm text-slate-500">Données financières uniquement dans Gestion.</p></div><Button variant="green" onClick={() => setShowRevenueForm(!showRevenueForm)}>+ Facture client</Button></div>{showRevenueForm && <form onSubmit={saveRevenue} className="mt-4 grid gap-3 md:grid-cols-6"><Field label="Chantier"><Select value={revenueForm.project_id} onChange={(e: any) => setRevenueForm({ ...revenueForm, project_id: e.target.value })}><option value="">Choisir</option>{activeProjects.map((p: any) => <option key={p.id} value={p.id}>{projectLabel(p.id)}</option>)}</Select></Field><Field label="Libellé"><Input value={revenueForm.label} onChange={(e: any) => setRevenueForm({ ...revenueForm, label: e.target.value })} /></Field><Field label="Montant HT"><Input type="number" step="0.01" value={revenueForm.amount} onChange={(e: any) => setRevenueForm({ ...revenueForm, amount: e.target.value })} /></Field><Field label="TVA"><Select value={revenueForm.tva_rate} onChange={(e: any) => setRevenueForm({ ...revenueForm, tva_rate: e.target.value })}><option value="0">0%</option><option value="5.5">5,5%</option><option value="10">10%</option><option value="20">20%</option></Select></Field><Field label="Date"><Input type="date" value={revenueForm.billing_date} onChange={(e: any) => setRevenueForm({ ...revenueForm, billing_date: e.target.value })} /></Field><Field label="Notes"><Input value={revenueForm.notes} onChange={(e: any) => setRevenueForm({ ...revenueForm, notes: e.target.value })} /></Field><div className="md:col-span-6 flex gap-2"><Button variant="green">{editingRevenueId ? "Enregistrer" : "Ajouter"}</Button>{editingRevenueId && <Button type="button" variant="secondary" onClick={() => { setEditingRevenueId(null); setShowRevenueForm(false); }}>Annuler</Button>}</div></form>}</Card><Card><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="text-xs uppercase text-slate-500"><th className="p-3">Chantier</th><th className="p-3">Libellé</th><th className="p-3">HT</th><th className="p-3">TVA collectée</th><th className="p-3">TTC</th><th className="p-3">Payé</th><th className="p-3">Reste</th><th className="p-3">Statut</th><th className="p-3">Date</th><th className="p-3">Actions</th></tr></thead><tbody>{periodActiveRevenues.map((r: any) => { const st = revenuePaymentStatus(r); return <tr key={r.id} className="border-t"><td className="p-3 font-bold">{projectLabel(r.project_id)}</td><td className="p-3">{r.label}</td><td className="p-3">{money(amountHT(r))}</td><td className="p-3 text-blue-700 font-bold">{money(amountTVA(r))}</td><td className="p-3 font-black">{money(amountTTC(r))}</td><td className="p-3 text-emerald-700 font-bold">{money(paidForRevenue(r))}</td><td className="p-3 text-red-700 font-bold">{money(remainingForRevenue(r))}</td><td className="p-3"><Badge tone={st.tone}>{st.label}</Badge></td><td className="p-3">{r.billing_date || "-"}</td><td className="p-3"><div className="flex flex-wrap gap-2"><Button variant="secondary" onClick={() => editRevenue(r)}>Modifier</Button><Button variant="green" onClick={() => preparePaymentForRevenue(r, false)}>Paiement partiel</Button><Button variant="primary" onClick={() => markRevenuePaid(r)}>Payée</Button><Button variant="danger" onClick={() => deleteRevenue(r)}>Supprimer</Button></div></td></tr>; })}{periodActiveRevenues.length === 0 && <tr><td colSpan={10} className="p-6 text-center text-slate-500">Aucune facture client active sur cette période. Les chantiers archivés sont masqués ici.</td></tr>}</tbody></table></div></Card></div>}
-
-    {tab === "paiements" && <div className="space-y-5"><Card><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-xl font-black">💳 Encours client</h3><p className="text-sm text-slate-500">Suivi des factures, paiements partiels, factures soldées et reste à encaisser.</p></div><div className="flex gap-2"><Badge>{money(paidTTC)} encaissé</Badge><Button variant="green" onClick={() => setShowPaymentForm(!showPaymentForm)}>+ Paiement / acompte</Button></div></div>{showPaymentForm && <form onSubmit={savePayment} className="mt-4 grid gap-3 md:grid-cols-6"><Field label="Facture liée"><Select value={paymentForm.revenue_id} onChange={(e: any) => { const r = activeRevenues.find((x: any) => x.id === e.target.value); const pr = projects.find((p: any) => p.id === r?.project_id); setPaymentForm({ ...paymentForm, revenue_id: e.target.value, project_id: r?.project_id || paymentForm.project_id, client: pr?.client || paymentForm.client, invoice_number: r?.invoice_number || r?.label || paymentForm.invoice_number, amount_ttc: r ? String(remainingForRevenue(r)) : paymentForm.amount_ttc }); }}><option value="">Non liée</option>{activeRevenues.map((r: any) => <option key={r.id} value={r.id}>{projectLabel(r.project_id)} · {r.label || "Facture"} · reste {money(remainingForRevenue(r))}</option>)}</Select></Field><Field label="Date"><Input type="date" value={paymentForm.payment_date} onChange={(e: any) => setPaymentForm({ ...paymentForm, payment_date: e.target.value })} /></Field><Field label="Client"><Input value={paymentForm.client} onChange={(e: any) => setPaymentForm({ ...paymentForm, client: e.target.value })} /></Field><Field label="N° facture"><Input value={paymentForm.invoice_number} onChange={(e: any) => setPaymentForm({ ...paymentForm, invoice_number: e.target.value })} /></Field><Field label="Montant TTC"><Input type="number" step="0.01" value={paymentForm.amount_ttc} onChange={(e: any) => setPaymentForm({ ...paymentForm, amount_ttc: e.target.value })} /></Field><Field label="Moyen"><Select value={paymentForm.payment_method} onChange={(e: any) => setPaymentForm({ ...paymentForm, payment_method: e.target.value })}><option>Virement bancaire</option><option>Virement CIC</option><option>Virement BP</option><option>Chèque</option><option>Espèces</option><option>CB</option></Select></Field><Field label="Chantier"><Select value={paymentForm.project_id} onChange={(e: any) => setPaymentForm({ ...paymentForm, project_id: e.target.value })}><option value="">Non lié</option>{activeProjects.map((p: any) => <option key={p.id} value={p.id}>{projectLabel(p.id)}</option>)}</Select></Field><Field label="Notes"><Input value={paymentForm.notes} onChange={(e: any) => setPaymentForm({ ...paymentForm, notes: e.target.value })} /></Field><div className="md:col-span-5 flex gap-2"><Button variant="green">{editingPaymentId ? "Enregistrer" : "Ajouter paiement"}</Button>{editingPaymentId && <Button type="button" variant="secondary" onClick={() => { setEditingPaymentId(null); setShowPaymentForm(false); }}>Annuler</Button>}</div></form>}</Card><Card><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="text-xs uppercase text-slate-500"><th className="p-3">Date</th><th className="p-3">Client</th><th className="p-3">N° facture</th><th className="p-3">Facture liée</th><th className="p-3">Montant TTC</th><th className="p-3">Moyen</th><th className="p-3">Chantier</th><th className="p-3">Actions</th></tr></thead><tbody>{periodPayments.map((p: any) => <tr key={p.id} className="border-t"><td className="p-3">{p.payment_date || "-"}</td><td className="p-3 font-bold">{p.client}</td><td className="p-3">{p.invoice_number}</td><td className="p-3">{p.revenue_id ? "Oui" : "-"}</td><td className="p-3 font-black">{money(p.amount_ttc)}</td><td className="p-3">{p.payment_method}</td><td className="p-3">{p.project_id ? projectLabel(p.project_id) : "-"}</td><td className="p-3"><div className="flex gap-2"><Button variant="secondary" onClick={() => editPayment(p)}>Modifier</Button><Button variant="danger" onClick={() => deletePayment(p)}>Supprimer</Button></div></td></tr>)}{periodPayments.length === 0 && <tr><td colSpan={8} className="p-6 text-center text-slate-500">Aucun paiement client enregistré sur cette période.</td></tr>}</tbody></table></div></Card></div>}
-
-    {tab === "charges" && <div className="space-y-5"><Card><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-xl font-black">🏢 Charges entreprise</h3><p className="text-sm text-slate-500">Charges fixes et variables intégrées au pilotage.</p></div><Button variant="green" onClick={() => setShowExpenseForm(!showExpenseForm)}>+ Charge</Button></div>{showExpenseForm && <form onSubmit={saveExpense} className="mt-4 grid gap-3 md:grid-cols-6"><Field label="Nom"><Input value={expenseForm.name} onChange={(e: any) => setExpenseForm({ ...expenseForm, name: e.target.value })} /></Field><Field label="Catégorie"><Select value={expenseForm.category} onChange={(e: any) => setExpenseForm({ ...expenseForm, category: e.target.value })}><option>Charges fixes</option><option>Charges variables</option><option>Véhicules</option><option>Assurances</option><option>Salaires</option><option>Matériel</option><option>Logiciels</option><option>Autres</option></Select></Field><Field label="Montant HT"><Input type="number" step="0.01" value={expenseForm.amount} onChange={(e: any) => setExpenseForm({ ...expenseForm, amount: e.target.value })} /></Field><Field label="TVA"><Select value={expenseForm.tva_rate} onChange={(e: any) => setExpenseForm({ ...expenseForm, tva_rate: e.target.value })}><option value="0">0%</option><option value="5.5">5,5%</option><option value="10">10%</option><option value="20">20%</option></Select></Field><Field label="Fréquence"><Select value={expenseForm.frequency} onChange={(e: any) => setExpenseForm({ ...expenseForm, frequency: e.target.value })}><option>mensuelle</option><option>hebdomadaire</option><option>ponctuelle</option><option>annuelle</option></Select></Field><Field label="Date"><Input type="date" value={expenseForm.expense_date} onChange={(e: any) => setExpenseForm({ ...expenseForm, expense_date: e.target.value })} /></Field><Field label="Notes"><Input value={expenseForm.notes} onChange={(e: any) => setExpenseForm({ ...expenseForm, notes: e.target.value })} /></Field><div className="md:col-span-5 flex gap-2"><Button variant="green">{editingExpenseId ? "Enregistrer" : "Ajouter charge"}</Button>{editingExpenseId && <Button type="button" variant="secondary" onClick={() => { setEditingExpenseId(null); setShowExpenseForm(false); }}>Annuler</Button>}</div></form>}</Card><Card><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="text-xs uppercase text-slate-500"><th className="p-3">Nom</th><th className="p-3">Catégorie</th><th className="p-3">HT</th><th className="p-3">TVA déductible</th><th className="p-3">TTC</th><th className="p-3">Fréquence</th><th className="p-3">Actions</th></tr></thead><tbody>{companyExpenses.map((e: any) => <tr key={e.id} className="border-t"><td className="p-3 font-bold">{e.name}</td><td className="p-3">{e.category}</td><td className="p-3">{money(amountHT(e))}</td><td className="p-3 text-emerald-700 font-bold">{money(amountTVA(e))}</td><td className="p-3 font-black">{money(amountTTC(e))}</td><td className="p-3">{e.frequency}</td><td className="p-3"><div className="flex gap-2"><Button variant="secondary" onClick={() => editExpense(e)}>Modifier</Button><Button variant="danger" onClick={() => deleteExpense(e)}>Supprimer</Button></div></td></tr>)}</tbody></table></div></Card></div>}
-
-    {tab === "archives" && <Card><h3 className="mb-4 text-xl font-black">📦 Chantiers archivés</h3><p className="mb-4 text-sm text-slate-500">Ils sont retirés visuellement des chantiers actifs, mais restent comptés dans Gestion, CA, marge, TVA et graphiques.</p><div className="grid gap-4">{archivedProjects.map((p: any) => { const s = projectStats(p.id, false); return <div key={p.id} className="rounded-3xl border border-slate-200 bg-slate-50 p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><Badge tone="slate">Archivé / terminé</Badge><h4 className="mt-2 text-xl font-black">{p.name}</h4><p className="text-sm text-slate-500">{p.client || "Client non renseigné"}</p></div><Button variant="green" onClick={() => archiveProject(p, false)}>Réactiver</Button></div><div className="mt-4 grid gap-3 md:grid-cols-4"><div className="rounded-2xl bg-white p-3"><b>CA HT</b><br />{money(s.revenueTotal)}</div><div className="rounded-2xl bg-white p-3"><b>Marge</b><br />{money(s.margin)}</div><div className="rounded-2xl bg-white p-3"><b>TVA collectée</b><br />{money(s.revenueTVA)}</div><div className="rounded-2xl bg-white p-3"><b>TVA déductible</b><br />{money(s.netDeductibleTVA)}</div></div></div>; })}{archivedProjects.length === 0 && <p className="text-sm text-slate-500">Aucun chantier archivé.</p>}</div></Card>}
+    {tab === "archives" && <Card><h3 className="mb-4 text-xl font-black">📦 Chantiers archivés</h3><div className="grid gap-4">{archivedProjects.map((p: any) => { const s = projectStats(p.id, false); return <div key={p.id} className="rounded-3xl border border-slate-200 bg-slate-50 p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><Badge tone="slate">Archivé / terminé</Badge><h4 className="mt-2 text-xl font-black">{p.name}</h4><p className="text-sm text-slate-500">{p.client || "Client non renseigné"}</p></div><Button variant="green" onClick={() => archiveProject(p, false)}>Réactiver</Button></div><div className="mt-4 grid gap-3 md:grid-cols-4"><div className="rounded-2xl bg-white p-3"><b>CA HT</b><br />{money(s.revenueTotal)}</div><div className="rounded-2xl bg-white p-3"><b>Marge</b><br />{money(s.margin)}</div><div className="rounded-2xl bg-white p-3"><b>TVA collectée</b><br />{money(s.revenueTVA)}</div><div className="rounded-2xl bg-white p-3"><b>TVA déductible</b><br />{money(s.netDeductibleTVA)}</div></div></div>; })}{archivedProjects.length === 0 && <p className="text-sm text-slate-500">Aucun chantier archivé.</p>}</div></Card>}
   </div>;
 }
 

@@ -1,0 +1,14 @@
+V56 - Gestion simplifiée et lisible
+
+- Suppression du bandeau V55 et des textes inutiles.
+- Gestion = une seule Vue 1 : Pilotage comptable filtré par période.
+- Suppression de la vue 2 dans Gestion.
+- Suppression du suivi de règlement / paiements côté Gestion.
+- Suppression des boutons Créer facture d'achat et Créer retour dans Gestion.
+- Conservation uniquement du bouton Créer facturation client.
+- Factures d'achat et retours restent dans Chantier / Magasinier.
+- Dates obligatoires pour facturation client, facture d'achat et retour.
+- Rentabilité chantier visible dans les chantiers actifs : CA HT, Achats HT, MO, charges fixes imputées, marge, TVA récupérée / TVA due, pourcentage de rentabilité.
+- Ajout du récapitulatif des factures d'achats dans Gestion.
+- Boutons Gestion plus gros et plus lisibles.
+- Barre période comptable + pilotage regroupée.
