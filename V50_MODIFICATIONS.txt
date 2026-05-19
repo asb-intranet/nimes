@@ -1,0 +1,5 @@
+V50 - Correctif Encours client Supabase
+- Crée réellement la table client_payments si elle n'existe pas.
+- Ajoute revenue_id pour les paiements partiels liés aux factures.
+- Ajoute les droits RLS et GRANT nécessaires.
+- À lancer dans Supabase : supabase/schema-complet-v50.sql
