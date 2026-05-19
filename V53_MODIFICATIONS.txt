@@ -1,0 +1,8 @@
+V53 Gestion archives propres
+- Charges fixes conservées uniquement en pilotage global, non imputées aux chantiers.
+- Pilotage global actif : les chantiers archivés sont exclus visuellement des stats actives.
+- Camemberts pilotage restaurés.
+- Textes d'aide inutiles allégés dans Gestion.
+- Trésorerie estimée non affichée.
+- Archives chantiers : dossier dédié avec fiche, factures clients, achats, retours, planning/main-d'œuvre, paiements clients et rapport PDF.
+- Factures/retours/achats/paiements des chantiers archivés masqués des vues actives Gestion.
