@@ -2811,11 +2811,123 @@ function Management({ projects, employees, planning, invoices, revenues, returns
   }
   function generateProjectPdfFromGestion(project: any) {
     const s = projectStats(project.id);
-    const myRevenues = revenues.filter((r: any) => r.project_id === project.id);
-    const myInvoices = invoices.filter((i: any) => i.project_id === project.id);
-    const myReturns = returns.filter((r: any) => r.project_id === project.id);
-    const html = `<html><head><title>Rapport gestion - ${project.name}</title><style>@page{size:A4;margin:14mm}body{font-family:Arial,sans-serif;background:#f1f5f9;color:#0f172a}.page{max-width:980px;margin:auto;background:white;padding:28px}.header{border-bottom:4px solid #0f172a;padding-bottom:16px}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:20px}.card{border-radius:18px;padding:14px;background:#f8fafc;border:1px solid #e2e8f0}.value{font-size:22px;font-weight:900}.section{margin-top:24px}table{width:100%;border-collapse:collapse;font-size:13px}th{background:#0f172a;color:white;text-align:left;padding:10px}td{padding:10px;border-bottom:1px solid #e2e8f0}.ok{color:#047857}.ko{color:#b91c1c}@media print{body{background:white}.page{padding:0}}</style></head><body><div class="page"><div class="header"><h1>Rapport gestion chantier actif</h1><p><b>${project.name}</b> · ${project.client || ""}</p><p>${project.address || ""}</p></div><div class="grid"><div class="card"><b>CA HT</b><div class="value">${money(s.revenueTotal)}</div></div><div class="card"><b>Achats HT</b><div class="value">${money(s.supplierTotal)}</div></div><div class="card"><b>Main-d’œuvre</b><div class="value">${money(s.laborTotal)}</div></div><div class="card"><b>Marge</b><div class="value ${s.margin >= 0 ? "ok" : "ko"}">${money(s.margin)}</div></div></div><div class="section"><h2>TVA</h2><p>TVA collectée : <b>${money(s.revenueTVA)}</b> · TVA déductible : <b>${money(s.netDeductibleTVA)}</b> · Solde : <b class="${s.tvaBalance >= 0 ? "ko" : "ok"}">${s.tvaBalance >= 0 ? "TVA due" : "TVA récupérable"} ${money(Math.abs(s.tvaBalance))}</b></p></div><div class="section"><h2>Factures clients</h2><table><thead><tr><th>Libellé</th><th>Date</th><th>HT</th><th>TVA</th><th>TTC</th></tr></thead><tbody>${myRevenues.map((r:any)=>`<tr><td>${r.label||"Facture"}</td><td>${r.billing_date||""}</td><td>${money(amountHT(r))}</td><td>${money(amountTVA(r))}</td><td>${money(amountTTC(r))}</td></tr>`).join("") || '<tr><td colspan="5">Aucune facture client.</td></tr>'}</tbody></table></div><div class="section"><h2>Achats et retours</h2><table><thead><tr><th>Type</th><th>Nom</th><th>Date</th><th>HT</th><th>TVA</th><th>TTC</th></tr></thead><tbody>${myInvoices.map((i:any)=>`<tr><td>Achat</td><td>${i.supplier||""}</td><td>${i.invoice_date||""}</td><td>${money(amountHT(i))}</td><td>${money(amountTVA(i))}</td><td>${money(amountTTC(i))}</td></tr>`).join("")}${myReturns.map((r:any)=>`<tr><td>Retour</td><td>${r.supplier||""}</td><td>${r.return_date||""}</td><td>-${money(amountHT(r))}</td><td>-${money(amountTVA(r))}</td><td>-${money(amountTTC(r))}</td></tr>`).join("")}</tbody></table></div></div><script>window.print()</script></body></html>`;
-    const w = window.open("", "_blank"); if (!w) return; w.document.write(html); w.document.close();
+    const projectRevenues = revenues.filter((r: any) => r.project_id === project.id);
+    const projectInvoices = invoices.filter((i: any) => i.project_id === project.id);
+    const projectReturns = returns.filter((r: any) => r.project_id === project.id);
+    const projectPlanning = planning.filter((p: any) => p.project_id === project.id);
+    const statusColor = s.margin >= 0 ? "#10b981" : "#ef4444";
+    const statusLabel = s.margin >= 0 ? "Rentable" : "À surveiller";
+    const employeeLabel = (id: string) => {
+      const e = employees.find((x: any) => x.id === id);
+      return e ? `${e.firstname || ""} ${e.lastname || ""}`.trim() || "Salarié" : "Salarié non défini";
+    };
+    const pct = (value: number, total: number) => total > 0 ? Math.max(0, Math.round((value / total) * 100)) : 0;
+    const revenueTTC = projectRevenues.reduce((sum: number, r: any) => sum + amountTTC(r), 0);
+    const purchasesTTC = projectInvoices.reduce((sum: number, i: any) => sum + amountTTC(i), 0);
+    const returnsTTC = projectReturns.reduce((sum: number, r: any) => sum + amountTTC(r), 0);
+    const tvaTotal = Math.max(1, s.revenueTVA + s.netDeductibleTVA);
+    const costTotalForPie = Math.max(1, s.supplierTotal + s.laborTotal + Math.max(0, s.margin));
+    const pSupplier = pct(s.supplierTotal, costTotalForPie);
+    const pLabor = pct(s.laborTotal, costTotalForPie);
+    const pMargin = Math.max(0, 100 - pSupplier - pLabor);
+    const pCollectee = pct(s.revenueTVA, tvaTotal);
+    const pDeductible = Math.max(0, 100 - pCollectee);
+    const totalCosts = s.supplierTotal + s.laborTotal;
+    const soldeClass = s.tvaBalance >= 0 ? "tva-due" : "tva-credit";
+    const soldeLabel = s.tvaBalance >= 0 ? "TVA due" : "TVA récupérable";
+    const html = `
+      <html>
+        <head>
+          <title>Rapport gestion ASB - ${project.name}</title>
+          <style>
+            @page{size:A4;margin:10mm}
+            *{box-sizing:border-box}
+            body{font-family:Arial,sans-serif;background:#e5e7eb;color:#0f172a;margin:0}
+            .page{max-width:980px;margin:auto;background:white;padding:28px}
+            .header{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;border-bottom:4px solid #0f172a;padding-bottom:18px}
+            .logo{height:66px;object-fit:contain}.title{margin:0;font-size:30px;letter-spacing:-.04em}.muted{color:#64748b}.badge{display:inline-block;border-radius:999px;padding:8px 14px;background:${statusColor};color:white;font-weight:900}
+            .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:18px}.card{border-radius:20px;padding:14px;background:#f8fafc;border:1px solid #e2e8f0}.card b{font-size:11px;text-transform:uppercase;color:#475569}.value{font-size:22px;font-weight:900;margin-top:6px}.small{font-size:12px;color:#64748b;margin-top:4px}
+            .summary{margin-top:20px;border-radius:24px;padding:20px;background:${s.margin>=0?'#ecfdf5':'#fef2f2'};border-left:10px solid ${statusColor}}
+            .big{font-size:38px;font-weight:900;letter-spacing:-.04em}.section{margin-top:24px;break-inside:avoid}h2{font-size:18px;margin:0 0 10px}table{width:100%;border-collapse:collapse;font-size:12px}th{background:#0f172a;color:white;text-align:left;padding:9px}td{padding:9px;border-bottom:1px solid #e2e8f0;vertical-align:top}.num{text-align:right;white-space:nowrap}
+            .charts{display:grid;grid-template-columns:repeat(2,1fr);gap:18px;margin-top:22px}.chartbox{border:1px solid #e2e8f0;border-radius:24px;padding:18px;background:#f8fafc}.pie{width:190px;height:190px;border-radius:50%;margin:10px auto;border:10px solid white;box-shadow:0 10px 24px rgba(15,23,42,.12)}.legend{display:grid;gap:7px;font-size:12px}.legend span{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:6px}.c1{background:#0ea5e9}.c2{background:#f59e0b}.c3{background:#10b981}.c4{background:#ef4444}.note{margin-top:22px;font-size:11px;color:#64748b}.pagebreak{break-before:page}.tva-due{color:#b91c1c}.tva-credit{color:#047857}
+            @media print{body{background:white}.page{padding:0}.charts{break-inside:avoid}}
+          </style>
+        </head>
+        <body>
+          <div class="page">
+            <div class="header">
+              <div>
+                <img class="logo" src="/logo-asb.png" />
+                <h1 class="title">Rapport gestion / rentabilité V37</h1>
+                <p><b>${project.name}</b> · ${project.client || ""}</p>
+                <p class="muted">${project.address || ""}</p>
+              </div>
+              <div style="text-align:right"><div class="badge">${statusLabel}</div><p class="muted">Généré depuis ASB Intranet</p></div>
+            </div>
+            <div class="grid">
+              <div class="card"><b>CA client HT</b><div class="value">${money(s.revenueTotal)}</div><div class="small">TTC ${money(revenueTTC)}</div></div>
+              <div class="card"><b>Achats - retours HT</b><div class="value">${money(s.supplierTotal)}</div><div class="small">Achats TTC ${money(purchasesTTC)} · retours TTC ${money(returnsTTC)}</div></div>
+              <div class="card"><b>Main d'œuvre</b><div class="value">${money(s.laborTotal)}</div><div class="small">${projectPlanning.length} ligne(s) planning</div></div>
+              <div class="card"><b>Marge estimée HT</b><div class="value">${money(s.margin)}</div><div class="small">${s.marginRate}% du CA HT</div></div>
+            </div>
+            <div class="grid">
+              <div class="card"><b>TVA collectée</b><div class="value">${money(s.revenueTVA)}</div><div class="small">Sur factures clients</div></div>
+              <div class="card"><b>TVA déductible</b><div class="value">${money(s.netDeductibleTVA)}</div><div class="small">Achats - TVA retours</div></div>
+              <div class="card"><b>${soldeLabel}</b><div class="value ${soldeClass}">${money(Math.abs(s.tvaBalance))}</div><div class="small">Collectée - déductible</div></div>
+              <div class="card"><b>Total coûts HT</b><div class="value">${money(totalCosts)}</div><div class="small">Achats nets + main d'œuvre</div></div>
+            </div>
+            <div class="summary">
+              <div style="font-size:13px;font-weight:900;text-transform:uppercase;color:#475569">Synthèse décisionnelle</div>
+              <div class="big">${s.margin >= 0 ? "+" : ""}${s.marginRate}%</div>
+              <div style="font-weight:900">${s.margin >= 0 ? "Chantier rentable à ce stade." : "Chantier en dérive ou marge négative."}</div>
+              <p style="margin-bottom:0;color:#475569">Jeux de TVA intégrés : TVA collectée client, TVA déductible achats, TVA corrigée par les retours et solde TVA estimatif.</p>
+            </div>
+            <div class="charts">
+              <div class="chartbox">
+                <h2>Camembert rentabilité HT</h2>
+                <div class="pie" style="background:conic-gradient(#ef4444 0 ${pSupplier}%, #f59e0b ${pSupplier}% ${pSupplier+pLabor}%, #10b981 ${pSupplier+pLabor}% 100%)"></div>
+                <div class="legend"><div><span class="c4"></span>Achats nets : ${money(s.supplierTotal)} (${pSupplier}%)</div><div><span class="c2"></span>Main d'œuvre : ${money(s.laborTotal)} (${pLabor}%)</div><div><span class="c3"></span>Marge : ${money(Math.max(0, s.margin))} (${pMargin}%)</div></div>
+              </div>
+              <div class="chartbox">
+                <h2>Camembert jeu de TVA</h2>
+                <div class="pie" style="background:conic-gradient(#0ea5e9 0 ${pCollectee}%, #10b981 ${pCollectee}% 100%)"></div>
+                <div class="legend"><div><span class="c1"></span>TVA collectée : ${money(s.revenueTVA)} (${pCollectee}%)</div><div><span class="c3"></span>TVA déductible nette : ${money(s.netDeductibleTVA)} (${pDeductible}%)</div><div><b>Solde TVA :</b> <span class="${soldeClass}">${soldeLabel} ${money(Math.abs(s.tvaBalance))}</span></div></div>
+              </div>
+            </div>
+            <div class="section pagebreak">
+              <h2>Facturation client — détail TVA collectée</h2>
+              <table><thead><tr><th>Libellé</th><th>Date</th><th class="num">HT</th><th class="num">Taux</th><th class="num">TVA collectée</th><th class="num">TTC</th><th>Notes</th></tr></thead><tbody>
+                ${projectRevenues.map((r: any) => `<tr><td><b>${r.label || "Facturation client"}</b></td><td>${r.billing_date || ""}</td><td class="num">${money(amountHT(r))}</td><td class="num">${Number(r.tva_rate ?? 0).toFixed(2).replace('.', ',')}%</td><td class="num">${money(amountTVA(r))}</td><td class="num">${money(amountTTC(r))}</td><td>${r.notes || ""}</td></tr>`).join("") || `<tr><td colspan="7">Aucune facturation client enregistrée.</td></tr>`}
+              </tbody></table>
+            </div>
+            <div class="section">
+              <h2>Factures fournisseurs — détail TVA déductible</h2>
+              <table><thead><tr><th>Fournisseur</th><th>Date</th><th class="num">HT</th><th class="num">Taux</th><th class="num">TVA déductible</th><th class="num">TTC</th><th>Notes</th></tr></thead><tbody>
+                ${projectInvoices.map((i: any) => `<tr><td><b>${i.supplier || "Fournisseur"}</b></td><td>${i.invoice_date || ""}</td><td class="num">${money(amountHT(i))}</td><td class="num">${Number(i.tva_rate ?? 0).toFixed(2).replace('.', ',')}%</td><td class="num">${money(amountTVA(i))}</td><td class="num">${money(amountTTC(i))}</td><td>${i.notes || ""}</td></tr>`).join("") || `<tr><td colspan="7">Aucune facture fournisseur enregistrée.</td></tr>`}
+              </tbody></table>
+            </div>
+            <div class="section">
+              <h2>Retours marchandise — TVA déductible corrigée</h2>
+              <table><thead><tr><th>Fournisseur</th><th>Date</th><th class="num">HT déduit</th><th class="num">Taux</th><th class="num">TVA corrigée</th><th class="num">TTC déduit</th><th>Notes</th></tr></thead><tbody>
+                ${projectReturns.map((r: any) => `<tr><td><b>${r.supplier || "Retour"}</b></td><td>${r.return_date || ""}</td><td class="num">-${money(amountHT(r))}</td><td class="num">${Number(r.tva_rate ?? 0).toFixed(2).replace('.', ',')}%</td><td class="num">-${money(amountTVA(r))}</td><td class="num">-${money(amountTTC(r))}</td><td>${r.notes || ""}</td></tr>`).join("") || `<tr><td colspan="7">Aucun retour marchandise.</td></tr>`}
+              </tbody></table>
+            </div>
+            <div class="section">
+              <h2>Temps salariés / planning</h2>
+              <table><thead><tr><th>Salarié</th><th>Début</th><th>Fin</th><th class="num">Jours</th><th class="num">Coût jour</th><th class="num">Coût estimé</th></tr></thead><tbody>
+                ${projectPlanning.map((pl: any) => { const days = daysBetween(pl.start_date, pl.end_date); const cost = employeeCost(pl.employee_id); return `<tr><td><b>${employeeLabel(pl.employee_id)}</b></td><td>${pl.start_date || ""}</td><td>${pl.end_date || ""}</td><td class="num">${days}</td><td class="num">${money(cost)}</td><td class="num">${money(days * cost)}</td></tr>`; }).join("") || `<tr><td colspan="6">Aucun temps salarié lié au chantier.</td></tr>`}
+              </tbody></table>
+            </div>
+            <p class="note">Document interne ASB — rapport de gestion et rentabilité. Ne pas transmettre au client sans validation.</p>
+          </div>
+        </body>
+      </html>`;
+    const w = window.open("", "_blank");
+    if (!w) return alert("Popup bloquée. Autorise les popups pour générer le rapport.");
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    setTimeout(() => w.print(), 500);
   }
 
   function SimplePie({ values }: any) {

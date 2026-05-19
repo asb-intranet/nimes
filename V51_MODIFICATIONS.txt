@@ -1,0 +1,8 @@
+V51 - PDF premium V37 restauré
+- Restauration du template PDF Gestion / rentabilité V37.
+- KPI visuels : CA HT/TTC, achats-retours, main d'œuvre, marge.
+- TVA collectée, TVA déductible, solde TVA avec couleur TVA due/récupérable.
+- Camemberts rentabilité HT et jeu de TVA.
+- Tableaux détaillés HT / taux / TVA / TTC.
+- Noms salariés dans le planning du rapport.
+- Base conservée V50 : encours client, paiements partiels, archives, pilotage.
