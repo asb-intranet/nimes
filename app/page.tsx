@@ -2957,60 +2957,84 @@ function Management({ projects, employees, planning, invoices, revenues, returns
 
   const tabButton = (id: string, label: string) => <Button variant={tab === id ? "primary" : "secondary"} onClick={() => setTab(id)}>{label}</Button>;
 
-  return <div>
-    <Section title="Gestion & pilotage global V49" subtitle="Pilotage période, encours client, paiements partiels et rapports PDF actifs." />
+  return <div className="space-y-5">
+    <Section title="Gestion V55 — tableau de bord clair" subtitle="Deux lectures séparées : comptabilité par période et rentabilité réelle par chantier." />
 
-    <Card className="mb-5 border-l-8 border-blue-500 bg-white">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div><h3 className="text-xl font-black">🔎 Recherche chantier</h3><p className="text-sm text-slate-500">Recherche placée en haut pour accéder rapidement au chantier.</p></div>
-        <Badge tone="blue">Période : {periodLabel}</Badge>
-      </div>
-      <div className="mt-4 grid gap-3 md:grid-cols-2">
-        <Field label="Recherche rapide"><Input placeholder="Nom chantier, client, adresse..." value={projectSearch} onChange={(e: any) => setProjectSearch(e.target.value)} /></Field>
-        <Field label="Liste déroulante"><Select value={selectedProjectFilter} onChange={(e: any) => setSelectedProjectFilter(e.target.value)}><option value="">Tous les chantiers actifs</option>{activeProjects.map((p: any) => <option key={p.id} value={p.id}>{p.name} · {p.client || "Client"}</option>)}</Select></Field>
+    <Card className="overflow-hidden border-0 bg-slate-950 text-white shadow-xl">
+      <div className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge tone="blue">Période active : {periodLabel}</Badge>
+            <Badge tone="slate">Vue comptable filtrée</Badge>
+            <Badge tone="green">Rentabilité chantier globale</Badge>
+          </div>
+          <h2 className="mt-4 text-3xl font-black tracking-tight">Pilotage simple, lisible et non biaisé</h2>
+          <p className="mt-2 max-w-3xl text-sm text-slate-300">La partie comptable suit les dates choisies. La rentabilité chantier additionne tout le chantier, même si les achats, la main d’œuvre et les factures clients sont sur plusieurs mois.</p>
+        </div>
+        <div className="rounded-3xl bg-white/10 p-4">
+          <p className="text-xs font-black uppercase text-slate-300">Recherche rapide chantier</p>
+          <div className="mt-3 grid gap-3">
+            <Input className="bg-white text-slate-900" placeholder="Nom chantier, client, adresse..." value={projectSearch} onChange={(e: any) => setProjectSearch(e.target.value)} />
+            <Select className="bg-white text-slate-900" value={selectedProjectFilter} onChange={(e: any) => setSelectedProjectFilter(e.target.value)}>
+              <option value="">Tous les chantiers actifs</option>{activeProjects.map((p: any) => <option key={p.id} value={p.id}>{p.name} · {p.client || "Client"}</option>)}
+            </Select>
+          </div>
+        </div>
       </div>
     </Card>
 
-    <Card className="mb-5 border-l-8 border-emerald-500 bg-emerald-50/40">
-      <h3 className="text-xl font-black">📅 Période de pilotage</h3>
-      <p className="mt-1 text-sm text-slate-500">Vue 1 : le pilotage comptable suit cette période. Vue 2 : la rentabilité chantier reste globale et non biaisée par les dates.</p>
-      <div className="mt-4 flex flex-wrap gap-2">
-        <Button variant={periodMode === "today" ? "primary" : "secondary"} onClick={() => applyPeriod("today")}>Aujourd’hui</Button>
-        <Button variant={periodMode === "week" ? "primary" : "secondary"} onClick={() => applyPeriod("week")}>Semaine</Button>
-        <Button variant={periodMode === "month" ? "primary" : "secondary"} onClick={() => applyPeriod("month")}>Mois</Button>
-        <Button variant={periodMode === "quarter" ? "primary" : "secondary"} onClick={() => applyPeriod("quarter")}>Trimestre</Button>
-        <Button variant={periodMode === "year" ? "primary" : "secondary"} onClick={() => applyPeriod("year")}>Année</Button>
-        <Button variant={periodMode === "custom" ? "primary" : "secondary"} onClick={() => setPeriodMode("custom")}>Personnalisée</Button>
+    <Card className="border-slate-200 bg-white">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h3 className="text-xl font-black">📅 Période comptable</h3>
+          <p className="text-sm text-slate-500">Utilisée uniquement pour TVA, trésorerie, CA, dépenses et charges.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant={periodMode === "today" ? "primary" : "secondary"} onClick={() => applyPeriod("today")}>Aujourd’hui</Button>
+          <Button variant={periodMode === "week" ? "primary" : "secondary"} onClick={() => applyPeriod("week")}>Semaine</Button>
+          <Button variant={periodMode === "month" ? "primary" : "secondary"} onClick={() => applyPeriod("month")}>Mois</Button>
+          <Button variant={periodMode === "quarter" ? "primary" : "secondary"} onClick={() => applyPeriod("quarter")}>Trimestre</Button>
+          <Button variant={periodMode === "year" ? "primary" : "secondary"} onClick={() => applyPeriod("year")}>Année</Button>
+          <Button variant={periodMode === "custom" ? "primary" : "secondary"} onClick={() => setPeriodMode("custom")}>Perso</Button>
+        </div>
       </div>
       <div className="mt-4 grid gap-3 md:grid-cols-3">
         <Field label="Date début"><Input type="date" value={periodStart} onChange={(e: any) => { setPeriodMode("custom"); setPeriodStart(e.target.value); }} /></Field>
         <Field label="Date fin"><Input type="date" value={periodEnd} onChange={(e: any) => { setPeriodMode("custom"); setPeriodEnd(e.target.value); }} /></Field>
-        <div className="rounded-2xl bg-white p-4"><p className="text-xs font-black uppercase text-slate-500">Période active</p><p className="mt-2 text-lg font-black text-slate-900">{periodLabel}</p></div>
+        <div className="rounded-2xl bg-slate-100 p-4"><p className="text-xs font-black uppercase text-slate-500">Période active</p><p className="mt-1 text-lg font-black text-slate-900">{periodLabel}</p></div>
       </div>
     </Card>
 
-    <div className="mb-5 flex flex-wrap gap-2">{tabButton("pilotage", "Pilotage comptable")}{tabButton("factures", "Factures clients chantiers")}{tabButton("paiements", "Encours client")}{tabButton("charges", "Charges entreprise")}{tabButton("archives", `Chantiers archivés (${archivedProjects.length})`)}</div>
+    <div className="grid gap-5 xl:grid-cols-2">
+      <Card className="border-l-8 border-blue-600 bg-blue-50/50">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div><p className="text-xs font-black uppercase text-blue-700">Vue 1</p><h3 className="text-2xl font-black">Pilotage comptable</h3><p className="text-sm text-slate-500">Filtré par période.</p></div>
+          <Badge tone="blue">{periodLabel}</Badge>
+        </div>
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className="rounded-3xl bg-white p-4 shadow-sm"><p className="text-xs font-black uppercase text-slate-500">CA période HT</p><p className="mt-1 text-3xl font-black text-emerald-700">{money(allStats.revenue)}</p></div>
+          <div className="rounded-3xl bg-white p-4 shadow-sm"><p className="text-xs font-black uppercase text-slate-500">TVA collectée</p><p className="mt-1 text-3xl font-black text-blue-700">{money(allStats.revenueTVA)}</p></div>
+          <div className="rounded-3xl bg-white p-4 shadow-sm"><p className="text-xs font-black uppercase text-slate-500">Dépenses + charges HT</p><p className="mt-1 text-3xl font-black text-orange-700">{money(allStats.purchases + expensesHT)}</p></div>
+          <div className={tvaBalanceGlobal >= 0 ? "rounded-3xl bg-red-50 p-4 shadow-sm" : "rounded-3xl bg-emerald-50 p-4 shadow-sm"}><p className="text-xs font-black uppercase text-slate-500">{tvaBalanceGlobal >= 0 ? "TVA à payer" : "TVA récupérable"}</p><p className={tvaBalanceGlobal >= 0 ? "mt-1 text-3xl font-black text-red-700" : "mt-1 text-3xl font-black text-emerald-700"}>{money(Math.abs(tvaBalanceGlobal))}</p></div>
+        </div>
+      </Card>
 
-    <div className="mb-6 space-y-4">
-      <div>
-        <h3 className="mb-3 text-lg font-black">Vue 1 — Pilotage comptable filtré par période</h3>
-        <div className="grid gap-4 md:grid-cols-4">
-          <Card><p className="text-xs font-black uppercase text-slate-500">CA mensuel / période HT</p><p className="mt-2 text-3xl font-black text-emerald-700">{money(allStats.revenue)}</p></Card>
-          <Card><p className="text-xs font-black uppercase text-slate-500">TVA collectée</p><p className="mt-2 text-3xl font-black text-blue-700">{money(allStats.revenueTVA)}</p><p className="text-xs text-slate-500">Factures clients période</p></Card>
-          <Card><p className="text-xs font-black uppercase text-slate-500">Dépenses + charges HT</p><p className="mt-2 text-3xl font-black text-orange-700">{money(allStats.purchases + expensesHT)}</p><p className="text-xs text-slate-500">Achats chantier + charges période</p></Card>
-          <Card className={tvaBalanceGlobal >= 0 ? "bg-red-50" : "bg-emerald-50"}><p className={tvaBalanceGlobal >= 0 ? "text-xs font-black uppercase text-red-700" : "text-xs font-black uppercase text-emerald-700"}>{tvaBalanceGlobal >= 0 ? "Solde TVA due" : "Solde TVA récupérable"}</p><p className={tvaBalanceGlobal >= 0 ? "mt-2 text-3xl font-black text-red-700" : "mt-2 text-3xl font-black text-emerald-700"}>{money(Math.abs(tvaBalanceGlobal))}</p><p className="text-xs text-slate-500">Collectée - déductible</p></Card>
+      <Card className="border-l-8 border-emerald-600 bg-emerald-50/50">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div><p className="text-xs font-black uppercase text-emerald-700">Vue 2</p><h3 className="text-2xl font-black">Rentabilité chantier</h3><p className="text-sm text-slate-500">Non biaisée par les dates.</p></div>
+          <Badge tone="green">Global chantier</Badge>
         </div>
-      </div>
-      <div>
-        <h3 className="mb-3 text-lg font-black">Vue 2 — Rentabilité chantier non biaisée par les dates</h3>
-        <div className="grid gap-4 md:grid-cols-5">
-          <Card><p className="text-xs font-black uppercase text-slate-500">CA total chantier HT</p><p className="mt-2 text-2xl font-black text-emerald-700">{money(chantierStats.revenue)}</p></Card>
-          <Card><p className="text-xs font-black uppercase text-slate-500">Achats totaux chantier HT</p><p className="mt-2 text-2xl font-black text-red-700">{money(chantierStats.purchases)}</p></Card>
-          <Card><p className="text-xs font-black uppercase text-slate-500">MO totale</p><p className="mt-2 text-2xl font-black text-purple-700">{money(chantierStats.labor)}</p></Card>
-          <Card><p className="text-xs font-black uppercase text-slate-500">Marge réelle chantier</p><p className="mt-2 text-2xl font-black text-blue-700">{money(chantierStats.margin)}</p></Card>
-          <Card><p className="text-xs font-black uppercase text-slate-500">Taux marge réel</p><p className="mt-2 text-2xl font-black text-slate-900">{chantierStats.revenue > 0 ? Math.round((chantierStats.margin / chantierStats.revenue) * 100) : 0}%</p></Card>
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className="rounded-3xl bg-white p-4 shadow-sm"><p className="text-xs font-black uppercase text-slate-500">CA total chantier HT</p><p className="mt-1 text-3xl font-black text-emerald-700">{money(chantierStats.revenue)}</p></div>
+          <div className="rounded-3xl bg-white p-4 shadow-sm"><p className="text-xs font-black uppercase text-slate-500">Achats totaux HT</p><p className="mt-1 text-3xl font-black text-red-700">{money(chantierStats.purchases)}</p></div>
+          <div className="rounded-3xl bg-white p-4 shadow-sm"><p className="text-xs font-black uppercase text-slate-500">Main d’œuvre totale</p><p className="mt-1 text-3xl font-black text-purple-700">{money(chantierStats.labor)}</p></div>
+          <div className="rounded-3xl bg-white p-4 shadow-sm"><p className="text-xs font-black uppercase text-slate-500">Marge réelle / taux</p><p className="mt-1 text-3xl font-black text-blue-700">{money(chantierStats.margin)}</p><p className="text-sm font-black text-slate-900">{chantierStats.revenue > 0 ? Math.round((chantierStats.margin / chantierStats.revenue) * 100) : 0}% de marge</p></div>
         </div>
-      </div>
+      </Card>
+    </div>
+
+    <div className="rounded-3xl border border-slate-200 bg-white p-2 shadow-sm">
+      <div className="flex flex-wrap gap-2">{tabButton("pilotage", "📊 Synthèse")}{tabButton("factures", "🧾 Factures clients")}{tabButton("paiements", "💶 Encours / paiements")}{tabButton("charges", "🏢 Charges entreprise")}{tabButton("archives", `📦 Archives (${archivedProjects.length})`)}</div>
     </div>
 
     {tab === "pilotage" && <div className="grid gap-5 lg:grid-cols-2">
