@@ -2738,6 +2738,15 @@ function Management({ projects, employees, planning, invoices, revenues, returns
     return searchOk && selectOk;
   });
 
+  // Pilotage comptable : le CA doit reprendre TOUS les chantiers, y compris les archivés.
+  // Les chantiers archivés restent cachés des cartes actives, mais ils comptent dans les KPI, la TVA et la répartition du CA.
+  const searchedAccountingProjects = projects.filter((p: any) => {
+    const txt = `${p.name || ""} ${p.client || ""} ${p.address || ""}`.toLowerCase();
+    const searchOk = !projectSearch || txt.includes(projectSearch.toLowerCase());
+    const selectOk = !selectedProjectFilter || p.id === selectedProjectFilter;
+    return searchOk && selectOk;
+  });
+
   function projectStats(projectId: string, usePeriodFilter = true) {
     const myInvoices = invoices.filter((i: any) => i.project_id === projectId && (!usePeriodFilter || inPeriod(i.invoice_date || i.created_at)));
     const myReturns = returns.filter((r: any) => r.project_id === projectId && (!usePeriodFilter || inPeriod(r.return_date || r.created_at)));
@@ -2756,7 +2765,7 @@ function Management({ projects, employees, planning, invoices, revenues, returns
     return { grossSupplierTotal, supplierTotal, supplierTVA, returnsTotal, returnsTVA, revenueTotal, revenueTVA, netDeductibleTVA, laborTotal, margin, marginRate, tvaBalance: revenueTVA - netDeductibleTVA };
   }
 
-  const allStats = activeProjects.reduce((a: any, p: any) => {
+  const allStats = projects.reduce((a: any, p: any) => {
     const s = projectStats(p.id);
     a.revenue += s.revenueTotal; a.revenueTVA += s.revenueTVA; a.purchases += s.supplierTotal; a.deductibleTVA += s.netDeductibleTVA; a.labor += s.laborTotal; a.margin += s.margin; return a;
   }, { revenue: 0, revenueTVA: 0, purchases: 0, deductibleTVA: 0, labor: 0, margin: 0 });
@@ -2814,6 +2823,74 @@ function Management({ projects, employees, planning, invoices, revenues, returns
     if (error) return alert(error.message);
     await refreshAll();
   }
+  function generateAccountingPdfFromGestion() {
+    const rows = searchedAccountingProjects.map((p: any) => ({ project: p, stats: projectStats(p.id, true) })).filter((x: any) => x.stats.revenueTotal > 0 || x.stats.supplierTotal > 0 || x.stats.laborTotal > 0);
+    const totalRevenue = rows.reduce((s: number, x: any) => s + x.stats.revenueTotal, 0);
+    const totalRevenueTVA = rows.reduce((s: number, x: any) => s + x.stats.revenueTVA, 0);
+    const totalPurchases = rows.reduce((s: number, x: any) => s + x.stats.supplierTotal, 0);
+    const totalPurchasesTVA = rows.reduce((s: number, x: any) => s + x.stats.netDeductibleTVA, 0);
+    const totalLabor = rows.reduce((s: number, x: any) => s + x.stats.laborTotal, 0);
+    const totalCharges = expensesHT;
+    const totalChargesTVA = expensesTVA;
+    const totalTvaDeductible = totalPurchasesTVA + totalChargesTVA;
+    const totalTvaBalance = totalRevenueTVA - totalTvaDeductible;
+    const totalMargin = totalRevenue - totalPurchases - totalLabor;
+    const marginRate = totalRevenue > 0 ? Math.round((totalMargin / totalRevenue) * 100) : 0;
+    const tvaLabel = totalTvaBalance >= 0 ? "TVA due" : "TVA récupérable";
+    const tvaClass = totalTvaBalance >= 0 ? "red" : "green";
+    const html = `
+      <html>
+        <head>
+          <title>Rapport comptable ASB - ${periodLabel}</title>
+          <style>
+            @page{size:A4;margin:10mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;background:#e5e7eb;color:#0f172a;margin:0}.page{max-width:1040px;margin:auto;background:white;padding:28px}.header{display:flex;justify-content:space-between;gap:18px;border-bottom:4px solid #0f172a;padding-bottom:16px}.logo{height:64px}.title{margin:0;font-size:30px;letter-spacing:-.04em}.muted{color:#64748b}.badge{display:inline-block;border-radius:999px;padding:8px 14px;background:#0f172a;color:white;font-weight:900}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:18px}.card{border:1px solid #e2e8f0;border-radius:20px;background:#f8fafc;padding:14px}.card b{font-size:11px;text-transform:uppercase;color:#475569}.value{font-size:23px;font-weight:900;margin-top:6px}.green{color:#047857}.red{color:#b91c1c}.blue{color:#1d4ed8}.purple{color:#7e22ce}.section{margin-top:24px;break-inside:avoid}h2{font-size:18px;margin:0 0 10px}table{width:100%;border-collapse:collapse;font-size:12px}th{background:#0f172a;color:white;text-align:left;padding:9px}td{padding:9px;border-bottom:1px solid #e2e8f0;vertical-align:top}.num{text-align:right;white-space:nowrap}.summary{margin-top:20px;border-radius:24px;padding:18px;background:#f8fafc;border-left:10px solid #0f172a}.note{margin-top:22px;font-size:11px;color:#64748b}@media print{body{background:white}.page{padding:0}}
+          </style>
+        </head>
+        <body>
+          <div class="page">
+            <div class="header">
+              <div>
+                <img class="logo" src="/logo-asb.png" />
+                <h1 class="title">Rapport comptable — pilotage</h1>
+                <p class="muted">Période : <b>${periodLabel}</b></p>
+                <p class="muted">Inclut les chantiers actifs et archivés dans le CA.</p>
+              </div>
+              <div style="text-align:right"><div class="badge">ASB Intranet</div><p class="muted">Généré depuis Gestion</p></div>
+            </div>
+            <div class="grid">
+              <div class="card"><b>CA HT</b><div class="value green">${money(totalRevenue)}</div><div class="muted">Factures clients</div></div>
+              <div class="card"><b>TVA collectée</b><div class="value blue">${money(totalRevenueTVA)}</div><div class="muted">Sur facturation</div></div>
+              <div class="card"><b>Dépenses HT</b><div class="value red">${money(totalPurchases + totalCharges)}</div><div class="muted">Achats + charges fixes</div></div>
+              <div class="card"><b>${tvaLabel}</b><div class="value ${tvaClass}">${money(Math.abs(totalTvaBalance))}</div><div class="muted">Collectée - déductible</div></div>
+            </div>
+            <div class="grid">
+              <div class="card"><b>Achats HT</b><div class="value red">${money(totalPurchases)}</div></div>
+              <div class="card"><b>Main d'œuvre</b><div class="value purple">${money(totalLabor)}</div></div>
+              <div class="card"><b>Charges fixes HT</b><div class="value purple">${money(totalCharges)}</div></div>
+              <div class="card"><b>Marge chantier</b><div class="value ${totalMargin >= 0 ? "green" : "red"}">${money(totalMargin)} · ${marginRate}%</div></div>
+            </div>
+            <div class="summary">
+              <b>Synthèse TVA</b>
+              <p>TVA collectée : <b>${money(totalRevenueTVA)}</b> · TVA déductible achats : <b>${money(totalPurchasesTVA)}</b> · TVA déductible charges : <b>${money(totalChargesTVA)}</b> · Solde : <b class="${tvaClass}">${tvaLabel} ${money(Math.abs(totalTvaBalance))}</b></p>
+            </div>
+            <div class="section">
+              <h2>Répartition du CA HT par chantier</h2>
+              <table><thead><tr><th>Chantier</th><th>Client</th><th>Statut</th><th class="num">CA HT</th><th class="num">TVA collectée</th><th class="num">Achats HT</th><th class="num">MO</th><th class="num">Marge</th><th class="num">Rentabilité</th></tr></thead><tbody>
+                ${rows.map((x: any) => `<tr><td><b>${x.project.name}</b></td><td>${x.project.client || ""}</td><td>${x.project.status === "archive" ? "Archivé" : "Actif"}</td><td class="num">${money(x.stats.revenueTotal)}</td><td class="num">${money(x.stats.revenueTVA)}</td><td class="num">${money(x.stats.supplierTotal)}</td><td class="num">${money(x.stats.laborTotal)}</td><td class="num">${money(x.stats.margin)}</td><td class="num">${x.stats.marginRate}%</td></tr>`).join("") || `<tr><td colspan="9">Aucune donnée sur cette période.</td></tr>`}
+              </tbody></table>
+            </div>
+            <p class="note">Document interne ASB — rapport comptable de pilotage. Les chantiers archivés sont inclus dans le CA et la TVA de la période.</p>
+          </div>
+        </body>
+      </html>`;
+    const w = window.open("", "_blank");
+    if (!w) return alert("Popup bloquée. Autorise les popups pour générer le rapport comptable.");
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    setTimeout(() => w.print(), 500);
+  }
+
   function generateProjectPdfFromGestion(project: any) {
     const s = projectStats(project.id);
     const projectRevenues = revenues.filter((r: any) => r.project_id === project.id);
@@ -2976,7 +3053,7 @@ function Management({ projects, employees, planning, invoices, revenues, returns
     <Card className="border border-slate-200 bg-white shadow-sm"><div className="grid gap-4 xl:grid-cols-[1.2fr_1fr_1fr]"><div><p className="mb-2 text-xs font-black uppercase text-slate-700">📅 Période comptable & pilotage</p><div className="flex flex-wrap items-center gap-3"><Input className="max-w-[180px]" type="date" value={periodStart} onChange={(e: any) => { setPeriodMode("custom"); setPeriodStart(e.target.value); }} /><span className="grid h-9 w-9 place-items-center rounded-full border border-slate-200 font-black text-slate-600">→</span><Input className="max-w-[180px]" type="date" value={periodEnd} onChange={(e: any) => { setPeriodMode("custom"); setPeriodEnd(e.target.value); }} /><Button className="h-12 px-8" onClick={() => applyPeriod(periodMode)}>Filtrer</Button></div></div><Field label="Recherche chantier"><Input placeholder="Nom chantier, client, adresse..." value={projectSearch} onChange={(e: any) => setProjectSearch(e.target.value)} /></Field><Field label="Liste déroulante"><Select value={selectedProjectFilter} onChange={(e: any) => setSelectedProjectFilter(e.target.value)}><option value="">Tous les chantiers actifs</option>{activeProjects.map((p: any) => <option key={p.id} value={p.id}>{p.name} · {p.client || "Client"}</option>)}</Select></Field></div></Card>
     <div className="grid gap-4 md:grid-cols-5"><Card className="border-l-4 border-emerald-500"><p className="text-xs font-black uppercase text-slate-500">CA HT</p><p className="mt-2 text-2xl font-black text-emerald-700">{money(allStats.revenue)}</p><p className="text-xs text-slate-500">Factures clients</p></Card><Card className="border-l-4 border-blue-500"><p className="text-xs font-black uppercase text-slate-500">TVA collectée</p><p className="mt-2 text-2xl font-black text-blue-700">{money(allStats.revenueTVA)}</p><p className="text-xs text-slate-500">Sur factures clients</p></Card><Card className="border-l-4 border-red-500"><p className="text-xs font-black uppercase text-slate-500">Dépenses HT</p><p className="mt-2 text-2xl font-black text-red-600">{money(allStats.purchases + expensesHT)}</p><p className="text-xs text-slate-500">Achats + charges</p></Card><Card className="border-l-4 border-purple-500"><p className="text-xs font-black uppercase text-slate-500">Charges fixes HT</p><p className="mt-2 text-2xl font-black text-purple-700">{money(expensesHT)}</p><p className="text-xs text-slate-500">Pilotage global uniquement</p></Card><Card className={tvaBalanceGlobal >= 0 ? "border-l-4 border-red-500" : "border-l-4 border-emerald-500"}><p className="text-xs font-black uppercase text-slate-500">{tvaBalanceGlobal >= 0 ? "Solde TVA due" : "TVA récupérable"}</p><p className={tvaBalanceGlobal >= 0 ? "mt-2 text-2xl font-black text-red-600" : "mt-2 text-2xl font-black text-emerald-700"}>{money(Math.abs(tvaBalanceGlobal))}</p><p className="text-xs text-slate-500">Collectée - déductible</p></Card></div>
     <div className="grid gap-4 md:grid-cols-3">{actionCard("factures", "📄", "Créer facturation client", "Sur chantiers actifs", "bg-emerald-600")}{actionCard("charges", "🏢", "Charges entreprises", "Gérer les charges fixes", "bg-purple-600")}{actionCard("achats", "🧾", "Récapitulatif des factures d’achats", "Voir le détail des achats", "bg-cyan-600")}</div>
-    <div className="grid gap-5 lg:grid-cols-2"><Card><h3 className="mb-4 text-lg font-black uppercase text-slate-800">Répartition du CA HT</h3><SimplePie values={searchedActiveProjects.slice(0, 5).map((p: any) => ({ label: p.name, value: projectStats(p.id, true).revenueTotal }))} /></Card><Card><h3 className="mb-4 text-lg font-black uppercase text-slate-800">Répartition des dépenses HT</h3><SimplePie values={[{ label: "Achats", value: allStats.purchases }, { label: "Main d’œuvre", value: allStats.labor }, { label: "Charges fixes", value: expensesHT }]} /></Card></div>
+    <div className="grid gap-5 lg:grid-cols-2"><Card><div className="mb-4 flex flex-wrap items-center justify-between gap-3"><h3 className="text-lg font-black uppercase text-slate-800">Répartition du CA HT</h3><Button variant="secondary" onClick={generateAccountingPdfFromGestion}>Rapport comptable PDF</Button></div><SimplePie values={searchedAccountingProjects.slice(0, 6).map((p: any) => ({ label: `${p.name}${p.status === "archive" ? " · archivé" : ""}`, value: projectStats(p.id, true).revenueTotal }))} /></Card><Card><h3 className="mb-4 text-lg font-black uppercase text-slate-800">Répartition des dépenses HT</h3><SimplePie values={[{ label: "Achats", value: allStats.purchases }, { label: "Main d’œuvre", value: allStats.labor }, { label: "Charges fixes", value: expensesHT }]} /></Card></div>
     <div><div className="mb-4 flex flex-wrap items-center justify-between gap-3"><h3 className="text-xl font-black uppercase text-slate-900">Chantiers actifs — rentabilité</h3><Badge tone="blue">{searchedActiveProjects.length} chantier(s)</Badge></div><div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">{searchedActiveProjects.map((p: any) => { const s = projectStats(p.id, false); return <Card key={p.id} className="overflow-hidden p-0"><div className="h-24 bg-gradient-to-br from-slate-100 to-slate-200" /><div className="p-5"><div className="flex items-start justify-between gap-3"><div><h4 className="text-xl font-black text-slate-900">{p.name}</h4><p className="text-sm text-slate-500">{p.client || "Client non renseigné"}</p></div><Badge tone="green">En cours</Badge></div><div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs"><div className="rounded-2xl bg-emerald-50 p-2"><b>CA HT</b><br /><span className="font-black text-emerald-700">{money(s.revenueTotal)}</span></div><div className="rounded-2xl bg-red-50 p-2"><b>Achats HT</b><br /><span className="font-black text-red-700">{money(s.supplierTotal)}</span></div><div className="rounded-2xl bg-blue-50 p-2"><b>MO</b><br /><span className="font-black text-blue-700">{money(s.laborTotal)}</span></div><div className="rounded-2xl bg-slate-50 p-2"><b>Marge</b><br /><span className={s.margin >= 0 ? "font-black text-emerald-700" : "font-black text-red-600"}>{money(s.margin)}</span></div><div className="rounded-2xl bg-purple-50 p-2"><b>TVA</b><br /><span className="font-black text-purple-700">{money(Math.abs(s.tvaBalance))}</span></div><div className={s.marginRate >= 0 ? "rounded-2xl bg-emerald-50 p-2" : "rounded-2xl bg-red-50 p-2"}><b>Rentabilité</b><br /><span className={s.marginRate >= 0 ? "font-black text-emerald-700" : "font-black text-red-600"}>{s.marginRate}%</span></div></div><div className="mt-4 grid grid-cols-2 gap-2"><Button variant="secondary" onClick={() => generateProjectPdfFromGestion(p)}>Rapport PDF</Button><Button variant="amber" onClick={() => archiveProject(p, true)}>Archiver</Button></div></div></Card>; })}{searchedActiveProjects.length === 0 && <Card><p className="text-center text-slate-500">Aucun chantier actif trouvé.</p></Card>}</div></div>
     <Card className="bg-slate-50"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-lg font-black">Chantiers archivés</h3><p className="text-sm text-slate-500">Les chantiers archivés ne sont plus visibles dans Chantiers actifs ni dans Gestion. Leurs factures, retours et documents restent consultables ici.</p></div><Button variant="secondary" onClick={() => setTab("archives")}>Accéder aux archives chantiers</Button></div>{tab === "archives" && <div className="mt-4 grid gap-4">{archivedProjects.map((p: any) => { const s = projectStats(p.id, false); return <div key={p.id} className="rounded-2xl border bg-white p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><Badge tone="slate">Archivé</Badge><h4 className="mt-2 text-xl font-black">{p.name}</h4><p className="text-sm text-slate-500">{p.client || "Client non renseigné"}</p></div><Button variant="green" onClick={() => archiveProject(p, false)}>Réactiver</Button></div><div className="mt-3 grid gap-3 md:grid-cols-4"><div><b>CA HT</b><br />{money(s.revenueTotal)}</div><div><b>Achats HT</b><br />{money(s.supplierTotal)}</div><div><b>Marge</b><br />{money(s.margin)}</div><div><b>TVA</b><br />{money(Math.abs(s.tvaBalance))}</div></div></div>; })}{archivedProjects.length === 0 && <p className="text-sm text-slate-500">Aucun chantier archivé.</p>}</div>}</Card>
   </div>;
