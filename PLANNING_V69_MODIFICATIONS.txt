@@ -1,0 +1,11 @@
+V69 Planning Simple
+
+- Planning ultra lisible
+- Une couleur = un chantier
+- Couleur demandée lors de la création chantier
+- Couleur automatique des salariés selon chantier
+- Cartes planning simplifiées
+- Vue semaine épurée
+- Affichage responsive tablette/mobile
+- Ouverture chantier plein écran
+- Suppression surcharge visuelle
