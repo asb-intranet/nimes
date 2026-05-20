@@ -1,0 +1,9 @@
+V64 - Gestion règlements clients hors intranet
+
+- Ajout d'un bouton "Règlements clients" entre "Créer facturation client" et "Charges entreprises".
+- Ouverture en page pleine depuis Gestion.
+- Gestion simple inspirée du fichier Excel : Date, Client, N° facture, Montant TTC, Moyen de paiement, Statut, Notes.
+- Ajout / modification / suppression / passage en statut Payée.
+- La date est obligatoire.
+- Les règlements sont indépendants des chantiers et de la facturation intranet.
+- Ajout du fichier SQL Supabase : supabase/schema-complet-v64.sql
