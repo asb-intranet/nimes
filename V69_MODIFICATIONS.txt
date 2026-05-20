@@ -1,0 +1,15 @@
+V69 Planning Simple - modifications réelles
+
+- Planning simplifié en vue semaine uniquement.
+- Suppression de la vue mois dans Planning pour alléger l'écran.
+- Une couleur = un chantier.
+- La couleur est demandée dans la création/modification chantier.
+- Suppression du choix de couleur dans la création planning.
+- Les lignes planning prennent automatiquement la couleur du chantier sélectionné.
+- Vue planning par salariés en lignes et jours en colonnes.
+- Cartes larges, lisibles, compatibles tablette/mobile avec scroll horizontal.
+- Suppression des cartes/jours trop chargées.
+- Recherche chantier/client/adresse.
+- Filtre salarié.
+- Clic sur une carte planning = ouverture plein écran d'une fiche chantier planning.
+- Modifier/Supprimer disponible directement sur chaque carte planning.

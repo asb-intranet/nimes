@@ -1202,31 +1202,59 @@ function Planning({ projects, employees, links, planning, requests = [], refresh
     end_date: "",
     start_time: "",
     end_time: "",
-    color: "#0f172a",
     notes: ""
   };
 
-  const [view, setView] = useState<"week" | "month">("week");
   const [cursor, setCursor] = useState(new Date());
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [form, setForm] = useState<any>(emptyForm);
   const [employeeFilter, setEmployeeFilter] = useState("all");
+  const [search, setSearch] = useState("");
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+
+  const activeProjects = projects.filter((p: any) => p.status !== "archive");
+  const selectedProject = projects.find((p: any) => p.id === selectedProjectId);
 
   const assignedIds = form.project_id
     ? links.filter((l: any) => l.project_id === form.project_id).map((l: any) => l.employee_id)
     : [];
 
-  const orderedEmployees = [...employees].sort((a: any, b: any) => {
+  const orderedEmployees = [...employees]
+    .filter((e: any) => employeeFilter === "all" || e.id === employeeFilter)
+    .sort((a: any, b: any) => `${a.firstname} ${a.lastname}`.localeCompare(`${b.firstname} ${b.lastname}`));
+
+  const formEmployees = [...employees].sort((a: any, b: any) => {
     const aAssigned = assignedIds.includes(a.id) ? 0 : 1;
     const bAssigned = assignedIds.includes(b.id) ? 0 : 1;
     return aAssigned - bAssigned || `${a.firstname} ${a.lastname}`.localeCompare(`${b.firstname} ${b.lastname}`);
   });
 
-  function projectNameLocal(id: string) { return projects.find((p: any) => p.id === id)?.name || "Chantier inconnu"; }
-  const activeProjects = projects.filter((p: any) => p.status !== "archive");
-  function employeeName(id: string) { const e = employees.find((x: any) => x.id === id); return e ? `${e.firstname} ${e.lastname}` : "Salarié inconnu"; }
-  function projectColor(id: string) { return projects.find((p: any) => p.id === id)?.color || "#0f172a"; }
+  function employeeName(id: string) {
+    const e = employees.find((x: any) => x.id === id);
+    return e ? `${e.firstname} ${e.lastname}` : "Salarié inconnu";
+  }
+
+  function projectNameLocal(id: string) {
+    return projects.find((p: any) => p.id === id)?.name || "Chantier inconnu";
+  }
+
+  function projectColor(id: string) {
+    return projects.find((p: any) => p.id === id)?.color || "#0f172a";
+  }
+
+  function projectAddress(id: string) {
+    return projects.find((p: any) => p.id === id)?.address || "Adresse non renseignée";
+  }
+
+  function isLightColor(hex: string) {
+    const value = String(hex || "#0f172a").replace("#", "");
+    if (value.length !== 6) return false;
+    const r = parseInt(value.slice(0, 2), 16);
+    const g = parseInt(value.slice(2, 4), 16);
+    const b = parseInt(value.slice(4, 6), 16);
+    return (r * 299 + g * 587 + b * 114) / 1000 > 170;
+  }
 
   function openCreatePlanning() {
     setEditing(null);
@@ -1245,11 +1273,15 @@ function Planning({ projects, employees, links, planning, requests = [], refresh
       end_date: item.end_date || item.start_date || "",
       start_time: item.start_time || "",
       end_time: item.end_time || "",
-      color: item.color || projectColor(item.project_id) || "#0f172a",
       notes: item.notes || ""
     });
     setShowForm(true);
     setTimeout(() => document.getElementById("planning-form")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+  }
+
+  function openProjectFull(projectId: string) {
+    setSelectedProjectId(projectId);
+    setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 50);
   }
 
   function toggleEmployee(employeeId: string) {
@@ -1281,7 +1313,7 @@ function Planning({ projects, employees, links, planning, requests = [], refresh
       end_date: form.end_date || form.start_date,
       start_time: form.start_time || null,
       end_time: form.end_time || null,
-      color: form.color || projectColor(form.project_id),
+      color: projectColor(form.project_id),
       notes: form.notes
     };
 
@@ -1307,63 +1339,102 @@ function Planning({ projects, employees, links, planning, requests = [], refresh
     await refreshAll();
   }
 
-  function requestPriorityMeta(priority: string) {
-    const p = String(priority || "normale").toLowerCase();
-    if (p === "urgente") return { label: "Urgente", icon: "🚨", bg: "bg-red-50 border-red-200 text-red-800", dot: "bg-red-500" };
-    if (p === "haute") return { label: "Haute", icon: "⚠️", bg: "bg-orange-50 border-orange-200 text-orange-800", dot: "bg-orange-500" };
-    if (p === "basse") return { label: "Basse", icon: "⬇️", bg: "bg-emerald-50 border-emerald-200 text-emerald-800", dot: "bg-emerald-500" };
-    return { label: "Normale", icon: "•", bg: "bg-blue-50 border-blue-200 text-blue-800", dot: "bg-blue-500" };
-  }
-
-  function plannedRequestsForDate(date: Date) {
+  function eventsForEmployeeAndDate(employeeId: string, date: Date) {
     const key = formatDate(date);
-    return requests.filter((r: any) => {
-      const status = String(r.status || "").toLowerCase();
-      const open = !["termine", "traité", "traite", "closed", "fait"].includes(status);
-      return open && r.planned_date === key && (employeeFilter === "all" || r.assigned_to === employeeFilter);
+    const term = search.trim().toLowerCase();
+    return planning.filter((p: any) => {
+      const project = projects.find((x: any) => x.id === p.project_id);
+      const matchDate = (p.start_date || "") <= key && (p.end_date || p.start_date || "") >= key;
+      const matchEmployee = p.employee_id === employeeId;
+      const matchSearch = !term || `${project?.name || ""} ${project?.client || ""} ${project?.address || ""} ${p.title || ""}`.toLowerCase().includes(term);
+      return matchDate && matchEmployee && matchSearch && project?.status !== "archive";
     });
-  }
-
-  function eventsForDate(date: Date) {
-    const key = formatDate(date);
-    return planning.filter((p: any) => (p.start_date || "") <= key && (p.end_date || p.start_date || "") >= key && (employeeFilter === "all" || p.employee_id === employeeFilter));
   }
 
   const weekStart = startOfWeek(cursor);
   const week = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
-  const month = monthDays(cursor);
-  const monthLabel = cursor.toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
+
+  if (selectedProject) {
+    const projectEvents = planning.filter((p: any) => p.project_id === selectedProject.id);
+    const projectEmployees = Array.from(new Set(projectEvents.map((p: any) => p.employee_id))).map((id: any) => employeeName(id));
+    return (
+      <div className="pb-24">
+        <div className="sticky top-0 z-30 mb-5 rounded-3xl border bg-white/95 p-4 shadow-sm backdrop-blur">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold uppercase text-slate-500">Planning / fiche chantier</p>
+              <h2 className="text-2xl font-black">{selectedProject.name}</h2>
+              <p className="text-sm text-slate-500">{selectedProject.client || "Client non renseigné"} · {selectedProject.address || "Adresse non renseignée"}</p>
+            </div>
+            <Button variant="secondary" onClick={() => setSelectedProjectId(null)}>← Retour planning</Button>
+          </div>
+        </div>
+
+        <div className="grid gap-5 lg:grid-cols-3">
+          <Card className="border-l-8" style={{ borderLeftColor: projectColor(selectedProject.id) }}>
+            <p className="text-xs font-black uppercase text-slate-500">Chantier</p>
+            <h3 className="mt-2 text-xl font-black">{selectedProject.name}</h3>
+            <p className="mt-2 text-sm text-slate-600">{selectedProject.description || "Aucune description."}</p>
+          </Card>
+          <Card>
+            <p className="text-xs font-black uppercase text-slate-500">Équipe planifiée</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {projectEmployees.map((name: any) => <Badge key={name}>{name}</Badge>)}
+              {projectEmployees.length === 0 && <p className="text-sm text-slate-500">Aucun salarié planifié.</p>}
+            </div>
+          </Card>
+          <Card>
+            <p className="text-xs font-black uppercase text-slate-500">Avancement</p>
+            <div className="mt-3 h-3 rounded-full bg-slate-100"><div className="h-3 rounded-full" style={{ width: `${Number(selectedProject.progress || 0)}%`, background: projectColor(selectedProject.id) }} /></div>
+            <p className="mt-2 text-2xl font-black">{Number(selectedProject.progress || 0)}%</p>
+          </Card>
+        </div>
+
+        <Card className="mt-5">
+          <h3 className="mb-4 text-xl font-black">Planning du chantier</h3>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {projectEvents.map((e: any) => (
+              <div key={e.id} className="rounded-3xl p-4 shadow-sm" style={{ background: projectColor(e.project_id), color: isLightColor(projectColor(e.project_id)) ? "#0f172a" : "white" }}>
+                <div className="text-lg font-black">{e.title}</div>
+                <div className="mt-1 text-sm opacity-90">{employeeName(e.employee_id)}</div>
+                <div className="mt-2 text-sm font-bold">{e.start_date}{e.end_date && e.end_date !== e.start_date ? ` → ${e.end_date}` : ""}</div>
+                <div className="text-sm opacity-90">{e.start_time || ""}{e.end_time ? ` - ${e.end_time}` : ""}</div>
+              </div>
+            ))}
+            {projectEvents.length === 0 && <p className="text-sm text-slate-500">Aucune ligne planning pour ce chantier.</p>}
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div>
       <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
-        <Section title="Planning" subtitle="Vue semaine/mois directe. Le formulaire s'ouvre uniquement avec le bouton de création ou de modification." />
+        <Section title="Planning simple" subtitle="Une couleur = un chantier. Les salariés prennent automatiquement la couleur du chantier." />
         <Button onClick={openCreatePlanning}>+ Créer planning</Button>
       </div>
 
       {showForm && (
-        <Card id="planning-form" className="mb-6">
+        <Card id="planning-form" className="mb-6 border-l-8" style={{ borderLeftColor: form.project_id ? projectColor(form.project_id) : "#e2e8f0" }}>
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-lg font-black">{editing ? "Modifier planning" : "Créer planning"}</h3>
+            <div>
+              <h3 className="text-lg font-black">{editing ? "Modifier planning" : "Créer planning"}</h3>
+              <p className="text-sm text-slate-500">La couleur est automatique : elle vient du chantier sélectionné.</p>
+            </div>
             <Button type="button" variant="secondary" onClick={() => { setShowForm(false); setEditing(null); setForm(emptyForm); }}>Fermer</Button>
           </div>
           <form onSubmit={savePlanning} className="grid gap-3 md:grid-cols-3">
-            <Field label="Chantier"><Select value={form.project_id} onChange={(e: any) => {
-              const project = projects.find((p: any) => p.id === e.target.value);
-              setForm({ ...form, project_id: e.target.value, employee_ids: [], color: project?.color || form.color });
-            }}><option value="">Choisir chantier</option>{activeProjects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field>
+            <Field label="Chantier"><Select value={form.project_id} onChange={(e: any) => setForm({ ...form, project_id: e.target.value, employee_ids: [] })}><option value="">Choisir chantier</option>{activeProjects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field>
             <Field label="Tâche"><Input value={form.title} onChange={(e: any) => setForm({ ...form, title: e.target.value })} placeholder="Ex : Pose isolation, RDV client..." /></Field>
             <Field label="Date début"><Input type="date" value={form.start_date} onChange={(e: any) => setForm({ ...form, start_date: e.target.value })} /></Field>
             <Field label="Date fin"><Input type="date" value={form.end_date} onChange={(e: any) => setForm({ ...form, end_date: e.target.value })} /></Field>
-            <div className="grid grid-cols-3 gap-2">
-              <Field label="Début"><Input type="time" value={form.start_time} onChange={(e: any) => setForm({ ...form, start_time: e.target.value })} /></Field>
-              <Field label="Fin"><Input type="time" value={form.end_time} onChange={(e: any) => setForm({ ...form, end_time: e.target.value })} /></Field>
-              <Field label="Couleur"><Input type="color" value={form.color} onChange={(e: any) => setForm({ ...form, color: e.target.value })} /></Field>
-            </div>
+            <Field label="Début"><Input type="time" value={form.start_time} onChange={(e: any) => setForm({ ...form, start_time: e.target.value })} /></Field>
+            <Field label="Fin"><Input type="time" value={form.end_time} onChange={(e: any) => setForm({ ...form, end_time: e.target.value })} /></Field>
             <div className="md:col-span-3">
-              <div className="mb-1 text-xs font-bold uppercase text-slate-500">Salariés affectés au chantier</div>
+              <div className="mb-1 text-xs font-bold uppercase text-slate-500">Salariés</div>
               <div className="grid gap-2 rounded-3xl border border-slate-100 bg-slate-50 p-3 md:grid-cols-3">
-                {orderedEmployees.map((emp: any) => {
+                {formEmployees.map((emp: any) => {
                   const checked = (form.employee_ids || []).includes(emp.id);
                   const isAssigned = assignedIds.includes(emp.id);
                   return (
@@ -1375,7 +1446,6 @@ function Planning({ projects, employees, links, planning, requests = [], refresh
                 })}
                 {employees.length === 0 && <p className="text-sm text-slate-500">Aucun salarié enregistré.</p>}
               </div>
-              <p className="mt-2 text-xs text-slate-500">En création, plusieurs salariés sélectionnés créent une ligne de planning par salarié. Les salariés non encore affectés seront aussi ajoutés au chantier.</p>
             </div>
             <div className="md:col-span-3"><Field label="Notes"><Textarea value={form.notes} onChange={(e: any) => setForm({ ...form, notes: e.target.value })} /></Field></div>
             <Button className="md:col-span-3">{editing ? "Enregistrer la modification" : "Ajouter au planning"}</Button>
@@ -1383,79 +1453,71 @@ function Planning({ projects, employees, links, planning, requests = [], refresh
         </Card>
       )}
 
-      <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-end gap-2">
-          <Button variant={view === "week" ? "primary" : "secondary"} onClick={() => setView("week")}>Semaine</Button>
-          <Button variant={view === "month" ? "primary" : "secondary"} onClick={() => setView("month")}>Mois</Button>
-          <div className="min-w-56">
-            <Field label="Filtrer par salarié"><Select value={employeeFilter} onChange={(e: any) => setEmployeeFilter(e.target.value)}><option value="all">Tous les salariés</option>{employees.map((e: any) => <option key={e.id} value={e.id}>{e.firstname} {e.lastname}</option>)}</Select></Field>
+      <Card className="mb-5">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div className="grid flex-1 gap-3 md:grid-cols-2">
+            <Field label="Recherche chantier"><Input value={search} onChange={(e: any) => setSearch(e.target.value)} placeholder="Nom chantier, client, adresse..." /></Field>
+            <Field label="Salarié"><Select value={employeeFilter} onChange={(e: any) => setEmployeeFilter(e.target.value)}><option value="all">Tous les salariés</option>{employees.map((e: any) => <option key={e.id} value={e.id}>{e.firstname} {e.lastname}</option>)}</Select></Field>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="secondary" onClick={() => setCursor(addDays(cursor, -7))}>← Semaine</Button>
+            <div className="min-w-48 rounded-2xl bg-slate-50 px-4 py-3 text-center font-black">Semaine du {formatDate(weekStart)}</div>
+            <Button variant="secondary" onClick={() => setCursor(addDays(cursor, 7))}>Semaine →</Button>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="secondary" onClick={() => setCursor(view === "week" ? addDays(cursor, -7) : new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))}>Précédent</Button>
-          <div className="min-w-48 text-center font-black">{view === "week" ? `Semaine du ${formatDate(weekStart)}` : monthLabel}</div>
-          <Button variant="secondary" onClick={() => setCursor(view === "week" ? addDays(cursor, 7) : new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))}>Suivant</Button>
-        </div>
-      </div>
+      </Card>
 
-      {view === "week" ? (
-        <div className="mt-4 grid gap-3 lg:grid-cols-7">
-          {week.map((day) => (
-            <Card key={formatDate(day)} className="min-h-64">
-              <h3 className="text-center font-black">{day.toLocaleDateString("fr-FR", { weekday: "short" })}</h3>
-              <p className="text-center text-xs text-slate-500">{formatDate(day)}</p>
-              <div className="mt-3 space-y-2">
-                {eventsForDate(day).map((e: any) => (
-                  <div key={e.id} className="rounded-2xl p-2 text-xs font-bold text-white" style={{ background: e.color || projectColor(e.project_id) }}>
-                    <div>{employeeName(e.employee_id)}</div>
-                    <div>{projectNameLocal(e.project_id)}</div>
-                    <div>{e.title}</div>
-                    <div>{e.start_time || ""}{e.end_time ? ` - ${e.end_time}` : ""}</div>
-                    <div className="mt-2 flex gap-1">
-                      <button className="rounded-lg bg-white/20 px-2 py-1" onClick={() => openEditPlanning(e)}>Modif.</button>
-                      <button className="rounded-lg bg-white/20 px-2 py-1" onClick={() => deletePlanning(e)}>Suppr.</button>
+      <div className="overflow-x-auto rounded-3xl border bg-white shadow-sm">
+        <div className="min-w-[980px]">
+          <div className="grid grid-cols-[190px_repeat(7,1fr)] border-b bg-slate-50">
+            <div className="p-4 text-sm font-black text-slate-600">Salarié</div>
+            {week.map((day) => (
+              <div key={formatDate(day)} className="border-l p-4 text-center">
+                <div className="text-sm font-black capitalize">{day.toLocaleDateString("fr-FR", { weekday: "short" })}</div>
+                <div className="text-xs text-slate-500">{formatDate(day)}</div>
+              </div>
+            ))}
+          </div>
+
+          {orderedEmployees.map((emp: any) => (
+            <div key={emp.id} className="grid min-h-32 grid-cols-[190px_repeat(7,1fr)] border-b last:border-b-0">
+              <div className="sticky left-0 z-10 border-r bg-white p-4">
+                <div className="font-black">{emp.firstname}</div>
+                <div className="text-sm text-slate-500">{emp.lastname}</div>
+              </div>
+              {week.map((day) => {
+                const dayEvents = eventsForEmployeeAndDate(emp.id, day);
+                return (
+                  <div key={`${emp.id}-${formatDate(day)}`} className="min-h-32 border-l p-2">
+                    <div className="space-y-2">
+                      {dayEvents.map((e: any) => {
+                        const bg = projectColor(e.project_id);
+                        const textColor = isLightColor(bg) ? "#0f172a" : "white";
+                        return (
+                          <div key={e.id} className="rounded-2xl p-3 text-left shadow-sm" style={{ background: bg, color: textColor }}>
+                            <button type="button" onClick={() => openProjectFull(e.project_id)} className="block w-full text-left">
+                              <div className="text-sm font-black leading-tight">{projectNameLocal(e.project_id)}</div>
+                              <div className="mt-1 text-xs opacity-90">{e.title}</div>
+                              <div className="mt-1 text-[11px] opacity-80">{projectAddress(e.project_id)}</div>
+                              {(e.start_time || e.end_time) && <div className="mt-2 text-xs font-black">{e.start_time || ""}{e.end_time ? ` - ${e.end_time}` : ""}</div>}
+                            </button>
+                            <div className="mt-3 flex gap-1">
+                              <button className="rounded-xl bg-white/20 px-2 py-1 text-[11px] font-black" onClick={() => openEditPlanning(e)}>Modifier</button>
+                              <button className="rounded-xl bg-white/20 px-2 py-1 text-[11px] font-black" onClick={() => deletePlanning(e)}>Suppr.</button>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
-                ))}
-                {plannedRequestsForDate(day).map((r: any) => {
-                  const meta = requestPriorityMeta(r.priority);
-                  return (
-                    <div key={`request-${r.id}`} className={`rounded-2xl border p-2 text-xs font-bold ${meta.bg}`}>
-                      <div className="mb-1 flex items-center justify-between gap-2">
-                        <span className="inline-flex items-center gap-1"><span className={`h-2 w-2 rounded-full ${meta.dot}`}></span>Demande interne</span>
-                        <span>{meta.icon} {meta.label}</span>
-                      </div>
-                      <div>{r.message || "Demande planifiée"}</div>
-                      <div className="mt-1 text-[10px] opacity-75">{r.assigned_to ? employeeName(r.assigned_to) : "Non attribuée"} · {projectNameLocal(r.project_id)}</div>
-                    </div>
-                  );
-                })}
-              </div>
-            </Card>
-          ))}
-        </div>
-      ) : (
-        <div className="mt-4 grid grid-cols-7 gap-2">
-          {["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"].map((d) => <div key={d} className="text-center text-xs font-black uppercase text-slate-500">{d}</div>)}
-          {month.map((day) => (
-            <div key={formatDate(day)} className="min-h-32 rounded-2xl border bg-white p-2">
-              <div className="mb-2 text-xs font-black">{day.getDate()}</div>
-              <div className="space-y-1">
-                {eventsForDate(day).slice(0, 3).map((e: any) => (
-                  <button key={e.id} type="button" onClick={() => openEditPlanning(e)} className="block w-full rounded-lg px-2 py-1 text-left text-[10px] font-bold text-white" style={{ background: e.color || projectColor(e.project_id) }}>
-                    {employeeName(e.employee_id).split(" ")[0]} · {e.title}
-                  </button>
-                ))}
-                {plannedRequestsForDate(day).slice(0, 2).map((r: any) => {
-                  const meta = requestPriorityMeta(r.priority);
-                  return <div key={`request-month-${r.id}`} className={`rounded-lg border px-2 py-1 text-[10px] font-bold ${meta.bg}`}>DI · {r.message || "Demande"}</div>;
-                })}
-                {eventsForDate(day).length + plannedRequestsForDate(day).length > 5 && <div className="text-[10px] text-slate-500">+{eventsForDate(day).length + plannedRequestsForDate(day).length - 5} autre(s)</div>}
-              </div>
+                );
+              })}
             </div>
           ))}
+
+          {orderedEmployees.length === 0 && <div className="p-8 text-center text-sm text-slate-500">Aucun salarié à afficher.</div>}
         </div>
-      )}
+      </div>
     </div>
   );
 }
