@@ -1,0 +1,1 @@
+V65 : règlement clients simplifié. Suppression de toute dépendance à la colonne status de client_payments. Actions : Modifier, Payé, Supprimer.
