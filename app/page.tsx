@@ -2788,7 +2788,10 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
   function paidForRevenue(r: any) { return paymentsForRevenue(r).reduce((s: number, p: any) => s + Number(p.amount_ttc || 0), 0); }
   function remainingForRevenue(r: any) { return Math.max(0, Math.round((amountTTC(r) - paidForRevenue(r)) * 100) / 100); }
   function revenuePaymentStatus(r: any) { const rest = remainingForRevenue(r); if (rest <= 0) return { label: "Payée", tone: "green" }; if (paidForRevenue(r) > 0) return { label: "Partiel", tone: "amber" }; return { label: "À encaisser", tone: "red" }; }
-  const clientOutstandingTotal = revenues.reduce((s: number, r: any) => s + remainingForRevenue(r), 0);
+  function isClientPaymentPaid(p: any) { return String(p.notes || "").toLowerCase().includes("payé"); }
+  const clientOutstandingTotal = clientPayments
+    .filter((p: any) => !isClientPaymentPaid(p))
+    .reduce((s: number, p: any) => s + Number(p.amount_ttc || 0), 0);
   const allRevenueHT = revenues.reduce((s: number, r: any) => s + amountHT(r), 0);
   const allPurchasesHT = invoices.reduce((s: number, i: any) => s + amountHT(i), 0) - returns.reduce((s: number, r: any) => s + amountHT(r), 0);
 
