@@ -114,8 +114,6 @@ export default function Page() {
   const [earthworkReturns, setEarthworkReturns] = useState<any[]>([]);
   const [companyExpenses, setCompanyExpenses] = useState<any[]>([]);
   const [clientPayments, setClientPayments] = useState<any[]>([]);
-  const [manualReglements, setManualReglements] = useState<any[]>([]);
-  const [marginSimulations, setMarginSimulations] = useState<any[]>([]);
   const [dataWarning, setDataWarning] = useState<string>("");
   
   useEffect(() => {
@@ -136,7 +134,7 @@ export default function Page() {
   }, []);
 
   async function refreshAll() {
-    const [p, ph, d, e, l, n, v, r, pl, mat, vig, inv, rev, ret, ew, ewph, ewd, ewn, ewm, ewv, ewp, ewr, ewi, ewrev, ewret, ce, cp, mr, ms] = await Promise.all([
+    const [p, ph, d, e, l, n, v, r, pl, mat, vig, inv, rev, ret, ew, ewph, ewd, ewn, ewm, ewv, ewp, ewr, ewi, ewrev, ewret, ce, cp] = await Promise.all([
       supabase.from("projects").select("*").order("created_at", { ascending: false }),
       supabase.from("chantier_photos").select("*").order("created_at", { ascending: false }),
       supabase.from("chantier_documents").select("*").order("created_at", { ascending: false }),
@@ -163,12 +161,10 @@ export default function Page() {
       supabase.from("earthwork_revenues").select("*").order("billing_date", { ascending: false }),
       supabase.from("earthwork_returns").select("*").order("return_date", { ascending: false }),
       supabase.from("company_expenses").select("*").order("expense_date", { ascending: false }),
-      supabase.from("client_payments").select("*").order("payment_date", { ascending: false }),
-      supabase.from("manual_reglements").select("*").order("payment_date", { ascending: false }),
-      supabase.from("margin_simulations").select("*").order("created_at", { ascending: false })
+      supabase.from("client_payments").select("*").order("payment_date", { ascending: false })
     ]);
 
-    const errors = [p, ph, d, e, l, n, v, r, pl, mat, vig, inv, rev, ret, ew, ewph, ewd, ewn, ewm, ewv, ewp, ewr, ewi, ewrev, ewret, ce, cp, mr, ms].filter((x: any) => x?.error).map((x: any) => x.error.message);
+    const errors = [p, ph, d, e, l, n, v, r, pl, mat, vig, inv, rev, ret, ew, ewph, ewd, ewn, ewm, ewv, ewp, ewr, ewi, ewrev, ewret, ce, cp].filter((x: any) => x?.error).map((x: any) => x.error.message);
     setDataWarning(errors.length ? errors.join(" | ") : "");
 
     setProjects(p.data || []);
@@ -198,8 +194,6 @@ export default function Page() {
     setEarthworkReturns(ewret.data || []);
     setCompanyExpenses(ce.data || []);
     setClientPayments(cp.data || []);
-    setManualReglements(mr.data || []);
-    setMarginSimulations(ms.data || []);
   }
 
   async function signIn(e: any) {
@@ -318,7 +312,7 @@ export default function Page() {
           {active === "vehicles" && userRole === "admin" && <Vehicles vehicles={vehicles} refreshAll={refreshAll} />}
           {active === "requests" && userRole === "admin" && <Requests requests={requests} projects={projects} employees={employees} refreshAll={refreshAll} projectName={projectName} />}
           {active === "mobile" && userRole === "admin" && <Mobile projects={projects} refreshAll={refreshAll} />}
-          {active === "management" && userRole === "admin" && <Management projects={projects} employees={employees} planning={planning} invoices={invoices} revenues={revenues} returns={returns} companyExpenses={companyExpenses} clientPayments={clientPayments} manualReglements={manualReglements} marginSimulations={marginSimulations} refreshAll={refreshAll} />}
+          {active === "management" && userRole === "admin" && <Management projects={projects} photos={photos} docs={docs} notes={notes} materials={materials} vigilance={vigilance} employees={employees} planning={planning} invoices={invoices} revenues={revenues} returns={returns} companyExpenses={companyExpenses} clientPayments={clientPayments} refreshAll={refreshAll} />}
         </section>
       </main>
     </div>
@@ -479,6 +473,7 @@ function Projects({ projects, photos, docs, notes, materials, vigilance, invoice
 
   const activeProjects = projects.filter((p: any) => p.status !== "archive");
   const archivedProjects = projects.filter((p: any) => p.status === "archive");
+  const activeProjectIds = new Set(activeProjects.map((p: any) => p.id));
 
   if (detailMode && current) {
     return (
@@ -1207,31 +1202,59 @@ function Planning({ projects, employees, links, planning, requests = [], refresh
     end_date: "",
     start_time: "",
     end_time: "",
-    color: "#0f172a",
     notes: ""
   };
 
-  const [view, setView] = useState<"week" | "month">("week");
   const [cursor, setCursor] = useState(new Date());
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [form, setForm] = useState<any>(emptyForm);
   const [employeeFilter, setEmployeeFilter] = useState("all");
+  const [search, setSearch] = useState("");
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+
+  const activeProjects = projects.filter((p: any) => p.status !== "archive");
+  const selectedProject = projects.find((p: any) => p.id === selectedProjectId);
 
   const assignedIds = form.project_id
     ? links.filter((l: any) => l.project_id === form.project_id).map((l: any) => l.employee_id)
     : [];
 
-  const orderedEmployees = [...employees].sort((a: any, b: any) => {
+  const orderedEmployees = [...employees]
+    .filter((e: any) => employeeFilter === "all" || e.id === employeeFilter)
+    .sort((a: any, b: any) => `${a.firstname} ${a.lastname}`.localeCompare(`${b.firstname} ${b.lastname}`));
+
+  const formEmployees = [...employees].sort((a: any, b: any) => {
     const aAssigned = assignedIds.includes(a.id) ? 0 : 1;
     const bAssigned = assignedIds.includes(b.id) ? 0 : 1;
     return aAssigned - bAssigned || `${a.firstname} ${a.lastname}`.localeCompare(`${b.firstname} ${b.lastname}`);
   });
 
-  function projectNameLocal(id: string) { return projects.find((p: any) => p.id === id)?.name || "Chantier inconnu"; }
-  const activeProjects = projects.filter((p: any) => p.status !== "archive");
-  function employeeName(id: string) { const e = employees.find((x: any) => x.id === id); return e ? `${e.firstname} ${e.lastname}` : "Salarié inconnu"; }
-  function projectColor(id: string) { return projects.find((p: any) => p.id === id)?.color || "#0f172a"; }
+  function employeeName(id: string) {
+    const e = employees.find((x: any) => x.id === id);
+    return e ? `${e.firstname} ${e.lastname}` : "Salarié inconnu";
+  }
+
+  function projectNameLocal(id: string) {
+    return projects.find((p: any) => p.id === id)?.name || "Chantier inconnu";
+  }
+
+  function projectColor(id: string) {
+    return projects.find((p: any) => p.id === id)?.color || "#0f172a";
+  }
+
+  function projectAddress(id: string) {
+    return projects.find((p: any) => p.id === id)?.address || "Adresse non renseignée";
+  }
+
+  function isLightColor(hex: string) {
+    const value = String(hex || "#0f172a").replace("#", "");
+    if (value.length !== 6) return false;
+    const r = parseInt(value.slice(0, 2), 16);
+    const g = parseInt(value.slice(2, 4), 16);
+    const b = parseInt(value.slice(4, 6), 16);
+    return (r * 299 + g * 587 + b * 114) / 1000 > 170;
+  }
 
   function openCreatePlanning() {
     setEditing(null);
@@ -1250,11 +1273,15 @@ function Planning({ projects, employees, links, planning, requests = [], refresh
       end_date: item.end_date || item.start_date || "",
       start_time: item.start_time || "",
       end_time: item.end_time || "",
-      color: item.color || projectColor(item.project_id) || "#0f172a",
       notes: item.notes || ""
     });
     setShowForm(true);
     setTimeout(() => document.getElementById("planning-form")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+  }
+
+  function openProjectFull(projectId: string) {
+    setSelectedProjectId(projectId);
+    setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 50);
   }
 
   function toggleEmployee(employeeId: string) {
@@ -1286,7 +1313,7 @@ function Planning({ projects, employees, links, planning, requests = [], refresh
       end_date: form.end_date || form.start_date,
       start_time: form.start_time || null,
       end_time: form.end_time || null,
-      color: form.color || projectColor(form.project_id),
+      color: projectColor(form.project_id),
       notes: form.notes
     };
 
@@ -1312,63 +1339,102 @@ function Planning({ projects, employees, links, planning, requests = [], refresh
     await refreshAll();
   }
 
-  function requestPriorityMeta(priority: string) {
-    const p = String(priority || "normale").toLowerCase();
-    if (p === "urgente") return { label: "Urgente", icon: "🚨", bg: "bg-red-50 border-red-200 text-red-800", dot: "bg-red-500" };
-    if (p === "haute") return { label: "Haute", icon: "⚠️", bg: "bg-orange-50 border-orange-200 text-orange-800", dot: "bg-orange-500" };
-    if (p === "basse") return { label: "Basse", icon: "⬇️", bg: "bg-emerald-50 border-emerald-200 text-emerald-800", dot: "bg-emerald-500" };
-    return { label: "Normale", icon: "•", bg: "bg-blue-50 border-blue-200 text-blue-800", dot: "bg-blue-500" };
-  }
-
-  function plannedRequestsForDate(date: Date) {
+  function eventsForEmployeeAndDate(employeeId: string, date: Date) {
     const key = formatDate(date);
-    return requests.filter((r: any) => {
-      const status = String(r.status || "").toLowerCase();
-      const open = !["termine", "traité", "traite", "closed", "fait"].includes(status);
-      return open && r.planned_date === key && (employeeFilter === "all" || r.assigned_to === employeeFilter);
+    const term = search.trim().toLowerCase();
+    return planning.filter((p: any) => {
+      const project = projects.find((x: any) => x.id === p.project_id);
+      const matchDate = (p.start_date || "") <= key && (p.end_date || p.start_date || "") >= key;
+      const matchEmployee = p.employee_id === employeeId;
+      const matchSearch = !term || `${project?.name || ""} ${project?.client || ""} ${project?.address || ""} ${p.title || ""}`.toLowerCase().includes(term);
+      return matchDate && matchEmployee && matchSearch && project?.status !== "archive";
     });
-  }
-
-  function eventsForDate(date: Date) {
-    const key = formatDate(date);
-    return planning.filter((p: any) => (p.start_date || "") <= key && (p.end_date || p.start_date || "") >= key && (employeeFilter === "all" || p.employee_id === employeeFilter));
   }
 
   const weekStart = startOfWeek(cursor);
   const week = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
-  const month = monthDays(cursor);
-  const monthLabel = cursor.toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
+
+  if (selectedProject) {
+    const projectEvents = planning.filter((p: any) => p.project_id === selectedProject.id);
+    const projectEmployees = Array.from(new Set(projectEvents.map((p: any) => p.employee_id))).map((id: any) => employeeName(id));
+    return (
+      <div className="pb-24">
+        <div className="sticky top-0 z-30 mb-5 rounded-3xl border bg-white/95 p-4 shadow-sm backdrop-blur">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold uppercase text-slate-500">Planning / fiche chantier</p>
+              <h2 className="text-2xl font-black">{selectedProject.name}</h2>
+              <p className="text-sm text-slate-500">{selectedProject.client || "Client non renseigné"} · {selectedProject.address || "Adresse non renseignée"}</p>
+            </div>
+            <Button variant="secondary" onClick={() => setSelectedProjectId(null)}>← Retour planning</Button>
+          </div>
+        </div>
+
+        <div className="grid gap-5 lg:grid-cols-3">
+          <Card className="border-l-8" style={{ borderLeftColor: projectColor(selectedProject.id) }}>
+            <p className="text-xs font-black uppercase text-slate-500">Chantier</p>
+            <h3 className="mt-2 text-xl font-black">{selectedProject.name}</h3>
+            <p className="mt-2 text-sm text-slate-600">{selectedProject.description || "Aucune description."}</p>
+          </Card>
+          <Card>
+            <p className="text-xs font-black uppercase text-slate-500">Équipe planifiée</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {projectEmployees.map((name: any) => <Badge key={name}>{name}</Badge>)}
+              {projectEmployees.length === 0 && <p className="text-sm text-slate-500">Aucun salarié planifié.</p>}
+            </div>
+          </Card>
+          <Card>
+            <p className="text-xs font-black uppercase text-slate-500">Avancement</p>
+            <div className="mt-3 h-3 rounded-full bg-slate-100"><div className="h-3 rounded-full" style={{ width: `${Number(selectedProject.progress || 0)}%`, background: projectColor(selectedProject.id) }} /></div>
+            <p className="mt-2 text-2xl font-black">{Number(selectedProject.progress || 0)}%</p>
+          </Card>
+        </div>
+
+        <Card className="mt-5">
+          <h3 className="mb-4 text-xl font-black">Planning du chantier</h3>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {projectEvents.map((e: any) => (
+              <div key={e.id} className="rounded-3xl p-4 shadow-sm" style={{ background: projectColor(e.project_id), color: isLightColor(projectColor(e.project_id)) ? "#0f172a" : "white" }}>
+                <div className="text-lg font-black">{e.title}</div>
+                <div className="mt-1 text-sm opacity-90">{employeeName(e.employee_id)}</div>
+                <div className="mt-2 text-sm font-bold">{e.start_date}{e.end_date && e.end_date !== e.start_date ? ` → ${e.end_date}` : ""}</div>
+                <div className="text-sm opacity-90">{e.start_time || ""}{e.end_time ? ` - ${e.end_time}` : ""}</div>
+              </div>
+            ))}
+            {projectEvents.length === 0 && <p className="text-sm text-slate-500">Aucune ligne planning pour ce chantier.</p>}
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div>
       <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
-        <Section title="Planning" subtitle="Vue semaine/mois directe. Le formulaire s'ouvre uniquement avec le bouton de création ou de modification." />
+        <Section title="Planning simple" subtitle="Une couleur = un chantier. Les salariés prennent automatiquement la couleur du chantier." />
         <Button onClick={openCreatePlanning}>+ Créer planning</Button>
       </div>
 
       {showForm && (
-        <Card id="planning-form" className="mb-6">
+        <Card id="planning-form" className="mb-6 border-l-8" style={{ borderLeftColor: form.project_id ? projectColor(form.project_id) : "#e2e8f0" }}>
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-lg font-black">{editing ? "Modifier planning" : "Créer planning"}</h3>
+            <div>
+              <h3 className="text-lg font-black">{editing ? "Modifier planning" : "Créer planning"}</h3>
+              <p className="text-sm text-slate-500">La couleur est automatique : elle vient du chantier sélectionné.</p>
+            </div>
             <Button type="button" variant="secondary" onClick={() => { setShowForm(false); setEditing(null); setForm(emptyForm); }}>Fermer</Button>
           </div>
           <form onSubmit={savePlanning} className="grid gap-3 md:grid-cols-3">
-            <Field label="Chantier"><Select value={form.project_id} onChange={(e: any) => {
-              const project = projects.find((p: any) => p.id === e.target.value);
-              setForm({ ...form, project_id: e.target.value, employee_ids: [], color: project?.color || form.color });
-            }}><option value="">Choisir chantier</option>{activeProjects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field>
+            <Field label="Chantier"><Select value={form.project_id} onChange={(e: any) => setForm({ ...form, project_id: e.target.value, employee_ids: [] })}><option value="">Choisir chantier</option>{activeProjects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field>
             <Field label="Tâche"><Input value={form.title} onChange={(e: any) => setForm({ ...form, title: e.target.value })} placeholder="Ex : Pose isolation, RDV client..." /></Field>
             <Field label="Date début"><Input type="date" value={form.start_date} onChange={(e: any) => setForm({ ...form, start_date: e.target.value })} /></Field>
             <Field label="Date fin"><Input type="date" value={form.end_date} onChange={(e: any) => setForm({ ...form, end_date: e.target.value })} /></Field>
-            <div className="grid grid-cols-3 gap-2">
-              <Field label="Début"><Input type="time" value={form.start_time} onChange={(e: any) => setForm({ ...form, start_time: e.target.value })} /></Field>
-              <Field label="Fin"><Input type="time" value={form.end_time} onChange={(e: any) => setForm({ ...form, end_time: e.target.value })} /></Field>
-              <Field label="Couleur"><Input type="color" value={form.color} onChange={(e: any) => setForm({ ...form, color: e.target.value })} /></Field>
-            </div>
+            <Field label="Début"><Input type="time" value={form.start_time} onChange={(e: any) => setForm({ ...form, start_time: e.target.value })} /></Field>
+            <Field label="Fin"><Input type="time" value={form.end_time} onChange={(e: any) => setForm({ ...form, end_time: e.target.value })} /></Field>
             <div className="md:col-span-3">
-              <div className="mb-1 text-xs font-bold uppercase text-slate-500">Salariés affectés au chantier</div>
+              <div className="mb-1 text-xs font-bold uppercase text-slate-500">Salariés</div>
               <div className="grid gap-2 rounded-3xl border border-slate-100 bg-slate-50 p-3 md:grid-cols-3">
-                {orderedEmployees.map((emp: any) => {
+                {formEmployees.map((emp: any) => {
                   const checked = (form.employee_ids || []).includes(emp.id);
                   const isAssigned = assignedIds.includes(emp.id);
                   return (
@@ -1380,7 +1446,6 @@ function Planning({ projects, employees, links, planning, requests = [], refresh
                 })}
                 {employees.length === 0 && <p className="text-sm text-slate-500">Aucun salarié enregistré.</p>}
               </div>
-              <p className="mt-2 text-xs text-slate-500">En création, plusieurs salariés sélectionnés créent une ligne de planning par salarié. Les salariés non encore affectés seront aussi ajoutés au chantier.</p>
             </div>
             <div className="md:col-span-3"><Field label="Notes"><Textarea value={form.notes} onChange={(e: any) => setForm({ ...form, notes: e.target.value })} /></Field></div>
             <Button className="md:col-span-3">{editing ? "Enregistrer la modification" : "Ajouter au planning"}</Button>
@@ -1388,79 +1453,71 @@ function Planning({ projects, employees, links, planning, requests = [], refresh
         </Card>
       )}
 
-      <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-end gap-2">
-          <Button variant={view === "week" ? "primary" : "secondary"} onClick={() => setView("week")}>Semaine</Button>
-          <Button variant={view === "month" ? "primary" : "secondary"} onClick={() => setView("month")}>Mois</Button>
-          <div className="min-w-56">
-            <Field label="Filtrer par salarié"><Select value={employeeFilter} onChange={(e: any) => setEmployeeFilter(e.target.value)}><option value="all">Tous les salariés</option>{employees.map((e: any) => <option key={e.id} value={e.id}>{e.firstname} {e.lastname}</option>)}</Select></Field>
+      <Card className="mb-5">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div className="grid flex-1 gap-3 md:grid-cols-2">
+            <Field label="Recherche chantier"><Input value={search} onChange={(e: any) => setSearch(e.target.value)} placeholder="Nom chantier, client, adresse..." /></Field>
+            <Field label="Salarié"><Select value={employeeFilter} onChange={(e: any) => setEmployeeFilter(e.target.value)}><option value="all">Tous les salariés</option>{employees.map((e: any) => <option key={e.id} value={e.id}>{e.firstname} {e.lastname}</option>)}</Select></Field>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="secondary" onClick={() => setCursor(addDays(cursor, -7))}>← Semaine</Button>
+            <div className="min-w-48 rounded-2xl bg-slate-50 px-4 py-3 text-center font-black">Semaine du {formatDate(weekStart)}</div>
+            <Button variant="secondary" onClick={() => setCursor(addDays(cursor, 7))}>Semaine →</Button>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="secondary" onClick={() => setCursor(view === "week" ? addDays(cursor, -7) : new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))}>Précédent</Button>
-          <div className="min-w-48 text-center font-black">{view === "week" ? `Semaine du ${formatDate(weekStart)}` : monthLabel}</div>
-          <Button variant="secondary" onClick={() => setCursor(view === "week" ? addDays(cursor, 7) : new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))}>Suivant</Button>
-        </div>
-      </div>
+      </Card>
 
-      {view === "week" ? (
-        <div className="mt-4 grid gap-3 lg:grid-cols-7">
-          {week.map((day) => (
-            <Card key={formatDate(day)} className="min-h-64">
-              <h3 className="text-center font-black">{day.toLocaleDateString("fr-FR", { weekday: "short" })}</h3>
-              <p className="text-center text-xs text-slate-500">{formatDate(day)}</p>
-              <div className="mt-3 space-y-2">
-                {eventsForDate(day).map((e: any) => (
-                  <div key={e.id} className="rounded-2xl p-2 text-xs font-bold text-white" style={{ background: e.color || projectColor(e.project_id) }}>
-                    <div>{employeeName(e.employee_id)}</div>
-                    <div>{projectNameLocal(e.project_id)}</div>
-                    <div>{e.title}</div>
-                    <div>{e.start_time || ""}{e.end_time ? ` - ${e.end_time}` : ""}</div>
-                    <div className="mt-2 flex gap-1">
-                      <button className="rounded-lg bg-white/20 px-2 py-1" onClick={() => openEditPlanning(e)}>Modif.</button>
-                      <button className="rounded-lg bg-white/20 px-2 py-1" onClick={() => deletePlanning(e)}>Suppr.</button>
+      <div className="overflow-x-auto rounded-3xl border bg-white shadow-sm">
+        <div className="min-w-[980px]">
+          <div className="grid grid-cols-[190px_repeat(7,1fr)] border-b bg-slate-50">
+            <div className="p-4 text-sm font-black text-slate-600">Salarié</div>
+            {week.map((day) => (
+              <div key={formatDate(day)} className="border-l p-4 text-center">
+                <div className="text-sm font-black capitalize">{day.toLocaleDateString("fr-FR", { weekday: "short" })}</div>
+                <div className="text-xs text-slate-500">{formatDate(day)}</div>
+              </div>
+            ))}
+          </div>
+
+          {orderedEmployees.map((emp: any) => (
+            <div key={emp.id} className="grid min-h-32 grid-cols-[190px_repeat(7,1fr)] border-b last:border-b-0">
+              <div className="sticky left-0 z-10 border-r bg-white p-4">
+                <div className="font-black">{emp.firstname}</div>
+                <div className="text-sm text-slate-500">{emp.lastname}</div>
+              </div>
+              {week.map((day) => {
+                const dayEvents = eventsForEmployeeAndDate(emp.id, day);
+                return (
+                  <div key={`${emp.id}-${formatDate(day)}`} className="min-h-32 border-l p-2">
+                    <div className="space-y-2">
+                      {dayEvents.map((e: any) => {
+                        const bg = projectColor(e.project_id);
+                        const textColor = isLightColor(bg) ? "#0f172a" : "white";
+                        return (
+                          <div key={e.id} className="rounded-2xl p-3 text-left shadow-sm" style={{ background: bg, color: textColor }}>
+                            <button type="button" onClick={() => openProjectFull(e.project_id)} className="block w-full text-left">
+                              <div className="text-sm font-black leading-tight">{projectNameLocal(e.project_id)}</div>
+                              <div className="mt-1 text-xs opacity-90">{e.title}</div>
+                              <div className="mt-1 text-[11px] opacity-80">{projectAddress(e.project_id)}</div>
+                              {(e.start_time || e.end_time) && <div className="mt-2 text-xs font-black">{e.start_time || ""}{e.end_time ? ` - ${e.end_time}` : ""}</div>}
+                            </button>
+                            <div className="mt-3 flex gap-1">
+                              <button className="rounded-xl bg-white/20 px-2 py-1 text-[11px] font-black" onClick={() => openEditPlanning(e)}>Modifier</button>
+                              <button className="rounded-xl bg-white/20 px-2 py-1 text-[11px] font-black" onClick={() => deletePlanning(e)}>Suppr.</button>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
-                ))}
-                {plannedRequestsForDate(day).map((r: any) => {
-                  const meta = requestPriorityMeta(r.priority);
-                  return (
-                    <div key={`request-${r.id}`} className={`rounded-2xl border p-2 text-xs font-bold ${meta.bg}`}>
-                      <div className="mb-1 flex items-center justify-between gap-2">
-                        <span className="inline-flex items-center gap-1"><span className={`h-2 w-2 rounded-full ${meta.dot}`}></span>Demande interne</span>
-                        <span>{meta.icon} {meta.label}</span>
-                      </div>
-                      <div>{r.message || "Demande planifiée"}</div>
-                      <div className="mt-1 text-[10px] opacity-75">{r.assigned_to ? employeeName(r.assigned_to) : "Non attribuée"} · {projectNameLocal(r.project_id)}</div>
-                    </div>
-                  );
-                })}
-              </div>
-            </Card>
-          ))}
-        </div>
-      ) : (
-        <div className="mt-4 grid grid-cols-7 gap-2">
-          {["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"].map((d) => <div key={d} className="text-center text-xs font-black uppercase text-slate-500">{d}</div>)}
-          {month.map((day) => (
-            <div key={formatDate(day)} className="min-h-32 rounded-2xl border bg-white p-2">
-              <div className="mb-2 text-xs font-black">{day.getDate()}</div>
-              <div className="space-y-1">
-                {eventsForDate(day).slice(0, 3).map((e: any) => (
-                  <button key={e.id} type="button" onClick={() => openEditPlanning(e)} className="block w-full rounded-lg px-2 py-1 text-left text-[10px] font-bold text-white" style={{ background: e.color || projectColor(e.project_id) }}>
-                    {employeeName(e.employee_id).split(" ")[0]} · {e.title}
-                  </button>
-                ))}
-                {plannedRequestsForDate(day).slice(0, 2).map((r: any) => {
-                  const meta = requestPriorityMeta(r.priority);
-                  return <div key={`request-month-${r.id}`} className={`rounded-lg border px-2 py-1 text-[10px] font-bold ${meta.bg}`}>DI · {r.message || "Demande"}</div>;
-                })}
-                {eventsForDate(day).length + plannedRequestsForDate(day).length > 5 && <div className="text-[10px] text-slate-500">+{eventsForDate(day).length + plannedRequestsForDate(day).length - 5} autre(s)</div>}
-              </div>
+                );
+              })}
             </div>
           ))}
+
+          {orderedEmployees.length === 0 && <div className="p-8 text-center text-sm text-slate-500">Aucun salarié à afficher.</div>}
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -2407,7 +2464,7 @@ function Storekeeper({ projects, materials, invoices = [], returns = [], refresh
   async function addStoreInvoice(e: any) {
     e.preventDefault();
     if (!invoiceForm.project_id) return alert("Choisis un chantier");
-    if (!invoiceForm.supplier || !invoiceForm.amount) return alert("Fournisseur et montant obligatoires");
+    if (!invoiceForm.supplier || !invoiceForm.amount || !invoiceForm.invoice_date) return alert("Fournisseur, montant et date obligatoires");
     const { error } = await supabase.from("project_invoices").insert({
       project_id: invoiceForm.project_id,
       supplier: invoiceForm.supplier,
@@ -2434,7 +2491,7 @@ function Storekeeper({ projects, materials, invoices = [], returns = [], refresh
 
   async function addReturn(e: any) {
     e.preventDefault();
-    if (!returnForm.supplier || !returnForm.amount) return alert("Fournisseur et montant obligatoires");
+    if (!returnForm.supplier || !returnForm.amount || !returnForm.return_date) return alert("Fournisseur, montant et date obligatoires");
     const { error } = await supabase.from("merchandise_returns").insert({
       project_id: returnForm.project_id || null,
       supplier: returnForm.supplier,
@@ -2691,7 +2748,7 @@ function Storekeeper({ projects, materials, invoices = [], returns = [], refresh
 }
 
 
-function Management({ projects, employees, planning, invoices, revenues, returns = [], companyExpenses = [], clientPayments = [], manualReglements = [], marginSimulations = [], refreshAll }: any) {
+function Management({ projects, photos = [], docs = [], notes = [], materials = [], vigilance = [], employees, planning, invoices, revenues, returns = [], companyExpenses = [], clientPayments = [], refreshAll }: any) {
   const [tab, setTab] = useState("pilotage");
   const [projectSearch, setProjectSearch] = useState("");
   const [selectedProjectFilter, setSelectedProjectFilter] = useState("");
@@ -2700,21 +2757,11 @@ function Management({ projects, employees, planning, invoices, revenues, returns
   const [revenueForm, setRevenueForm] = useState({ project_id: "", label: "", amount: "", tva_rate: "10", billing_date: formatDate(new Date()), notes: "" });
   const [showExpenseForm, setShowExpenseForm] = useState(false);
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
-  const [expenseForm, setExpenseForm] = useState({ name: "", category: "Charges fixes", amount: "", tva_rate: "20", frequency: "mensuelle", expense_date: formatDate(new Date()), notes: "", active: true });
+  const [expenseForm, setExpenseForm] = useState({ name: "", category: "Total à encaisser", amount: "", tva_rate: "20", frequency: "mensuelle", expense_date: formatDate(new Date()), notes: "", active: true });
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
   const [paymentForm, setPaymentForm] = useState({ project_id: "", revenue_id: "", client: "", invoice_number: "", amount_ttc: "", payment_method: "Virement bancaire", payment_date: formatDate(new Date()), notes: "" });
-  const [showReglementForm, setShowReglementForm] = useState(false);
-  const [editingReglementId, setEditingReglementId] = useState<string | null>(null);
-  const [reglementForm, setReglementForm] = useState({ payment_date: formatDate(new Date()), client_supplier: "", label: "", amount: "", payment_method: "Virement bancaire", status: "À payer", notes: "" });
-  const [showSimulationForm, setShowSimulationForm] = useState(false);
-  const [editingSimulationId, setEditingSimulationId] = useState<string | null>(null);
-  const emptyExpenseLine = { label: "", category: "Matériaux", amount: "", tva_rate: "20" };
-  const emptyLaborLine = { employee_id: "", label: "", days: "1", daily_cost: "" };
-  const [simulationForm, setSimulationForm] = useState<any>({
-    title: "", client: "", description: "", sale_ht: "", client_tva_rate: "10", discount: "0", target_margin_rate: "30",
-    expenses: [{ ...emptyExpenseLine }], labor: [{ ...emptyLaborLine }]
-  });
+  const [selectedDetailProject, setSelectedDetailProject] = useState<any | null>(null);
   const today = new Date();
   const [periodMode, setPeriodMode] = useState("month");
   const [periodStart, setPeriodStart] = useState(formatDate(new Date(today.getFullYear(), today.getMonth(), 1)));
@@ -2746,6 +2793,7 @@ function Management({ projects, employees, planning, invoices, revenues, returns
 
   const activeProjects = projects.filter((p: any) => p.status !== "archive");
   const archivedProjects = projects.filter((p: any) => p.status === "archive");
+  const activeProjectIds = new Set(activeProjects.map((p: any) => p.id));
   const searchedActiveProjects = activeProjects.filter((p: any) => {
     const txt = `${p.name || ""} ${p.client || ""} ${p.address || ""}`.toLowerCase();
     const searchOk = !projectSearch || txt.includes(projectSearch.toLowerCase());
@@ -2753,10 +2801,19 @@ function Management({ projects, employees, planning, invoices, revenues, returns
     return searchOk && selectOk;
   });
 
-  function projectStats(projectId: string) {
-    const myInvoices = invoices.filter((i: any) => i.project_id === projectId && inPeriod(i.invoice_date || i.created_at));
-    const myReturns = returns.filter((r: any) => r.project_id === projectId && inPeriod(r.return_date || r.created_at));
-    const myRevenues = revenues.filter((r: any) => r.project_id === projectId && inPeriod(r.billing_date || r.created_at));
+  // Pilotage comptable : le CA doit reprendre TOUS les chantiers, y compris les archivés.
+  // Les chantiers archivés restent cachés des cartes actives, mais ils comptent dans les KPI, la TVA et la répartition du CA.
+  const searchedAccountingProjects = projects.filter((p: any) => {
+    const txt = `${p.name || ""} ${p.client || ""} ${p.address || ""}`.toLowerCase();
+    const searchOk = !projectSearch || txt.includes(projectSearch.toLowerCase());
+    const selectOk = !selectedProjectFilter || p.id === selectedProjectFilter;
+    return searchOk && selectOk;
+  });
+
+  function projectStats(projectId: string, usePeriodFilter = true) {
+    const myInvoices = invoices.filter((i: any) => i.project_id === projectId && (!usePeriodFilter || inPeriod(i.invoice_date || i.created_at)));
+    const myReturns = returns.filter((r: any) => r.project_id === projectId && (!usePeriodFilter || inPeriod(r.return_date || r.created_at)));
+    const myRevenues = revenues.filter((r: any) => r.project_id === projectId && (!usePeriodFilter || inPeriod(r.billing_date || r.created_at)));
     const grossSupplierTotal = myInvoices.reduce((s: number, i: any) => s + amountHT(i), 0);
     const supplierTVA = myInvoices.reduce((s: number, i: any) => s + amountTVA(i), 0);
     const returnsTotal = myReturns.reduce((s: number, r: any) => s + amountHT(r), 0);
@@ -2765,13 +2822,13 @@ function Management({ projects, employees, planning, invoices, revenues, returns
     const revenueTotal = myRevenues.reduce((s: number, r: any) => s + amountHT(r), 0);
     const revenueTVA = myRevenues.reduce((s: number, r: any) => s + amountTVA(r), 0);
     const netDeductibleTVA = Math.max(0, supplierTVA - returnsTVA);
-    const laborTotal = planning.filter((p: any) => p.project_id === projectId && overlapsPeriod(p.start_date, p.end_date)).reduce((s: number, p: any) => s + daysBetween(p.start_date, p.end_date) * employeeCost(p.employee_id), 0);
+    const laborTotal = planning.filter((p: any) => p.project_id === projectId && (!usePeriodFilter || overlapsPeriod(p.start_date, p.end_date))).reduce((s: number, p: any) => s + daysBetween(p.start_date, p.end_date) * employeeCost(p.employee_id), 0);
     const margin = revenueTotal - supplierTotal - laborTotal;
     const marginRate = revenueTotal > 0 ? Math.round((margin / revenueTotal) * 100) : 0;
     return { grossSupplierTotal, supplierTotal, supplierTVA, returnsTotal, returnsTVA, revenueTotal, revenueTVA, netDeductibleTVA, laborTotal, margin, marginRate, tvaBalance: revenueTVA - netDeductibleTVA };
   }
 
-  const allStats = activeProjects.reduce((a: any, p: any) => {
+  const allStats = projects.reduce((a: any, p: any) => {
     const s = projectStats(p.id);
     a.revenue += s.revenueTotal; a.revenueTVA += s.revenueTVA; a.purchases += s.supplierTotal; a.deductibleTVA += s.netDeductibleTVA; a.labor += s.laborTotal; a.margin += s.margin; return a;
   }, { revenue: 0, revenueTVA: 0, purchases: 0, deductibleTVA: 0, labor: 0, margin: 0 });
@@ -2780,16 +2837,25 @@ function Management({ projects, employees, planning, invoices, revenues, returns
   const expensesTVA = activeExpenses.reduce((s: number, e: any) => s + amountTVA(e), 0);
   const tvaDeductibleGlobal = allStats.deductibleTVA + expensesTVA;
   const tvaBalanceGlobal = allStats.revenueTVA - tvaDeductibleGlobal;
+  const globalResultHT = allStats.revenue - allStats.purchases - allStats.labor - expensesHT;
+  const globalMarginRate = allStats.revenue > 0 ? Math.round((globalResultHT / allStats.revenue) * 100) : 0;
   const periodPayments = clientPayments.filter((p: any) => inPeriod(p.payment_date || p.created_at));
-  const periodActivePayments = periodPayments.filter((pay: any) => !pay.project_id || projects.find((pr: any) => pr.id === pay.project_id)?.status !== "archive");
-  const paidTTC = periodActivePayments.reduce((s: number, p: any) => s + Number(p.amount_ttc || 0), 0);
-  const periodManualReglements = manualReglements.filter((r: any) => inPeriod(r.payment_date || r.created_at));
+  const paidTTC = periodPayments.reduce((s: number, p: any) => s + Number(p.amount_ttc || 0), 0);
   const activeRevenues = revenues.filter((r: any) => projects.find((p: any) => p.id === r.project_id)?.status !== "archive");
   const periodActiveRevenues = activeRevenues.filter((r: any) => inPeriod(r.billing_date || r.created_at));
+  const activeInvoices = invoices.filter((i: any) => activeProjectIds.has(i.project_id));
+  const periodActiveInvoices = activeInvoices.filter((i: any) => inPeriod(i.invoice_date || i.created_at));
+  const purchaseSummary = { count: periodActiveInvoices.length, ht: periodActiveInvoices.reduce((s: number, i: any) => s + amountHT(i), 0), tva: periodActiveInvoices.reduce((s: number, i: any) => s + amountTVA(i), 0), ttc: periodActiveInvoices.reduce((s: number, i: any) => s + amountTTC(i), 0) };
   function paymentsForRevenue(r: any) { return clientPayments.filter((p: any) => (p.revenue_id && p.revenue_id === r.id) || (!p.revenue_id && p.project_id === r.project_id && p.invoice_number && (p.invoice_number === r.invoice_number || p.invoice_number === r.label))); }
   function paidForRevenue(r: any) { return paymentsForRevenue(r).reduce((s: number, p: any) => s + Number(p.amount_ttc || 0), 0); }
   function remainingForRevenue(r: any) { return Math.max(0, Math.round((amountTTC(r) - paidForRevenue(r)) * 100) / 100); }
   function revenuePaymentStatus(r: any) { const rest = remainingForRevenue(r); if (rest <= 0) return { label: "Payée", tone: "green" }; if (paidForRevenue(r) > 0) return { label: "Partiel", tone: "amber" }; return { label: "À encaisser", tone: "red" }; }
+  function isClientPaymentPaid(p: any) { return String(p.notes || "").toLowerCase().includes("payé"); }
+  const clientOutstandingTotal = clientPayments
+    .filter((p: any) => !isClientPaymentPaid(p))
+    .reduce((s: number, p: any) => s + Number(p.amount_ttc || 0), 0);
+  const allRevenueHT = revenues.reduce((s: number, r: any) => s + amountHT(r), 0);
+  const allPurchasesHT = invoices.reduce((s: number, i: any) => s + amountHT(i), 0) - returns.reduce((s: number, r: any) => s + amountHT(r), 0);
 
   async function archiveProject(project: any, archived: boolean) {
     const { error } = await supabase.from("projects").update({ status: archived ? "archive" : "termine" }).eq("id", project.id);
@@ -2797,7 +2863,7 @@ function Management({ projects, employees, planning, invoices, revenues, returns
     await refreshAll();
   }
   async function saveRevenue(e: any) {
-    e.preventDefault(); if (!revenueForm.project_id || !revenueForm.amount) return alert("Chantier et montant HT obligatoires");
+    e.preventDefault(); if (!revenueForm.project_id || !revenueForm.amount || !revenueForm.billing_date) return alert("Chantier, montant HT et date obligatoires");
     const payload = { project_id: revenueForm.project_id, label: revenueForm.label || "Facturation client", ...taxPayload(revenueForm.amount, revenueForm.tva_rate), billing_date: revenueForm.billing_date || null, notes: revenueForm.notes };
     const query = editingRevenueId ? supabase.from("project_revenues").update(payload).eq("id", editingRevenueId) : supabase.from("project_revenues").insert(payload);
     const { error } = await query; if (error) return alert(error.message);
@@ -2808,149 +2874,10 @@ function Management({ projects, employees, planning, invoices, revenues, returns
   async function saveExpense(e: any) { e.preventDefault(); if (!expenseForm.name || !expenseForm.amount) return alert("Nom et montant obligatoires"); const payload = { ...expenseForm, ...taxPayload(expenseForm.amount, expenseForm.tva_rate), active: expenseForm.active }; const query = editingExpenseId ? supabase.from("company_expenses").update(payload).eq("id", editingExpenseId) : supabase.from("company_expenses").insert(payload); const { error } = await query; if (error) return alert(error.message); setEditingExpenseId(null); setShowExpenseForm(false); setExpenseForm({ name: "", category: "Charges fixes", amount: "", tva_rate: "20", frequency: "mensuelle", expense_date: formatDate(new Date()), notes: "", active: true }); await refreshAll(); }
   function editExpense(item: any) { setEditingExpenseId(item.id); setShowExpenseForm(true); setTab("charges"); setExpenseForm({ name: item.name || "", category: item.category || "Charges fixes", amount: String(amountHT(item) || ""), tva_rate: String(item.tva_rate ?? 20), frequency: item.frequency || "mensuelle", expense_date: item.expense_date || formatDate(new Date()), notes: item.notes || "", active: item.active !== false }); }
   async function deleteExpense(item: any) { if (!confirm("Supprimer cette charge ?")) return; const { error } = await supabase.from("company_expenses").delete().eq("id", item.id); if (error) return alert(error.message); await refreshAll(); }
-  async function savePayment(e: any) { e.preventDefault(); if (!paymentForm.client || !paymentForm.amount_ttc) return alert("Client et montant obligatoires"); const payload = { project_id: paymentForm.project_id || null, revenue_id: paymentForm.revenue_id || null, client: paymentForm.client, invoice_number: paymentForm.invoice_number, amount_ttc: Math.round(Number(paymentForm.amount_ttc || 0) * 100) / 100, payment_method: paymentForm.payment_method, payment_date: paymentForm.payment_date || null, notes: paymentForm.notes }; const query = editingPaymentId ? supabase.from("client_payments").update(payload).eq("id", editingPaymentId) : supabase.from("client_payments").insert(payload); const { error } = await query; if (error) return alert(error.message); setEditingPaymentId(null); setShowPaymentForm(false); setPaymentForm({ project_id: "", revenue_id: "", client: "", invoice_number: "", amount_ttc: "", payment_method: "Virement bancaire", payment_date: formatDate(new Date()), notes: "" }); await refreshAll(); }
+  async function savePayment(e: any) { e.preventDefault(); if (!paymentForm.client || !paymentForm.amount_ttc || !paymentForm.payment_date) return alert("Date, client et montant TTC obligatoires"); const payload = { project_id: paymentForm.project_id || null, revenue_id: paymentForm.revenue_id || null, client: paymentForm.client, invoice_number: paymentForm.invoice_number, amount_ttc: Math.round(Number(paymentForm.amount_ttc || 0) * 100) / 100, payment_method: paymentForm.payment_method, payment_date: paymentForm.payment_date || null, notes: paymentForm.notes }; const query = editingPaymentId ? supabase.from("client_payments").update(payload).eq("id", editingPaymentId) : supabase.from("client_payments").insert(payload); const { error } = await query; if (error) return alert(error.message); setEditingPaymentId(null); setShowPaymentForm(false); setPaymentForm({ project_id: "", revenue_id: "", client: "", invoice_number: "", amount_ttc: "", payment_method: "Virement bancaire", payment_date: formatDate(new Date()), notes: "" }); await refreshAll(); }
   function editPayment(item: any) { setEditingPaymentId(item.id); setShowPaymentForm(true); setTab("paiements"); setPaymentForm({ project_id: item.project_id || "", revenue_id: item.revenue_id || "", client: item.client || "", invoice_number: item.invoice_number || "", amount_ttc: String(item.amount_ttc || ""), payment_method: item.payment_method || "Virement bancaire", payment_date: item.payment_date || "", notes: item.notes || "" }); }
-  async function deletePayment(item: any) { if (!confirm("Supprimer ce paiement client ?")) return; const { error } = await supabase.from("client_payments").delete().eq("id", item.id); if (error) return alert(error.message); await refreshAll(); }
-
-  async function saveReglement(e: any) {
-    e.preventDefault();
-    if (!reglementForm.client_supplier || !reglementForm.amount) return alert("Client/fournisseur et montant obligatoires");
-    const payload = {
-      payment_date: reglementForm.payment_date || null,
-      client_supplier: reglementForm.client_supplier,
-      label: reglementForm.label,
-      amount: Math.round(Number(reglementForm.amount || 0) * 100) / 100,
-      payment_method: reglementForm.payment_method,
-      status: reglementForm.status,
-      notes: reglementForm.notes
-    };
-    const query = editingReglementId ? supabase.from("manual_reglements").update(payload).eq("id", editingReglementId) : supabase.from("manual_reglements").insert(payload);
-    const { error } = await query;
-    if (error) return alert(error.message);
-    setEditingReglementId(null);
-    setShowReglementForm(false);
-    setReglementForm({ payment_date: formatDate(new Date()), client_supplier: "", label: "", amount: "", payment_method: "Virement bancaire", status: "À payer", notes: "" });
-    await refreshAll();
-  }
-  function editReglement(item: any) {
-    setEditingReglementId(item.id);
-    setShowReglementForm(true);
-    setTab("reglements");
-    setReglementForm({ payment_date: item.payment_date || formatDate(new Date()), client_supplier: item.client_supplier || "", label: item.label || "", amount: String(item.amount || ""), payment_method: item.payment_method || "Virement bancaire", status: item.status || "À payer", notes: item.notes || "" });
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }
-  async function deleteReglement(item: any) {
-    if (!confirm("Supprimer ce règlement ?")) return;
-    const { error } = await supabase.from("manual_reglements").delete().eq("id", item.id);
-    if (error) return alert(error.message);
-    await refreshAll();
-  }
-  async function markReglementPaid(item: any) {
-    const { error } = await supabase.from("manual_reglements").update({ status: "Payé" }).eq("id", item.id);
-    if (error) return alert(error.message);
-    await refreshAll();
-  }
-
-
-  function setExpenseLine(index: number, key: string, value: string) {
-    const rows = [...simulationForm.expenses];
-    rows[index] = { ...rows[index], [key]: value };
-    setSimulationForm({ ...simulationForm, expenses: rows });
-  }
-  function setLaborLine(index: number, key: string, value: string) {
-    const rows = [...simulationForm.labor];
-    rows[index] = { ...rows[index], [key]: value };
-    if (key === "employee_id") {
-      const emp = employees.find((e: any) => e.id === value);
-      if (emp) rows[index].daily_cost = String(emp.daily_cost || "");
-    }
-    setSimulationForm({ ...simulationForm, labor: rows });
-  }
-  function addExpenseLine() { setSimulationForm({ ...simulationForm, expenses: [...simulationForm.expenses, { ...emptyExpenseLine }] }); }
-  function addLaborLine() { setSimulationForm({ ...simulationForm, labor: [...simulationForm.labor, { ...emptyLaborLine }] }); }
-  function removeExpenseLine(index: number) { setSimulationForm({ ...simulationForm, expenses: simulationForm.expenses.filter((_: any, i: number) => i !== index) }); }
-  function removeLaborLine(index: number) { setSimulationForm({ ...simulationForm, labor: simulationForm.labor.filter((_: any, i: number) => i !== index) }); }
-  function simulationCalc(form: any) {
-    const saleHT = Number(form.sale_ht || 0);
-    const discount = Number(form.discount || 0);
-    const netSaleHT = Math.max(0, saleHT - discount);
-    const clientTVA = Math.round(netSaleHT * Number(form.client_tva_rate || 0)) / 100;
-    const expensesHT = (form.expenses || []).reduce((sum: number, x: any) => sum + Number(x.amount || 0), 0);
-    const expensesTVA = (form.expenses || []).reduce((sum: number, x: any) => sum + (Number(x.amount || 0) * Number(x.tva_rate || 0) / 100), 0);
-    const laborTotal = (form.labor || []).reduce((sum: number, x: any) => sum + (Number(x.days || 0) * Number(x.daily_cost || 0)), 0);
-    const totalCost = expensesHT + laborTotal;
-    const margin = netSaleHT - totalCost;
-    const marginRate = netSaleHT > 0 ? Math.round((margin / netSaleHT) * 100) : 0;
-    const target = Number(form.target_margin_rate || 0);
-    const minimumSale = target < 100 ? totalCost / (1 - target / 100) : totalCost;
-    const tvaBalance = clientTVA - expensesTVA;
-    return { saleHT, discount, netSaleHT, clientTVA, saleTTC: netSaleHT + clientTVA, expensesHT, expensesTVA, laborTotal, totalCost, margin, marginRate, minimumSale, tvaBalance };
-  }
-  async function saveSimulation(e: any) {
-    e.preventDefault();
-    if (!simulationForm.title || !simulationForm.sale_ht) return alert("Nom de simulation et prix de vente HT obligatoires");
-    const calc = simulationCalc(simulationForm);
-    const payload = {
-      title: simulationForm.title,
-      client: simulationForm.client,
-      description: simulationForm.description,
-      sale_ht: calc.netSaleHT,
-      client_tva_rate: Number(simulationForm.client_tva_rate || 0),
-      discount: Number(simulationForm.discount || 0),
-      target_margin_rate: Number(simulationForm.target_margin_rate || 0),
-      expenses: simulationForm.expenses,
-      labor: simulationForm.labor,
-      total_expenses_ht: calc.expensesHT,
-      total_labor: calc.laborTotal,
-      total_cost: calc.totalCost,
-      margin_ht: calc.margin,
-      margin_rate: calc.marginRate,
-      tva_collected: calc.clientTVA,
-      tva_deductible: calc.expensesTVA,
-      tva_balance: calc.tvaBalance
-    };
-    const query = editingSimulationId ? supabase.from("margin_simulations").update(payload).eq("id", editingSimulationId) : supabase.from("margin_simulations").insert(payload);
-    const { error } = await query;
-    if (error) return alert(error.message);
-    setEditingSimulationId(null);
-    setShowSimulationForm(false);
-    setSimulationForm({ title: "", client: "", description: "", sale_ht: "", client_tva_rate: "10", discount: "0", target_margin_rate: "30", expenses: [{ ...emptyExpenseLine }], labor: [{ ...emptyLaborLine }] });
-    await refreshAll();
-  }
-  function editSimulation(item: any) {
-    setEditingSimulationId(item.id);
-    setShowSimulationForm(true);
-    setTab("marge");
-    setSimulationForm({
-      title: item.title || "", client: item.client || "", description: item.description || "", sale_ht: String(item.sale_ht || ""), client_tva_rate: String(item.client_tva_rate ?? 10), discount: String(item.discount || 0), target_margin_rate: String(item.target_margin_rate ?? 30),
-      expenses: Array.isArray(item.expenses) && item.expenses.length ? item.expenses : [{ ...emptyExpenseLine }],
-      labor: Array.isArray(item.labor) && item.labor.length ? item.labor : [{ ...emptyLaborLine }]
-    });
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }
-  function duplicateSimulation(item: any) {
-    setEditingSimulationId(null);
-    setShowSimulationForm(true);
-    setTab("marge");
-    setSimulationForm({
-      title: `${item.title || "Simulation"} - copie`, client: item.client || "", description: item.description || "", sale_ht: String(item.sale_ht || ""), client_tva_rate: String(item.client_tva_rate ?? 10), discount: String(item.discount || 0), target_margin_rate: String(item.target_margin_rate ?? 30),
-      expenses: Array.isArray(item.expenses) && item.expenses.length ? item.expenses : [{ ...emptyExpenseLine }],
-      labor: Array.isArray(item.labor) && item.labor.length ? item.labor : [{ ...emptyLaborLine }]
-    });
-  }
-  async function deleteSimulation(item: any) {
-    if (!confirm("Supprimer cette simulation de marge ?")) return;
-    const { error } = await supabase.from("margin_simulations").delete().eq("id", item.id);
-    if (error) return alert(error.message);
-    await refreshAll();
-  }
-  async function createProjectFromSimulation(item: any) {
-    if (!confirm("Créer un chantier à partir de cette simulation ?")) return;
-    const { error } = await supabase.from("projects").insert({ name: item.title, client: item.client || "", description: item.description || "Simulation transformée en chantier", status: "preparation", color: "#0f172a", progress: 0 });
-    if (error) return alert(error.message);
-    await refreshAll();
-    alert("Chantier créé en préparation. Les dépenses restent dans la simulation, elles ne sont pas transférées automatiquement.");
-  }
+  async function deletePayment(item: any) { if (!confirm("Supprimer ce règlement client ?")) return; const { error } = await supabase.from("client_payments").delete().eq("id", item.id); if (error) return alert(error.message); await refreshAll(); }
+  async function markPaymentPaid(item: any) { const paidNote = String(item.notes || "").includes("Payé") ? item.notes : `${item.notes ? item.notes + "\n" : ""}Payé le ${formatDate(new Date())}`; const { error } = await supabase.from("client_payments").update({ notes: paidNote }).eq("id", item.id); if (error) return alert(error.message); await refreshAll(); }
 
   function preparePaymentForRevenue(r: any, full = false) {
     const project = projects.find((p: any) => p.id === r.project_id);
@@ -2968,6 +2895,74 @@ function Management({ projects, employees, planning, invoices, revenues, returns
     if (error) return alert(error.message);
     await refreshAll();
   }
+  function generateAccountingPdfFromGestion() {
+    const rows = searchedAccountingProjects.map((p: any) => ({ project: p, stats: projectStats(p.id, true) })).filter((x: any) => x.stats.revenueTotal > 0 || x.stats.supplierTotal > 0 || x.stats.laborTotal > 0);
+    const totalRevenue = rows.reduce((s: number, x: any) => s + x.stats.revenueTotal, 0);
+    const totalRevenueTVA = rows.reduce((s: number, x: any) => s + x.stats.revenueTVA, 0);
+    const totalPurchases = rows.reduce((s: number, x: any) => s + x.stats.supplierTotal, 0);
+    const totalPurchasesTVA = rows.reduce((s: number, x: any) => s + x.stats.netDeductibleTVA, 0);
+    const totalLabor = rows.reduce((s: number, x: any) => s + x.stats.laborTotal, 0);
+    const totalCharges = expensesHT;
+    const totalChargesTVA = expensesTVA;
+    const totalTvaDeductible = totalPurchasesTVA + totalChargesTVA;
+    const totalTvaBalance = totalRevenueTVA - totalTvaDeductible;
+    const totalMargin = totalRevenue - totalPurchases - totalLabor;
+    const marginRate = totalRevenue > 0 ? Math.round((totalMargin / totalRevenue) * 100) : 0;
+    const tvaLabel = totalTvaBalance >= 0 ? "TVA due" : "TVA récupérable";
+    const tvaClass = totalTvaBalance >= 0 ? "red" : "green";
+    const html = `
+      <html>
+        <head>
+          <title>Rapport comptable ASB - ${periodLabel}</title>
+          <style>
+            @page{size:A4;margin:10mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;background:#e5e7eb;color:#0f172a;margin:0}.page{max-width:1040px;margin:auto;background:white;padding:28px}.header{display:flex;justify-content:space-between;gap:18px;border-bottom:4px solid #0f172a;padding-bottom:16px}.logo{height:64px}.title{margin:0;font-size:30px;letter-spacing:-.04em}.muted{color:#64748b}.badge{display:inline-block;border-radius:999px;padding:8px 14px;background:#0f172a;color:white;font-weight:900}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:18px}.card{border:1px solid #e2e8f0;border-radius:20px;background:#f8fafc;padding:14px}.card b{font-size:11px;text-transform:uppercase;color:#475569}.value{font-size:23px;font-weight:900;margin-top:6px}.green{color:#047857}.red{color:#b91c1c}.blue{color:#1d4ed8}.purple{color:#7e22ce}.section{margin-top:24px;break-inside:avoid}h2{font-size:18px;margin:0 0 10px}table{width:100%;border-collapse:collapse;font-size:12px}th{background:#0f172a;color:white;text-align:left;padding:9px}td{padding:9px;border-bottom:1px solid #e2e8f0;vertical-align:top}.num{text-align:right;white-space:nowrap}.summary{margin-top:20px;border-radius:24px;padding:18px;background:#f8fafc;border-left:10px solid #0f172a}.note{margin-top:22px;font-size:11px;color:#64748b}@media print{body{background:white}.page{padding:0}}
+          </style>
+        </head>
+        <body>
+          <div class="page">
+            <div class="header">
+              <div>
+                <img class="logo" src="/logo-asb.png" />
+                <h1 class="title">Rapport comptable — pilotage</h1>
+                <p class="muted">Période : <b>${periodLabel}</b></p>
+                <p class="muted">Inclut les chantiers actifs et archivés dans le CA.</p>
+              </div>
+              <div style="text-align:right"><div class="badge">ASB Intranet</div><p class="muted">Généré depuis Gestion</p></div>
+            </div>
+            <div class="grid">
+              <div class="card"><b>CA HT</b><div class="value green">${money(totalRevenue)}</div><div class="muted">Factures clients</div></div>
+              <div class="card"><b>TVA collectée</b><div class="value blue">${money(totalRevenueTVA)}</div><div class="muted">Sur facturation</div></div>
+              <div class="card"><b>Dépenses HT</b><div class="value red">${money(totalPurchases + totalCharges)}</div><div class="muted">Achats + charges fixes</div></div>
+              <div class="card"><b>${tvaLabel}</b><div class="value ${tvaClass}">${money(Math.abs(totalTvaBalance))}</div><div class="muted">Collectée - déductible</div></div>
+            </div>
+            <div class="grid">
+              <div class="card"><b>Achats HT</b><div class="value red">${money(totalPurchases)}</div></div>
+              <div class="card"><b>Main d'œuvre</b><div class="value purple">${money(totalLabor)}</div></div>
+              <div class="card"><b>Charges fixes HT</b><div class="value purple">${money(totalCharges)}</div></div>
+              <div class="card"><b>Marge chantier</b><div class="value ${totalMargin >= 0 ? "green" : "red"}">${money(totalMargin)} · ${marginRate}%</div></div>
+            </div>
+            <div class="summary">
+              <b>Synthèse TVA</b>
+              <p>TVA collectée : <b>${money(totalRevenueTVA)}</b> · TVA déductible achats : <b>${money(totalPurchasesTVA)}</b> · TVA déductible charges : <b>${money(totalChargesTVA)}</b> · Solde : <b class="${tvaClass}">${tvaLabel} ${money(Math.abs(totalTvaBalance))}</b></p>
+            </div>
+            <div class="section">
+              <h2>Répartition du CA HT par chantier</h2>
+              <table><thead><tr><th>Chantier</th><th>Client</th><th>Statut</th><th class="num">CA HT</th><th class="num">TVA collectée</th><th class="num">Achats HT</th><th class="num">MO</th><th class="num">Marge</th><th class="num">Rentabilité</th></tr></thead><tbody>
+                ${rows.map((x: any) => `<tr><td><b>${x.project.name}</b></td><td>${x.project.client || ""}</td><td>${x.project.status === "archive" ? "Archivé" : "Actif"}</td><td class="num">${money(x.stats.revenueTotal)}</td><td class="num">${money(x.stats.revenueTVA)}</td><td class="num">${money(x.stats.supplierTotal)}</td><td class="num">${money(x.stats.laborTotal)}</td><td class="num">${money(x.stats.margin)}</td><td class="num">${x.stats.marginRate}%</td></tr>`).join("") || `<tr><td colspan="9">Aucune donnée sur cette période.</td></tr>`}
+              </tbody></table>
+            </div>
+            <p class="note">Document interne ASB — rapport comptable de pilotage. Les chantiers archivés sont inclus dans le CA et la TVA de la période.</p>
+          </div>
+        </body>
+      </html>`;
+    const w = window.open("", "_blank");
+    if (!w) return alert("Popup bloquée. Autorise les popups pour générer le rapport comptable.");
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    setTimeout(() => w.print(), 500);
+  }
+
   function generateProjectPdfFromGestion(project: any) {
     const s = projectStats(project.id);
     const projectRevenues = revenues.filter((r: any) => r.project_id === project.id);
@@ -3097,109 +3092,110 @@ function Management({ projects, employees, planning, invoices, revenues, returns
     return <div className="flex flex-wrap items-center gap-4"><div className="h-36 w-36 rounded-full shadow-inner" style={{ background: `conic-gradient(${stops})` }} /> <div className="space-y-2">{values.map((v: any, i: number) => <div key={v.label} className="flex items-center gap-2 text-sm font-bold"><span className="h-3 w-3 rounded-full" style={{ backgroundColor: colors[i % colors.length] }} />{v.label} · {money(v.value)}</div>)}</div></div>;
   }
 
-  const tabButton = (id: string, label: string) => <Button variant={tab === id ? "primary" : "secondary"} onClick={() => setTab(id)}>{label}</Button>;
+  const tabButton = (id: string, label: string) => <Button className="min-h-11 px-5 shadow-sm" variant={tab === id ? "primary" : "secondary"} onClick={() => setTab(id)}>{label}</Button>;
 
-  function archiveProjectDetails(projectId: string) {
-    const projectInvoices = invoices.filter((i: any) => i.project_id === projectId);
-    const projectRevenues = revenues.filter((r: any) => r.project_id === projectId);
-    const projectReturns = returns.filter((r: any) => r.project_id === projectId);
-    const projectPlanning = planning.filter((p: any) => p.project_id === projectId);
-    const projectPayments = clientPayments.filter((p: any) => p.project_id === projectId || projectRevenues.some((r: any) => r.id === p.revenue_id));
-    return { projectInvoices, projectRevenues, projectReturns, projectPlanning, projectPayments };
+  const visiblePurchaseInvoices = periodActiveInvoices;
+  const actionCard = (id: string, icon: string, title: string, sub: string, tone: string) => (
+    <button onClick={() => setTab(id)} className="group flex min-h-[92px] items-center justify-between rounded-3xl border border-slate-200 bg-white px-6 py-4 text-left shadow-sm ring-1 ring-slate-100 transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-lg">
+      <div className="flex items-center gap-4"><span className={`grid h-14 w-14 shrink-0 place-items-center rounded-2xl text-2xl text-white shadow-sm ${tone}`}>{icon}</span><span><b className="block text-lg font-black text-slate-900">{title}</b><span className="text-sm font-semibold text-slate-500">{sub}</span></span></div>
+      <span className="text-3xl font-black text-slate-400 group-hover:text-slate-900">›</span>
+    </button>
+  );
+
+
+  function openProjectFullDetail(project: any) {
+    setSelectedDetailProject(project);
+    setTab("chantier-full-detail");
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
-  function employeeName(id: string) { const e = employees.find((x: any) => x.id === id); return e ? `${e.first_name || ""} ${e.last_name || ""}`.trim() || e.name || "Salarié" : "Salarié"; }
 
-  return <div>
-    <Section title="Gestion & pilotage global V53" subtitle="Pilotage actif, archives séparées et TVA claire." />
-
-    <Card className="mb-5 border-l-8 border-blue-500 bg-white">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div><h3 className="text-xl font-black">🔎 Recherche chantier</h3></div>
-        <Badge tone="blue">Période : {periodLabel}</Badge>
+  if (tab === "chantier-full-detail" && selectedDetailProject) {
+    const p = selectedDetailProject;
+    const s = projectStats(p.id, false);
+    const projectPhotos = photos.filter((x: any) => x.project_id === p.id);
+    const projectDocs = docs.filter((x: any) => x.project_id === p.id);
+    const projectNotes = notes.filter((x: any) => x.project_id === p.id);
+    const projectMaterials = materials.filter((x: any) => x.project_id === p.id);
+    const projectVigilance = vigilance.filter((x: any) => x.project_id === p.id);
+    const projectInvoices = invoices.filter((x: any) => x.project_id === p.id);
+    const projectRevenues = revenues.filter((x: any) => x.project_id === p.id);
+    const projectReturns = returns.filter((x: any) => x.project_id === p.id);
+    const projectPlanning = planning.filter((x: any) => x.project_id === p.id);
+    return <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div><Button variant="secondary" onClick={() => setTab("pilotage")}>← Retour Gestion</Button><h1 className="mt-3 text-3xl font-black text-slate-900">Vue complète chantier — {p.name}</h1><p className="text-sm text-slate-500">Gestion financière + informations chantier + photos + documents.</p></div>
+        <Button variant="secondary" onClick={() => generateProjectPdfFromGestion(p)}>Rapport PDF</Button>
       </div>
-      <div className="mt-4 grid gap-3 md:grid-cols-2">
-        <Field label="Recherche rapide"><Input placeholder="Nom chantier, client, adresse..." value={projectSearch} onChange={(e: any) => setProjectSearch(e.target.value)} /></Field>
-        <Field label="Liste déroulante"><Select value={selectedProjectFilter} onChange={(e: any) => setSelectedProjectFilter(e.target.value)}><option value="">Tous les chantiers actifs</option>{activeProjects.map((p: any) => <option key={p.id} value={p.id}>{p.name} · {p.client || "Client"}</option>)}</Select></Field>
-      </div>
-    </Card>
+      <div className="grid gap-4 md:grid-cols-6"><Card className="border-l-4 border-emerald-500"><p className="text-xs font-black uppercase text-slate-500">CA HT</p><p className="mt-2 text-xl font-black text-emerald-700">{money(s.revenueTotal)}</p></Card><Card className="border-l-4 border-red-500"><p className="text-xs font-black uppercase text-slate-500">Achats HT</p><p className="mt-2 text-xl font-black text-red-600">{money(s.supplierTotal)}</p></Card><Card className="border-l-4 border-blue-500"><p className="text-xs font-black uppercase text-slate-500">MO</p><p className="mt-2 text-xl font-black text-blue-700">{money(s.laborTotal)}</p></Card><Card className="border-l-4 border-slate-500"><p className="text-xs font-black uppercase text-slate-500">Marge</p><p className={s.margin >= 0 ? "mt-2 text-xl font-black text-emerald-700" : "mt-2 text-xl font-black text-red-600"}>{money(s.margin)}</p></Card><Card className="border-l-4 border-purple-500"><p className="text-xs font-black uppercase text-slate-500">TVA</p><p className="mt-2 text-xl font-black text-purple-700">{money(Math.abs(s.tvaBalance))}</p><p className="text-xs text-slate-500">{s.tvaBalance >= 0 ? "TVA due" : "TVA récupérable"}</p></Card><Card className="border-l-4 border-emerald-500"><p className="text-xs font-black uppercase text-slate-500">Rentabilité</p><p className={s.marginRate >= 0 ? "mt-2 text-xl font-black text-emerald-700" : "mt-2 text-xl font-black text-red-600"}>{s.marginRate}%</p></Card></div>
+      <div className="grid gap-5 xl:grid-cols-3"><Card><h3 className="mb-3 text-lg font-black">Informations chantier</h3><div className="space-y-2 text-sm"><p><b>Client :</b> {p.client || "Non renseigné"}</p><p><b>Adresse :</b> {p.address || "Non renseignée"}</p><p><b>Statut :</b> {p.status === "archive" ? "Archivé" : "Actif"}</p><p><b>Début :</b> {p.start_date || "-"}</p><p><b>Fin prévue :</b> {p.end_date || "-"}</p><p><b>Description :</b><br />{p.description || "Aucune description."}</p></div></Card><Card><h3 className="mb-3 text-lg font-black">Répartition chantier HT</h3><SimplePie values={[{ label: "CA HT", value: s.revenueTotal }, { label: "Achats HT", value: s.supplierTotal }, { label: "Main d’œuvre", value: s.laborTotal }]} /></Card><Card><h3 className="mb-3 text-lg font-black">Documents chantier</h3><div className="space-y-2">{projectDocs.slice(0, 8).map((d: any) => <a key={d.id} href={d.file_url} target="_blank" className="flex justify-between rounded-2xl border bg-slate-50 p-3 text-sm font-bold"><span>{d.name || "Document"}</span><span>Voir</span></a>)}{projectDocs.length === 0 && <p className="text-sm text-slate-500">Aucun document.</p>}</div></Card></div>
+      <Card><h3 className="mb-4 text-lg font-black">Photos du chantier</h3><div className="grid gap-3 md:grid-cols-4">{projectPhotos.slice(0, 12).map((ph: any) => <a key={ph.id} href={ph.file_url} target="_blank" className="block overflow-hidden rounded-2xl border bg-white"><img src={ph.file_url} className="h-36 w-full object-cover" /><div className="p-2 text-xs font-bold">{ph.title || "Photo"}</div></a>)}{projectPhotos.length === 0 && <p className="text-sm text-slate-500">Aucune photo.</p>}</div></Card>
+      <div className="grid gap-5 xl:grid-cols-2"><Card><h3 className="mb-4 text-lg font-black">Factures clients</h3><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="text-xs uppercase text-slate-500"><th className="p-3">Date</th><th className="p-3">Libellé</th><th className="p-3">HT</th><th className="p-3">TVA</th><th className="p-3">TTC</th></tr></thead><tbody>{projectRevenues.map((r: any) => <tr key={r.id} className="border-t"><td className="p-3">{r.billing_date || "-"}</td><td className="p-3 font-bold">{r.label || "Facturation client"}</td><td className="p-3">{money(amountHT(r))}</td><td className="p-3">{money(amountTVA(r))}</td><td className="p-3 font-black">{money(amountTTC(r))}</td></tr>)}{projectRevenues.length === 0 && <tr><td colSpan={5} className="p-6 text-center text-slate-500">Aucune facture client.</td></tr>}</tbody></table></div></Card><Card><h3 className="mb-4 text-lg font-black">Achats, retours et main d’œuvre</h3><div className="space-y-4"><div><b>Factures d’achats</b>{projectInvoices.map((i: any) => <div key={i.id} className="mt-2 rounded-xl bg-red-50 p-3 text-sm">{i.invoice_date || "-"} · {i.supplier || "Fournisseur"} · <b>{money(amountHT(i))} HT</b></div>)}{projectInvoices.length === 0 && <p className="text-sm text-slate-500">Aucun achat.</p>}</div><div><b>Retours</b>{projectReturns.map((r: any) => <div key={r.id} className="mt-2 rounded-xl bg-emerald-50 p-3 text-sm">{r.return_date || "-"} · {r.supplier || "Retour"} · <b>{money(amountHT(r))} HT</b></div>)}{projectReturns.length === 0 && <p className="text-sm text-slate-500">Aucun retour.</p>}</div><div><b>Main d’œuvre / planning</b>{projectPlanning.map((pl: any) => <div key={pl.id} className="mt-2 rounded-xl bg-blue-50 p-3 text-sm">{pl.start_date || "-"} → {pl.end_date || "-"} · {daysBetween(pl.start_date, pl.end_date)} jour(s) · <b>{money(daysBetween(pl.start_date, pl.end_date) * employeeCost(pl.employee_id))}</b></div>)}{projectPlanning.length === 0 && <p className="text-sm text-slate-500">Aucune main d’œuvre liée.</p>}</div></div></Card></div>
+      <div className="grid gap-5 xl:grid-cols-3"><Card><h3 className="mb-3 text-lg font-black">Notes</h3>{projectNotes.map((n: any) => <div key={n.id} className="mb-2 rounded-xl bg-slate-50 p-3 text-sm"><b>{n.title || "Note"}</b><p>{n.content || n.note || ""}</p></div>)}{projectNotes.length === 0 && <p className="text-sm text-slate-500">Aucune note.</p>}</Card><Card><h3 className="mb-3 text-lg font-black">Matériel à prévoir</h3>{projectMaterials.map((m: any) => <div key={m.id} className="mb-2 rounded-xl bg-amber-50 p-3 text-sm"><b>{m.title || "Matériel"}</b><p>{m.content || m.description || ""}</p></div>)}{projectMaterials.length === 0 && <p className="text-sm text-slate-500">Aucun matériel.</p>}</Card><Card><h3 className="mb-3 text-lg font-black">Points de vigilance</h3>{projectVigilance.map((v: any) => <div key={v.id} className="mb-2 rounded-xl bg-red-50 p-3 text-sm"><b>{v.title || "Vigilance"}</b><p>{v.content || v.description || ""}</p></div>)}{projectVigilance.length === 0 && <p className="text-sm text-slate-500">Aucun point de vigilance.</p>}</Card></div>
+    </div>;
+  }
 
-    <Card className="mb-5 border-l-8 border-emerald-500 bg-emerald-50/40">
-      <h3 className="text-xl font-black">📅 Période de pilotage</h3>
+  if (tab === "paiements") {
+    const visiblePayments = clientPayments;
+    const totalPayments = visiblePayments.reduce((s: number, p: any) => s + Number(p.amount_ttc || 0), 0);
+    return <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-3xl font-black text-slate-900">Règlements clients hors intranet</h1><p className="text-sm text-slate-500">Gestion simple type Excel : date, client, n° facture, montant TTC, moyen de paiement. Non lié aux chantiers.</p></div><Button variant="secondary" onClick={() => setTab("pilotage")}>← Retour Gestion</Button></div>
       
-      <div className="mt-4 flex flex-wrap gap-2">
-        <Button variant={periodMode === "today" ? "primary" : "secondary"} onClick={() => applyPeriod("today")}>Aujourd’hui</Button>
-        <Button variant={periodMode === "week" ? "primary" : "secondary"} onClick={() => applyPeriod("week")}>Semaine</Button>
-        <Button variant={periodMode === "month" ? "primary" : "secondary"} onClick={() => applyPeriod("month")}>Mois</Button>
-        <Button variant={periodMode === "quarter" ? "primary" : "secondary"} onClick={() => applyPeriod("quarter")}>Trimestre</Button>
-        <Button variant={periodMode === "year" ? "primary" : "secondary"} onClick={() => applyPeriod("year")}>Année</Button>
-        <Button variant={periodMode === "custom" ? "primary" : "secondary"} onClick={() => setPeriodMode("custom")}>Personnalisée</Button>
-      </div>
-      <div className="mt-4 grid gap-3 md:grid-cols-3">
-        <Field label="Date début"><Input type="date" value={periodStart} onChange={(e: any) => { setPeriodMode("custom"); setPeriodStart(e.target.value); }} /></Field>
-        <Field label="Date fin"><Input type="date" value={periodEnd} onChange={(e: any) => { setPeriodMode("custom"); setPeriodEnd(e.target.value); }} /></Field>
-        <div className="rounded-2xl bg-white p-4"><p className="text-xs font-black uppercase text-slate-500">Période active</p><p className="mt-2 text-lg font-black text-slate-900">{periodLabel}</p></div>
+      <Card><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-black">Ajouter / modifier un règlement</h2><p className="text-sm text-slate-500">La date est obligatoire.</p></div><Button onClick={() => { setEditingPaymentId(null); setShowPaymentForm(!showPaymentForm); setPaymentForm({ project_id: "", revenue_id: "", client: "", invoice_number: "", amount_ttc: "", payment_method: "Virement bancaire", payment_date: formatDate(new Date()), notes: "" }); }}>{showPaymentForm ? "Fermer" : "+ Règlement"}</Button></div>
+        {showPaymentForm && <form onSubmit={savePayment} className="mt-4 grid gap-3 md:grid-cols-5"><Field label="Date *"><Input required type="date" value={paymentForm.payment_date} onChange={(e: any) => setPaymentForm({ ...paymentForm, payment_date: e.target.value })} /></Field><Field label="Client *"><Input required value={paymentForm.client} onChange={(e: any) => setPaymentForm({ ...paymentForm, client: e.target.value })} placeholder="Nom client" /></Field><Field label="N° facture"><Input value={paymentForm.invoice_number} onChange={(e: any) => setPaymentForm({ ...paymentForm, invoice_number: e.target.value })} /></Field><Field label="Montant TTC *"><Input required type="number" step="0.01" value={paymentForm.amount_ttc} onChange={(e: any) => setPaymentForm({ ...paymentForm, amount_ttc: e.target.value })} /></Field><Field label="Moyen"><Select value={paymentForm.payment_method} onChange={(e: any) => setPaymentForm({ ...paymentForm, payment_method: e.target.value })}><option>Virement bancaire</option><option>Chèque</option><option>Carte bancaire</option><option>Espèces</option><option>Prélèvement</option><option>Autre</option></Select></Field><div className="md:col-span-5"><Field label="Notes"><Textarea value={paymentForm.notes} onChange={(e: any) => setPaymentForm({ ...paymentForm, notes: e.target.value })} /></Field></div><div className="md:col-span-5 flex gap-2"><Button type="submit">{editingPaymentId ? "Modifier" : "Enregistrer"}</Button><Button type="button" variant="secondary" onClick={() => { setEditingPaymentId(null); setShowPaymentForm(false); }}>Annuler</Button></div></form>}
+      </Card>
+      <Card><div className="mb-4 flex flex-wrap items-center justify-between gap-3"><h2 className="text-xl font-black">Liste des règlements clients</h2><Badge tone="blue">{visiblePayments.length}</Badge></div><div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left text-xs uppercase text-slate-500"><th className="p-3">Date</th><th className="p-3">Client</th><th className="p-3">N° facture</th><th className="p-3 text-right">Montant TTC</th><th className="p-3">Moyen</th><th className="p-3 text-right">Actions</th></tr></thead><tbody>{visiblePayments.map((p: any) => <tr key={p.id} className="border-b"><td className="p-3 font-bold">{p.payment_date || "—"}</td><td className="p-3">{p.client}</td><td className="p-3">{p.invoice_number || "—"}</td><td className="p-3 text-right font-black">{money(Number(p.amount_ttc || 0))}</td><td className="p-3">{p.payment_method || "—"}</td><td className="p-3"><div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => editPayment(p)}>Modifier</Button><Button variant="green" onClick={() => markPaymentPaid(p)}>Payé</Button><Button variant="danger" onClick={() => deletePayment(p)}>Supprimer</Button></div></td></tr>)}{visiblePayments.length === 0 && <tr><td colSpan={6} className="p-8 text-center text-slate-500">Aucun règlement enregistré.</td></tr>}</tbody></table></div></Card>
+    </div>;
+  }
+
+  if (tab === "factures") return <div className="space-y-5">
+    <div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-3xl font-black text-slate-900">Créer facturation client</h1><p className="text-sm text-slate-500">Facturation uniquement sur chantiers actifs. Date obligatoire.</p></div><Button variant="secondary" onClick={() => setTab("pilotage")}>← Retour Gestion</Button></div>
+    <Card><form onSubmit={saveRevenue} className="grid gap-4 md:grid-cols-6"><Field label="Chantier"><Select required value={revenueForm.project_id} onChange={(e: any) => setRevenueForm({ ...revenueForm, project_id: e.target.value })}><option value="">Choisir</option>{activeProjects.map((p: any) => <option key={p.id} value={p.id}>{projectLabel(p.id)}</option>)}</Select></Field><Field label="Libellé"><Input value={revenueForm.label} onChange={(e: any) => setRevenueForm({ ...revenueForm, label: e.target.value })} /></Field><Field label="Montant HT"><Input required type="number" step="0.01" value={revenueForm.amount} onChange={(e: any) => setRevenueForm({ ...revenueForm, amount: e.target.value })} /></Field><Field label="TVA"><Select value={revenueForm.tva_rate} onChange={(e: any) => setRevenueForm({ ...revenueForm, tva_rate: e.target.value })}><option value="0">0%</option><option value="5.5">5,5%</option><option value="10">10%</option><option value="20">20%</option></Select></Field><Field label="Date obligatoire"><Input required type="date" value={revenueForm.billing_date} onChange={(e: any) => setRevenueForm({ ...revenueForm, billing_date: e.target.value })} /></Field><Field label="Notes"><Input value={revenueForm.notes} onChange={(e: any) => setRevenueForm({ ...revenueForm, notes: e.target.value })} /></Field><div className="md:col-span-6 flex gap-3"><Button variant="green">Enregistrer la facturation</Button><Button type="button" variant="secondary" onClick={() => { setEditingRevenueId(null); setRevenueForm({ project_id: "", label: "", amount: "", tva_rate: "10", billing_date: formatDate(new Date()), notes: "" }); }}>Réinitialiser</Button></div></form></Card>
+    <Card><h3 className="mb-4 text-xl font-black">Factures clients créées</h3><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="text-xs uppercase text-slate-500"><th className="p-3">Date</th><th className="p-3">Chantier</th><th className="p-3">Libellé</th><th className="p-3">HT</th><th className="p-3">TVA</th><th className="p-3">TTC</th><th className="p-3">Actions</th></tr></thead><tbody>{periodActiveRevenues.map((r: any) => <tr key={r.id} className="border-t"><td className="p-3">{r.billing_date || "-"}</td><td className="p-3 font-bold">{projectLabel(r.project_id)}</td><td className="p-3">{r.label || "Facturation client"}</td><td className="p-3">{money(amountHT(r))}</td><td className="p-3">{money(amountTVA(r))}</td><td className="p-3 font-black">{money(amountTTC(r))}</td><td className="p-3"><div className="flex gap-2"><Button variant="secondary" onClick={() => editRevenue(r)}>Modifier</Button><Button variant="danger" onClick={() => deleteRevenue(r)}>Supprimer</Button></div></td></tr>)}{periodActiveRevenues.length === 0 && <tr><td colSpan={7} className="p-6 text-center text-slate-500">Aucune facturation client sur cette période.</td></tr>}</tbody></table></div></Card>
+  </div>;
+
+  if (tab === "charges") return <div className="space-y-5">
+    <div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-3xl font-black text-slate-900">Charges entreprises</h1><p className="text-sm text-slate-500">Charges fixes visibles en pilotage global uniquement, non imputées aux chantiers.</p></div><Button variant="secondary" onClick={() => setTab("pilotage")}>← Retour Gestion</Button></div>
+    <Card><div className="flex flex-wrap items-center justify-between gap-3"><h3 className="text-xl font-black">Ajouter / modifier une charge</h3><Button variant="green" onClick={() => setShowExpenseForm(!showExpenseForm)}>{showExpenseForm ? "Masquer" : "+ Charge"}</Button></div>{showExpenseForm && <form onSubmit={saveExpense} className="mt-4 grid gap-3 md:grid-cols-6"><Field label="Nom"><Input required value={expenseForm.name} onChange={(e: any) => setExpenseForm({ ...expenseForm, name: e.target.value })} /></Field><Field label="Catégorie"><Select value={expenseForm.category} onChange={(e: any) => setExpenseForm({ ...expenseForm, category: e.target.value })}><option>Charges fixes</option><option>Charges variables</option><option>Véhicules</option><option>Assurances</option><option>Salaires</option><option>Matériel</option><option>Logiciels</option><option>Autres</option></Select></Field><Field label="Montant HT"><Input required type="number" step="0.01" value={expenseForm.amount} onChange={(e: any) => setExpenseForm({ ...expenseForm, amount: e.target.value })} /></Field><Field label="TVA"><Select value={expenseForm.tva_rate} onChange={(e: any) => setExpenseForm({ ...expenseForm, tva_rate: e.target.value })}><option value="0">0%</option><option value="5.5">5,5%</option><option value="10">10%</option><option value="20">20%</option></Select></Field><Field label="Fréquence"><Select value={expenseForm.frequency} onChange={(e: any) => setExpenseForm({ ...expenseForm, frequency: e.target.value })}><option>mensuelle</option><option>hebdomadaire</option><option>ponctuelle</option><option>annuelle</option></Select></Field><Field label="Date obligatoire"><Input required type="date" value={expenseForm.expense_date} onChange={(e: any) => setExpenseForm({ ...expenseForm, expense_date: e.target.value })} /></Field><div className="md:col-span-6"><Button variant="green">Enregistrer</Button></div></form>}</Card>
+    <Card><h3 className="mb-4 text-xl font-black">Liste des charges</h3><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="text-xs uppercase text-slate-500"><th className="p-3">Date</th><th className="p-3">Nom</th><th className="p-3">Catégorie</th><th className="p-3">Fréquence</th><th className="p-3">HT</th><th className="p-3">TVA</th><th className="p-3">TTC</th><th className="p-3">Actions</th></tr></thead><tbody>{companyExpenses.map((e: any) => <tr key={e.id} className="border-t"><td className="p-3">{e.expense_date || "-"}</td><td className="p-3 font-bold">{e.name}</td><td className="p-3">{e.category}</td><td className="p-3">{e.frequency}</td><td className="p-3">{money(amountHT(e))}</td><td className="p-3">{money(amountTVA(e))}</td><td className="p-3 font-black">{money(amountTTC(e))}</td><td className="p-3"><div className="flex gap-2"><Button variant="secondary" onClick={() => editExpense(e)}>Modifier</Button><Button variant="danger" onClick={() => deleteExpense(e)}>Supprimer</Button></div></td></tr>)}{companyExpenses.length === 0 && <tr><td colSpan={8} className="p-6 text-center text-slate-500">Aucune charge.</td></tr>}</tbody></table></div></Card>
+  </div>;
+
+  if (tab === "achats") return <div className="space-y-5">
+    <div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-3xl font-black text-slate-900">Récapitulatif des factures d’achats</h1><p className="text-sm text-slate-500">Vue détaillée filtrée par période comptable.</p></div><Button variant="secondary" onClick={() => setTab("pilotage")}>← Retour Gestion</Button></div>
+    <Card><div className="grid gap-4 md:grid-cols-4"><div><b>Nombre de factures</b><p className="text-2xl font-black">{purchaseSummary.count}</p></div><div><b>Total HT</b><p className="text-2xl font-black">{money(purchaseSummary.ht)}</p></div><div><b>Total TVA</b><p className="text-2xl font-black">{money(purchaseSummary.tva)}</p></div><div><b>Total TTC</b><p className="text-2xl font-black">{money(purchaseSummary.ttc)}</p></div></div></Card>
+    <Card><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="text-xs uppercase text-slate-500"><th className="p-3">Date</th><th className="p-3">Fournisseur</th><th className="p-3">N° facture</th><th className="p-3">Chantier</th><th className="p-3">Montant HT</th><th className="p-3">TVA</th><th className="p-3">Montant TTC</th></tr></thead><tbody>{visiblePurchaseInvoices.map((i: any) => <tr key={i.id} className="border-t"><td className="p-3">{i.invoice_date || "-"}</td><td className="p-3 font-bold">{i.supplier || "Fournisseur"}</td><td className="p-3">{i.invoice_number || i.label || "-"}</td><td className="p-3">{projectLabel(i.project_id)}</td><td className="p-3">{money(amountHT(i))}</td><td className="p-3">{money(amountTVA(i))}</td><td className="p-3 font-black">{money(amountTTC(i))}</td></tr>)}{visiblePurchaseInvoices.length === 0 && <tr><td colSpan={7} className="p-6 text-center text-slate-500">Aucune facture d’achat sur cette période.</td></tr>}</tbody></table></div></Card>
+  </div>;
+
+  return <div className="space-y-5">
+    <h1 className="text-3xl font-black text-slate-900">Gestion</h1>
+    <Card className="border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="grid items-end gap-3 xl:grid-cols-[minmax(440px,0.9fr)_minmax(300px,0.7fr)_minmax(280px,0.7fr)]">
+        <div>
+          <p className="mb-1 text-xs font-black uppercase tracking-wide text-slate-700">📅 Période comptable & pilotage</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Input className="!mt-0 h-11 max-w-[155px] bg-white py-2 font-bold" type="date" value={periodStart} onChange={(e: any) => { setPeriodMode("custom"); setPeriodStart(e.target.value); }} />
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-slate-200 bg-slate-50 font-black text-slate-600">→</span>
+            <Input className="!mt-0 h-11 max-w-[155px] bg-white py-2 font-bold" type="date" value={periodEnd} onChange={(e: any) => { setPeriodMode("custom"); setPeriodEnd(e.target.value); }} />
+            <Button className="h-11 px-6 shadow-sm" onClick={() => applyPeriod(periodMode)}>Appliquer</Button>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button type="button" onClick={() => applyPeriod("today")} className={periodMode === "today" ? "rounded-xl bg-slate-900 px-3 py-1.5 text-xs font-black text-white" : "rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-black text-slate-700 hover:bg-slate-50"}>Aujourd’hui</button>
+            <button type="button" onClick={() => applyPeriod("week")} className={periodMode === "week" ? "rounded-xl bg-slate-900 px-3 py-1.5 text-xs font-black text-white" : "rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-black text-slate-700 hover:bg-slate-50"}>Semaine</button>
+            <button type="button" onClick={() => applyPeriod("month")} className={periodMode === "month" ? "rounded-xl bg-slate-900 px-3 py-1.5 text-xs font-black text-white" : "rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-black text-slate-700 hover:bg-slate-50"}>Mois</button>
+            <button type="button" onClick={() => applyPeriod("quarter")} className={periodMode === "quarter" ? "rounded-xl bg-slate-900 px-3 py-1.5 text-xs font-black text-white" : "rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-black text-slate-700 hover:bg-slate-50"}>Trimestre</button>
+            <button type="button" onClick={() => applyPeriod("year")} className={periodMode === "year" ? "rounded-xl bg-slate-900 px-3 py-1.5 text-xs font-black text-white" : "rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-black text-slate-700 hover:bg-slate-50"}>Année</button>
+          </div>
+        </div>
+        <Field label="Recherche chantier"><Input className="!mt-1 h-11 bg-white py-2" placeholder="Nom chantier, client, adresse..." value={projectSearch} onChange={(e: any) => setProjectSearch(e.target.value)} /></Field>
+        <Field label="Liste déroulante"><Select className="!mt-1 h-11 bg-white py-2" value={selectedProjectFilter} onChange={(e: any) => setSelectedProjectFilter(e.target.value)}><option value="">Tous les chantiers actifs</option>{activeProjects.map((p: any) => <option key={p.id} value={p.id}>{p.name} · {p.client || "Client"}</option>)}</Select></Field>
       </div>
     </Card>
-
-    <div className="mb-5 flex flex-wrap gap-2">{tabButton("pilotage", "Pilotage global")}{tabButton("factures", "Factures clients chantiers")}{tabButton("marge", "Calcul marge chantier")}{tabButton("reglements", "Gestion des règlements")}{tabButton("paiements", "Encours client")}{tabButton("charges", "Charges entreprise")}{tabButton("archives", `Chantiers archivés (${archivedProjects.length})`)}</div>
-
-    <div className="mb-6 grid gap-4 md:grid-cols-4 xl:grid-cols-6">
-      <Card><p className="text-xs font-black uppercase text-slate-500">CA HT facturé</p><p className="mt-2 text-3xl font-black text-emerald-700">{money(allStats.revenue)}</p></Card>
-      <Card><p className="text-xs font-black uppercase text-slate-500">TVA collectée</p><p className="mt-2 text-3xl font-black text-blue-700">{money(allStats.revenueTVA)}</p><p className="text-xs text-slate-500">Factures clients</p></Card>
-      <Card><p className="text-xs font-black uppercase text-slate-500">TVA déductible</p><p className="mt-2 text-3xl font-black text-emerald-700">{money(tvaDeductibleGlobal)}</p><p className="text-xs text-slate-500">Achats + charges - retours</p></Card>
-      <Card className={tvaBalanceGlobal >= 0 ? "bg-red-50" : "bg-emerald-50"}><p className={tvaBalanceGlobal >= 0 ? "text-xs font-black uppercase text-red-700" : "text-xs font-black uppercase text-emerald-700"}>{tvaBalanceGlobal >= 0 ? "Solde TVA due" : "Solde TVA récupérable"}</p><p className={tvaBalanceGlobal >= 0 ? "mt-2 text-3xl font-black text-red-700" : "mt-2 text-3xl font-black text-emerald-700"}>{money(Math.abs(tvaBalanceGlobal))}</p><p className="text-xs text-slate-500">Collectée - déductible</p></Card>
-      <Card><p className="text-xs font-black uppercase text-slate-500">Charges globales HT</p><p className="mt-2 text-3xl font-black text-slate-900">{money(expensesHT)}</p></Card>
-      <Card><p className="text-xs font-black uppercase text-slate-500">Marge globale HT</p><p className={(allStats.margin - expensesHT) >= 0 ? "mt-2 text-3xl font-black text-emerald-700" : "mt-2 text-3xl font-black text-red-700"}>{money(allStats.margin - expensesHT)}</p></Card>
-    </div>
-
-    {tab === "pilotage" && <div className="grid gap-5 lg:grid-cols-2">
-      <Card><h3 className="mb-4 text-xl font-black">📊 Répartition rentabilité</h3><SimplePie values={[{ label: "CA HT", value: allStats.revenue }, { label: "Achats", value: allStats.purchases }, { label: "Main-d'œuvre", value: allStats.labor }, { label: "Charges", value: expensesHT }, { label: "Marge", value: Math.max(0, allStats.margin - expensesHT) }]} /></Card>
-      <Card><h3 className="mb-4 text-xl font-black">🧾 Jeu de TVA</h3><SimplePie values={[{ label: "TVA collectée", value: allStats.revenueTVA }, { label: "TVA déductible", value: tvaDeductibleGlobal }, { label: tvaBalanceGlobal >= 0 ? "TVA due" : "TVA récupérée", value: Math.abs(tvaBalanceGlobal) }]} /></Card>
-      <Card className="lg:col-span-2"><h3 className="mb-4 text-xl font-black">🏗️ Chantiers actifs</h3><div className="grid gap-4">{searchedActiveProjects.map((p: any) => { const s = projectStats(p.id); return <div key={p.id} className="rounded-3xl border border-slate-200 bg-white p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-black uppercase text-slate-500">Chantier actif</p><h4 className="text-xl font-black">{p.name}</h4><p className="text-sm text-slate-500">{p.client || "Client non renseigné"}</p></div><div className="flex flex-wrap gap-2"><Badge tone={s.margin >= 0 ? "green" : "red"}>{s.margin >= 0 ? "Rentable" : "À surveiller"}</Badge><Button variant="secondary" onClick={() => generateProjectPdfFromGestion(p)}>Rapport PDF</Button><Button variant="amber" onClick={() => archiveProject(p, true)}>Archiver</Button></div></div><div className="mt-4 grid gap-3 md:grid-cols-5"><div className="rounded-2xl bg-emerald-50 p-3"><b>CA HT</b><br />{money(s.revenueTotal)}</div><div className="rounded-2xl bg-red-50 p-3"><b>Achats HT</b><br />{money(s.supplierTotal)}</div><div className="rounded-2xl bg-purple-50 p-3"><b>Main-d'œuvre</b><br />{money(s.laborTotal)}</div><div className="rounded-2xl bg-blue-50 p-3"><b>Marge</b><br />{money(s.margin)}</div><div className={s.tvaBalance >= 0 ? "rounded-2xl bg-red-50 p-3" : "rounded-2xl bg-emerald-50 p-3"}><b>{s.tvaBalance >= 0 ? "TVA due" : "TVA récupérée"}</b><br />{money(Math.abs(s.tvaBalance))}</div></div></div>; })}{searchedActiveProjects.length === 0 && <p className="text-sm text-slate-500">Aucun chantier actif trouvé.</p>}</div></Card>
-    </div>}
-
-    {tab === "factures" && <div className="space-y-5"><Card><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-xl font-black">🧾 Factures clients chantiers</h3></div><Button variant="green" onClick={() => setShowRevenueForm(!showRevenueForm)}>+ Facture client</Button></div>{showRevenueForm && <form onSubmit={saveRevenue} className="mt-4 grid gap-3 md:grid-cols-6"><Field label="Chantier"><Select value={revenueForm.project_id} onChange={(e: any) => setRevenueForm({ ...revenueForm, project_id: e.target.value })}><option value="">Choisir</option>{activeProjects.map((p: any) => <option key={p.id} value={p.id}>{projectLabel(p.id)}</option>)}</Select></Field><Field label="Libellé"><Input value={revenueForm.label} onChange={(e: any) => setRevenueForm({ ...revenueForm, label: e.target.value })} /></Field><Field label="Montant HT"><Input type="number" step="0.01" value={revenueForm.amount} onChange={(e: any) => setRevenueForm({ ...revenueForm, amount: e.target.value })} /></Field><Field label="TVA"><Select value={revenueForm.tva_rate} onChange={(e: any) => setRevenueForm({ ...revenueForm, tva_rate: e.target.value })}><option value="0">0%</option><option value="5.5">5,5%</option><option value="10">10%</option><option value="20">20%</option></Select></Field><Field label="Date"><Input type="date" value={revenueForm.billing_date} onChange={(e: any) => setRevenueForm({ ...revenueForm, billing_date: e.target.value })} /></Field><Field label="Notes"><Input value={revenueForm.notes} onChange={(e: any) => setRevenueForm({ ...revenueForm, notes: e.target.value })} /></Field><div className="md:col-span-6 flex gap-2"><Button variant="green">{editingRevenueId ? "Enregistrer" : "Ajouter"}</Button>{editingRevenueId && <Button type="button" variant="secondary" onClick={() => { setEditingRevenueId(null); setShowRevenueForm(false); }}>Annuler</Button>}</div></form>}</Card><Card><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="text-xs uppercase text-slate-500"><th className="p-3">Chantier</th><th className="p-3">Libellé</th><th className="p-3">HT</th><th className="p-3">TVA collectée</th><th className="p-3">TTC</th><th className="p-3">Payé</th><th className="p-3">Reste</th><th className="p-3">Statut</th><th className="p-3">Date</th><th className="p-3">Actions</th></tr></thead><tbody>{periodActiveRevenues.map((r: any) => { const st = revenuePaymentStatus(r); return <tr key={r.id} className="border-t"><td className="p-3 font-bold">{projectLabel(r.project_id)}</td><td className="p-3">{r.label}</td><td className="p-3">{money(amountHT(r))}</td><td className="p-3 text-blue-700 font-bold">{money(amountTVA(r))}</td><td className="p-3 font-black">{money(amountTTC(r))}</td><td className="p-3 text-emerald-700 font-bold">{money(paidForRevenue(r))}</td><td className="p-3 text-red-700 font-bold">{money(remainingForRevenue(r))}</td><td className="p-3"><Badge tone={st.tone}>{st.label}</Badge></td><td className="p-3">{r.billing_date || "-"}</td><td className="p-3"><div className="flex flex-wrap gap-2"><Button variant="secondary" onClick={() => editRevenue(r)}>Modifier</Button><Button variant="green" onClick={() => preparePaymentForRevenue(r, false)}>Paiement partiel</Button><Button variant="primary" onClick={() => markRevenuePaid(r)}>Payée</Button><Button variant="danger" onClick={() => deleteRevenue(r)}>Supprimer</Button></div></td></tr>; })}{periodActiveRevenues.length === 0 && <tr><td colSpan={10} className="p-6 text-center text-slate-500">Aucune facture client active sur cette période. Les chantiers archivés sont masqués ici.</td></tr>}</tbody></table></div></Card></div>}
-
-    {tab === "marge" && <div className="space-y-5">
-      <Card className="border-l-8 border-violet-500">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div><h3 className="text-xl font-black">🧮 Calcul marge devis / chantier</h3><p className="text-sm text-slate-500">Outil de simulation indépendant pour préparer un devis avant création du chantier.</p></div>
-          <Button variant="green" onClick={() => setShowSimulationForm(!showSimulationForm)}>+ Simulation</Button>
-        </div>
-        {showSimulationForm && <form onSubmit={saveSimulation} className="mt-5 space-y-5">
-          <div className="grid gap-3 md:grid-cols-6">
-            <Field label="Nom simulation"><Input value={simulationForm.title} onChange={(e: any) => setSimulationForm({ ...simulationForm, title: e.target.value })} placeholder="Ex : BRUNEL cuisine - devis" /></Field>
-            <Field label="Client"><Input value={simulationForm.client} onChange={(e: any) => setSimulationForm({ ...simulationForm, client: e.target.value })} /></Field>
-            <Field label="Prix vente HT prévu"><Input type="number" step="0.01" value={simulationForm.sale_ht} onChange={(e: any) => setSimulationForm({ ...simulationForm, sale_ht: e.target.value })} /></Field>
-            <Field label="TVA client"><Select value={simulationForm.client_tva_rate} onChange={(e: any) => setSimulationForm({ ...simulationForm, client_tva_rate: e.target.value })}><option value="0">0%</option><option value="5.5">5,5%</option><option value="10">10%</option><option value="20">20%</option></Select></Field>
-            <Field label="Remise HT"><Input type="number" step="0.01" value={simulationForm.discount} onChange={(e: any) => setSimulationForm({ ...simulationForm, discount: e.target.value })} /></Field>
-            <Field label="Marge souhaitée %"><Input type="number" step="0.01" value={simulationForm.target_margin_rate} onChange={(e: any) => setSimulationForm({ ...simulationForm, target_margin_rate: e.target.value })} /></Field>
-            <Field label="Notes"><Input value={simulationForm.description} onChange={(e: any) => setSimulationForm({ ...simulationForm, description: e.target.value })} /></Field>
-          </div>
-          <div className="rounded-3xl bg-slate-50 p-4">
-            <div className="mb-3 flex items-center justify-between gap-2"><h4 className="font-black">Dépenses prévues</h4><Button type="button" variant="secondary" onClick={addExpenseLine}>+ Ligne dépense</Button></div>
-            <div className="space-y-3">{simulationForm.expenses.map((row: any, index: number) => <div key={index} className="grid gap-3 md:grid-cols-5"><Field label="Libellé"><Input value={row.label} onChange={(e: any) => setExpenseLine(index, "label", e.target.value)} /></Field><Field label="Catégorie"><Select value={row.category} onChange={(e: any) => setExpenseLine(index, "category", e.target.value)}><option>Matériaux</option><option>Sous-traitance</option><option>Location</option><option>Transport</option><option>Autre</option></Select></Field><Field label="Montant HT"><Input type="number" step="0.01" value={row.amount} onChange={(e: any) => setExpenseLine(index, "amount", e.target.value)} /></Field><Field label="TVA achat"><Select value={row.tva_rate} onChange={(e: any) => setExpenseLine(index, "tva_rate", e.target.value)}><option value="0">0%</option><option value="5.5">5,5%</option><option value="10">10%</option><option value="20">20%</option></Select></Field><div className="flex items-end"><Button type="button" variant="danger" onClick={() => removeExpenseLine(index)}>Supprimer</Button></div></div>)}</div>
-          </div>
-          <div className="rounded-3xl bg-purple-50 p-4">
-            <div className="mb-3 flex items-center justify-between gap-2"><h4 className="font-black">Personnel prévu</h4><Button type="button" variant="secondary" onClick={addLaborLine}>+ Ligne personnel</Button></div>
-            <div className="space-y-3">{simulationForm.labor.map((row: any, index: number) => <div key={index} className="grid gap-3 md:grid-cols-5"><Field label="Salarié"><Select value={row.employee_id} onChange={(e: any) => setLaborLine(index, "employee_id", e.target.value)}><option value="">Manuel / non défini</option>{employees.map((emp: any) => <option key={emp.id} value={emp.id}>{`${emp.firstname || emp.first_name || ""} ${emp.lastname || emp.last_name || ""}`.trim() || emp.name || "Salarié"}</option>)}</Select></Field><Field label="Libellé"><Input value={row.label} onChange={(e: any) => setLaborLine(index, "label", e.target.value)} placeholder="Pose, préparation..." /></Field><Field label="Jours"><Input type="number" step="0.5" value={row.days} onChange={(e: any) => setLaborLine(index, "days", e.target.value)} /></Field><Field label="Coût jour"><Input type="number" step="0.01" value={row.daily_cost} onChange={(e: any) => setLaborLine(index, "daily_cost", e.target.value)} /></Field><div className="flex items-end"><Button type="button" variant="danger" onClick={() => removeLaborLine(index)}>Supprimer</Button></div></div>)}</div>
-          </div>
-          {(() => { const c = simulationCalc(simulationForm); return <div className="grid gap-3 md:grid-cols-4"><div className="rounded-2xl bg-emerald-50 p-4"><b>Vente HT nette</b><div className="text-2xl font-black text-emerald-700">{money(c.netSaleHT)}</div></div><div className="rounded-2xl bg-red-50 p-4"><b>Coûts totaux HT</b><div className="text-2xl font-black text-red-700">{money(c.totalCost)}</div></div><div className={c.margin >= 0 ? "rounded-2xl bg-blue-50 p-4" : "rounded-2xl bg-red-100 p-4"}><b>Marge estimée</b><div className={c.margin >= 0 ? "text-2xl font-black text-blue-700" : "text-2xl font-black text-red-700"}>{money(c.margin)} · {c.marginRate}%</div></div><div className="rounded-2xl bg-white p-4"><b>Prix mini conseillé HT</b><div className="text-2xl font-black text-slate-900">{money(c.minimumSale)}</div></div><div className="rounded-2xl bg-white p-4"><b>TVA collectée</b><div className="font-black text-blue-700">{money(c.clientTVA)}</div></div><div className="rounded-2xl bg-white p-4"><b>TVA déductible</b><div className="font-black text-emerald-700">{money(c.expensesTVA)}</div></div><div className={c.tvaBalance >= 0 ? "rounded-2xl bg-red-50 p-4" : "rounded-2xl bg-emerald-50 p-4"}><b>{c.tvaBalance >= 0 ? "TVA due" : "TVA récupérable"}</b><div className="font-black">{money(Math.abs(c.tvaBalance))}</div></div><div className="rounded-2xl bg-white p-4"><b>Vente TTC</b><div className="font-black">{money(c.saleTTC)}</div></div></div>; })()}
-          <div className="flex flex-wrap gap-2"><Button variant="green">{editingSimulationId ? "Enregistrer simulation" : "Créer simulation"}</Button>{editingSimulationId && <Button type="button" variant="secondary" onClick={() => { setEditingSimulationId(null); setShowSimulationForm(false); }}>Annuler</Button>}</div>
-        </form>}
-      </Card>
-      <Card><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="text-xs uppercase text-slate-500"><th className="p-3">Simulation</th><th className="p-3">Client</th><th className="p-3">Vente HT</th><th className="p-3">Coûts HT</th><th className="p-3">Marge</th><th className="p-3">TVA</th><th className="p-3">Actions</th></tr></thead><tbody>{marginSimulations.map((sim: any) => <tr key={sim.id} className="border-t"><td className="p-3 font-black">{sim.title}</td><td className="p-3">{sim.client || "-"}</td><td className="p-3">{money(sim.sale_ht)}</td><td className="p-3">{money(sim.total_cost)}</td><td className="p-3"><Badge tone={Number(sim.margin_ht || 0) >= 0 ? "green" : "red"}>{money(sim.margin_ht)} · {Number(sim.margin_rate || 0)}%</Badge></td><td className="p-3">{Number(sim.tva_balance || 0) >= 0 ? "Due " : "Récup. "}{money(Math.abs(Number(sim.tva_balance || 0)))}</td><td className="p-3"><div className="flex flex-wrap gap-2"><Button variant="secondary" onClick={() => editSimulation(sim)}>Modifier</Button><Button variant="primary" onClick={() => duplicateSimulation(sim)}>Dupliquer</Button><Button variant="green" onClick={() => createProjectFromSimulation(sim)}>Transformer en chantier</Button><Button variant="danger" onClick={() => deleteSimulation(sim)}>Supprimer</Button></div></td></tr>)}{marginSimulations.length === 0 && <tr><td colSpan={7} className="p-6 text-center text-slate-500">Aucune simulation enregistrée.</td></tr>}</tbody></table></div></Card>
-    </div>}
-
-
-    {tab === "reglements" && <div className="space-y-5"><Card><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-xl font-black">🏦 Gestion des règlements</h3><p className="text-sm text-slate-500">Suivi manuel indépendant : non lié aux chantiers, non intégré au pilotage.</p></div><Button variant="green" onClick={() => setShowReglementForm(!showReglementForm)}>+ Règlement</Button></div>{showReglementForm && <form onSubmit={saveReglement} className="mt-4 grid gap-3 md:grid-cols-7"><Field label="Date"><Input type="date" value={reglementForm.payment_date} onChange={(e: any) => setReglementForm({ ...reglementForm, payment_date: e.target.value })} /></Field><Field label="Client / fournisseur"><Input value={reglementForm.client_supplier} onChange={(e: any) => setReglementForm({ ...reglementForm, client_supplier: e.target.value })} /></Field><Field label="Libellé"><Input value={reglementForm.label} onChange={(e: any) => setReglementForm({ ...reglementForm, label: e.target.value })} /></Field><Field label="Montant"><Input type="number" step="0.01" value={reglementForm.amount} onChange={(e: any) => setReglementForm({ ...reglementForm, amount: e.target.value })} /></Field><Field label="Moyen"><Select value={reglementForm.payment_method} onChange={(e: any) => setReglementForm({ ...reglementForm, payment_method: e.target.value })}><option>Virement bancaire</option><option>Virement CIC</option><option>Virement BP</option><option>Chèque</option><option>Espèces</option><option>CB</option><option>Prélèvement</option><option>Autre</option></Select></Field><Field label="Statut"><Select value={reglementForm.status} onChange={(e: any) => setReglementForm({ ...reglementForm, status: e.target.value })}><option>À payer</option><option>Payé</option></Select></Field><Field label="Note"><Input value={reglementForm.notes} onChange={(e: any) => setReglementForm({ ...reglementForm, notes: e.target.value })} /></Field><div className="md:col-span-7 flex gap-2"><Button variant="green">{editingReglementId ? "Enregistrer" : "Ajouter règlement"}</Button>{editingReglementId && <Button type="button" variant="secondary" onClick={() => { setEditingReglementId(null); setShowReglementForm(false); setReglementForm({ payment_date: formatDate(new Date()), client_supplier: "", label: "", amount: "", payment_method: "Virement bancaire", status: "À payer", notes: "" }); }}>Annuler</Button>}</div></form>}</Card><Card><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="text-xs uppercase text-slate-500"><th className="p-3">Date</th><th className="p-3">Client / fournisseur</th><th className="p-3">Libellé</th><th className="p-3">Montant</th><th className="p-3">Moyen</th><th className="p-3">Statut</th><th className="p-3">Note</th><th className="p-3">Actions</th></tr></thead><tbody>{periodManualReglements.map((r: any) => <tr key={r.id} className="border-t"><td className="p-3">{r.payment_date || "-"}</td><td className="p-3 font-bold">{r.client_supplier}</td><td className="p-3">{r.label || "-"}</td><td className="p-3 font-black">{money(r.amount)}</td><td className="p-3">{r.payment_method || "-"}</td><td className="p-3"><Badge tone={r.status === "Payé" ? "green" : "amber"}>{r.status || "À payer"}</Badge></td><td className="p-3">{r.notes || "-"}</td><td className="p-3"><div className="flex flex-wrap gap-2"><Button variant="secondary" onClick={() => editReglement(r)}>Modifier</Button>{r.status !== "Payé" && <Button variant="primary" onClick={() => markReglementPaid(r)}>Payée</Button>}<Button variant="danger" onClick={() => deleteReglement(r)}>Supprimer</Button></div></td></tr>)}{periodManualReglements.length === 0 && <tr><td colSpan={8} className="p-6 text-center text-slate-500">Aucun règlement manuel enregistré sur cette période.</td></tr>}</tbody></table></div></Card></div>}
-
-    {tab === "paiements" && <div className="space-y-5"><Card><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-xl font-black">💳 Encours client</h3><p className="text-sm text-slate-500">Suivi des factures, paiements partiels, factures soldées et reste à encaisser.</p></div><div className="flex gap-2"><Badge>{money(paidTTC)} encaissé</Badge><Button variant="green" onClick={() => setShowPaymentForm(!showPaymentForm)}>+ Paiement / acompte</Button></div></div>{showPaymentForm && <form onSubmit={savePayment} className="mt-4 grid gap-3 md:grid-cols-6"><Field label="Facture liée"><Select value={paymentForm.revenue_id} onChange={(e: any) => { const r = activeRevenues.find((x: any) => x.id === e.target.value); const pr = projects.find((p: any) => p.id === r?.project_id); setPaymentForm({ ...paymentForm, revenue_id: e.target.value, project_id: r?.project_id || paymentForm.project_id, client: pr?.client || paymentForm.client, invoice_number: r?.invoice_number || r?.label || paymentForm.invoice_number, amount_ttc: r ? String(remainingForRevenue(r)) : paymentForm.amount_ttc }); }}><option value="">Non liée</option>{activeRevenues.map((r: any) => <option key={r.id} value={r.id}>{projectLabel(r.project_id)} · {r.label || "Facture"} · reste {money(remainingForRevenue(r))}</option>)}</Select></Field><Field label="Date"><Input type="date" value={paymentForm.payment_date} onChange={(e: any) => setPaymentForm({ ...paymentForm, payment_date: e.target.value })} /></Field><Field label="Client"><Input value={paymentForm.client} onChange={(e: any) => setPaymentForm({ ...paymentForm, client: e.target.value })} /></Field><Field label="N° facture"><Input value={paymentForm.invoice_number} onChange={(e: any) => setPaymentForm({ ...paymentForm, invoice_number: e.target.value })} /></Field><Field label="Montant TTC"><Input type="number" step="0.01" value={paymentForm.amount_ttc} onChange={(e: any) => setPaymentForm({ ...paymentForm, amount_ttc: e.target.value })} /></Field><Field label="Moyen"><Select value={paymentForm.payment_method} onChange={(e: any) => setPaymentForm({ ...paymentForm, payment_method: e.target.value })}><option>Virement bancaire</option><option>Virement CIC</option><option>Virement BP</option><option>Chèque</option><option>Espèces</option><option>CB</option></Select></Field><Field label="Chantier"><Select value={paymentForm.project_id} onChange={(e: any) => setPaymentForm({ ...paymentForm, project_id: e.target.value })}><option value="">Non lié</option>{activeProjects.map((p: any) => <option key={p.id} value={p.id}>{projectLabel(p.id)}</option>)}</Select></Field><Field label="Notes"><Input value={paymentForm.notes} onChange={(e: any) => setPaymentForm({ ...paymentForm, notes: e.target.value })} /></Field><div className="md:col-span-5 flex gap-2"><Button variant="green">{editingPaymentId ? "Enregistrer" : "Ajouter paiement"}</Button>{editingPaymentId && <Button type="button" variant="secondary" onClick={() => { setEditingPaymentId(null); setShowPaymentForm(false); }}>Annuler</Button>}</div></form>}</Card><Card><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="text-xs uppercase text-slate-500"><th className="p-3">Date</th><th className="p-3">Client</th><th className="p-3">N° facture</th><th className="p-3">Facture liée</th><th className="p-3">Montant TTC</th><th className="p-3">Moyen</th><th className="p-3">Chantier</th><th className="p-3">Actions</th></tr></thead><tbody>{periodActivePayments.map((p: any) => <tr key={p.id} className="border-t"><td className="p-3">{p.payment_date || "-"}</td><td className="p-3 font-bold">{p.client}</td><td className="p-3">{p.invoice_number}</td><td className="p-3">{p.revenue_id ? "Oui" : "-"}</td><td className="p-3 font-black">{money(p.amount_ttc)}</td><td className="p-3">{p.payment_method}</td><td className="p-3">{p.project_id ? projectLabel(p.project_id) : "-"}</td><td className="p-3"><div className="flex gap-2"><Button variant="secondary" onClick={() => editPayment(p)}>Modifier</Button><Button variant="danger" onClick={() => deletePayment(p)}>Supprimer</Button></div></td></tr>)}{periodActivePayments.length === 0 && <tr><td colSpan={8} className="p-6 text-center text-slate-500">Aucun paiement client enregistré sur cette période.</td></tr>}</tbody></table></div></Card></div>}
-
-    {tab === "charges" && <div className="space-y-5"><Card><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-xl font-black">🏢 Charges entreprise</h3><p className="text-sm text-slate-500">Charges globales entreprise, non imputées aux chantiers.</p></div><Button variant="green" onClick={() => setShowExpenseForm(!showExpenseForm)}>+ Charge</Button></div>{showExpenseForm && <form onSubmit={saveExpense} className="mt-4 grid gap-3 md:grid-cols-6"><Field label="Nom"><Input value={expenseForm.name} onChange={(e: any) => setExpenseForm({ ...expenseForm, name: e.target.value })} /></Field><Field label="Catégorie"><Select value={expenseForm.category} onChange={(e: any) => setExpenseForm({ ...expenseForm, category: e.target.value })}><option>Charges fixes</option><option>Charges variables</option><option>Véhicules</option><option>Assurances</option><option>Salaires</option><option>Matériel</option><option>Logiciels</option><option>Autres</option></Select></Field><Field label="Montant HT"><Input type="number" step="0.01" value={expenseForm.amount} onChange={(e: any) => setExpenseForm({ ...expenseForm, amount: e.target.value })} /></Field><Field label="TVA"><Select value={expenseForm.tva_rate} onChange={(e: any) => setExpenseForm({ ...expenseForm, tva_rate: e.target.value })}><option value="0">0%</option><option value="5.5">5,5%</option><option value="10">10%</option><option value="20">20%</option></Select></Field><Field label="Fréquence"><Select value={expenseForm.frequency} onChange={(e: any) => setExpenseForm({ ...expenseForm, frequency: e.target.value })}><option>mensuelle</option><option>hebdomadaire</option><option>ponctuelle</option><option>annuelle</option></Select></Field><Field label="Date"><Input type="date" value={expenseForm.expense_date} onChange={(e: any) => setExpenseForm({ ...expenseForm, expense_date: e.target.value })} /></Field><Field label="Notes"><Input value={expenseForm.notes} onChange={(e: any) => setExpenseForm({ ...expenseForm, notes: e.target.value })} /></Field><div className="md:col-span-5 flex gap-2"><Button variant="green">{editingExpenseId ? "Enregistrer" : "Ajouter charge"}</Button>{editingExpenseId && <Button type="button" variant="secondary" onClick={() => { setEditingExpenseId(null); setShowExpenseForm(false); }}>Annuler</Button>}</div></form>}</Card><Card><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="text-xs uppercase text-slate-500"><th className="p-3">Nom</th><th className="p-3">Catégorie</th><th className="p-3">HT</th><th className="p-3">TVA déductible</th><th className="p-3">TTC</th><th className="p-3">Fréquence</th><th className="p-3">Actions</th></tr></thead><tbody>{companyExpenses.map((e: any) => <tr key={e.id} className="border-t"><td className="p-3 font-bold">{e.name}</td><td className="p-3">{e.category}</td><td className="p-3">{money(amountHT(e))}</td><td className="p-3 text-emerald-700 font-bold">{money(amountTVA(e))}</td><td className="p-3 font-black">{money(amountTTC(e))}</td><td className="p-3">{e.frequency}</td><td className="p-3"><div className="flex gap-2"><Button variant="secondary" onClick={() => editExpense(e)}>Modifier</Button><Button variant="danger" onClick={() => deleteExpense(e)}>Supprimer</Button></div></td></tr>)}</tbody></table></div></Card></div>}
-
-    {tab === "archives" && <Card><h3 className="mb-4 text-xl font-black">📦 Archives chantiers</h3><p className="mb-4 text-sm text-slate-500">Dossier historique complet : fiche chantier, factures clients, achats, retours, planning, paiements et rapport PDF.</p><div className="grid gap-5">{archivedProjects.map((p: any) => { const s = projectStats(p.id); const d = archiveProjectDetails(p.id); return <div key={p.id} className="rounded-3xl border border-slate-200 bg-slate-50 p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><Badge tone="slate">Archivé / terminé</Badge><h4 className="mt-2 text-xl font-black">{p.name}</h4><p className="text-sm text-slate-500">{p.client || "Client non renseigné"} · {p.address || "Adresse non renseignée"}</p></div><div className="flex flex-wrap gap-2"><Button variant="secondary" onClick={() => generateProjectPdfFromGestion(p)}>Rapport PDF</Button><Button variant="green" onClick={() => archiveProject(p, false)}>Réactiver</Button></div></div><div className="mt-4 grid gap-3 md:grid-cols-5"><div className="rounded-2xl bg-white p-3"><b>CA HT</b><br />{money(s.revenueTotal)}</div><div className="rounded-2xl bg-white p-3"><b>Achats HT</b><br />{money(s.supplierTotal)}</div><div className="rounded-2xl bg-white p-3"><b>Main-d'œuvre</b><br />{money(s.laborTotal)}</div><div className="rounded-2xl bg-white p-3"><b>Marge</b><br />{money(s.margin)}</div><div className={s.tvaBalance >= 0 ? "rounded-2xl bg-red-50 p-3" : "rounded-2xl bg-emerald-50 p-3"}><b>{s.tvaBalance >= 0 ? "TVA due" : "TVA récupérée"}</b><br />{money(Math.abs(s.tvaBalance))}</div></div><div className="mt-4 grid gap-4 xl:grid-cols-2"><div className="rounded-2xl bg-white p-4"><h5 className="mb-2 font-black">Factures clients</h5>{d.projectRevenues.length ? <div className="space-y-2 text-sm">{d.projectRevenues.map((r: any) => <div key={r.id} className="flex justify-between border-b py-1"><span>{r.billing_date || "-"} · {r.label || "Facture"}</span><b>{money(amountTTC(r))}</b></div>)}</div> : <p className="text-sm text-slate-500">Aucune facture client.</p>}</div><div className="rounded-2xl bg-white p-4"><h5 className="mb-2 font-black">Achats fournisseurs</h5>{d.projectInvoices.length ? <div className="space-y-2 text-sm">{d.projectInvoices.map((i: any) => <div key={i.id} className="flex justify-between border-b py-1"><span>{i.invoice_date || "-"} · {i.supplier || i.vendor || "Fournisseur"}</span><b>{money(amountTTC(i))}</b></div>)}</div> : <p className="text-sm text-slate-500">Aucun achat.</p>}</div><div className="rounded-2xl bg-white p-4"><h5 className="mb-2 font-black">Retours</h5>{d.projectReturns.length ? <div className="space-y-2 text-sm">{d.projectReturns.map((r: any) => <div key={r.id} className="flex justify-between border-b py-1"><span>{r.return_date || "-"} · {r.supplier || "Retour"}</span><b>{money(amountTTC(r))}</b></div>)}</div> : <p className="text-sm text-slate-500">Aucun retour.</p>}</div><div className="rounded-2xl bg-white p-4"><h5 className="mb-2 font-black">Planning / main-d'œuvre</h5>{d.projectPlanning.length ? <div className="space-y-2 text-sm">{d.projectPlanning.map((pl: any) => <div key={pl.id} className="flex justify-between border-b py-1"><span>{employeeName(pl.employee_id)} · {pl.start_date} → {pl.end_date || pl.start_date}</span><b>{money(daysBetween(pl.start_date, pl.end_date) * employeeCost(pl.employee_id))}</b></div>)}</div> : <p className="text-sm text-slate-500">Aucune affectation.</p>}</div><div className="rounded-2xl bg-white p-4 xl:col-span-2"><h5 className="mb-2 font-black">Paiements clients</h5>{d.projectPayments.length ? <div className="space-y-2 text-sm">{d.projectPayments.map((pay: any) => <div key={pay.id} className="flex justify-between border-b py-1"><span>{pay.payment_date || "-"} · {pay.client || p.client || "Client"} · {pay.payment_method || "Paiement"}</span><b>{money(pay.amount_ttc)}</b></div>)}</div> : <p className="text-sm text-slate-500">Aucun paiement client.</p>}</div></div></div>; })}{archivedProjects.length === 0 && <p className="text-sm text-slate-500">Aucun chantier archivé.</p>}</div></Card>}
+    <div className="grid gap-4 md:grid-cols-5"><Card className="border-l-4 border-emerald-500"><p className="text-xs font-black uppercase text-slate-500">CA HT</p><p className="mt-2 text-2xl font-black text-emerald-700">{money(allStats.revenue)}</p><p className="text-xs text-slate-500">Factures clients</p></Card><Card className="border-l-4 border-blue-500"><p className="text-xs font-black uppercase text-slate-500">TVA collectée</p><p className="mt-2 text-2xl font-black text-blue-700">{money(allStats.revenueTVA)}</p><p className="text-xs text-slate-500">Sur factures clients</p></Card><Card className="border-l-4 border-red-500"><p className="text-xs font-black uppercase text-slate-500">Dépenses HT</p><p className="mt-2 text-2xl font-black text-red-600">{money(allStats.purchases + expensesHT)}</p><p className="text-xs text-slate-500">Achats + charges</p></Card><Card className="border-l-4 border-blue-500"><p className="text-xs font-black uppercase text-slate-500">Factures clientes en attente de règlement</p><p className="mt-2 text-2xl font-black text-blue-700">{money(clientOutstandingTotal)}</p><p className="text-xs text-slate-500">Total à encaisser</p></Card><Card className={tvaBalanceGlobal >= 0 ? "border-l-4 border-red-500" : "border-l-4 border-emerald-500"}><p className="text-xs font-black uppercase text-slate-500">{tvaBalanceGlobal >= 0 ? "Solde TVA due" : "TVA récupérable"}</p><p className={tvaBalanceGlobal >= 0 ? "mt-2 text-2xl font-black text-red-600" : "mt-2 text-2xl font-black text-emerald-700"}>{money(Math.abs(tvaBalanceGlobal))}</p><p className="text-xs text-slate-500">Collectée - déductible</p></Card></div>
+    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">{actionCard("factures", "📄", "Créer facturation client", "Sur chantiers actifs", "bg-emerald-600")}{actionCard("paiements", "💶", "Règlements clients", "Factures clientes en attente de règlement", "bg-blue-600")}{actionCard("charges", "🏢", "Charges entreprises", "Gérer les charges fixes", "bg-purple-600")}{actionCard("achats", "🧾", "Récapitulatif des factures d’achats", "Voir le détail des achats", "bg-cyan-600")}</div>
+    <div className="grid gap-5 xl:grid-cols-3"><Card><div className="mb-4 flex flex-wrap items-center justify-between gap-3"><h3 className="text-lg font-black uppercase text-slate-800">Répartition du CA HT</h3><Button variant="secondary" onClick={generateAccountingPdfFromGestion}>Rapport comptable PDF</Button></div><SimplePie values={searchedAccountingProjects.slice(0, 6).map((p: any) => ({ label: `${p.name}${p.status === "archive" ? " · archivé" : ""}`, value: projectStats(p.id, true).revenueTotal }))} /></Card><Card><h3 className="mb-4 text-lg font-black uppercase text-slate-800">Répartition des dépenses HT</h3><SimplePie values={[{ label: "Achats", value: allStats.purchases }, { label: "Main d’œuvre", value: allStats.labor }, { label: "Charges fixes", value: expensesHT }]} /></Card><Card className={globalResultHT >= 0 ? "border-l-4 border-emerald-500" : "border-l-4 border-red-500"}><div className="mb-4 flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-lg font-black uppercase text-slate-800">Résultat global HT</h3><p className="text-xs text-slate-500">CA, achats, MO et charges fixes</p></div><div className={globalResultHT >= 0 ? "rounded-2xl bg-emerald-50 px-4 py-2 text-right" : "rounded-2xl bg-red-50 px-4 py-2 text-right"}><p className="text-xs font-black uppercase text-slate-500">Résultat</p><p className={globalResultHT >= 0 ? "text-2xl font-black text-emerald-700" : "text-2xl font-black text-red-600"}>{money(globalResultHT)}</p><p className={globalResultHT >= 0 ? "text-lg font-black text-emerald-700" : "text-lg font-black text-red-600"}>{globalMarginRate}% de marge</p></div></div><SimplePie values={[{ label: "CA HT", value: allStats.revenue }, { label: "Achats HT", value: allStats.purchases }, { label: "MO", value: allStats.labor }, { label: "Charges fixes", value: expensesHT }]} /></Card></div>
+    <div><div className="mb-4 flex flex-wrap items-center justify-between gap-3"><h3 className="text-xl font-black uppercase text-slate-900">Chantiers actifs — rentabilité</h3><Badge tone="blue">{searchedActiveProjects.length} chantier(s)</Badge></div><div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">{searchedActiveProjects.map((p: any) => { const s = projectStats(p.id, false); return <Card key={p.id} className="overflow-hidden p-0"><div className="p-5"><div className="flex items-start justify-between gap-3"><div><h4 className="text-xl font-black text-slate-900">{p.name}</h4><p className="text-sm text-slate-500">{p.client || "Client non renseigné"}</p></div><Badge tone="green">En cours</Badge></div><div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs"><div className="rounded-2xl bg-emerald-50 p-2"><b>CA HT</b><br /><span className="font-black text-emerald-700">{money(s.revenueTotal)}</span></div><div className="rounded-2xl bg-red-50 p-2"><b>Achats HT</b><br /><span className="font-black text-red-700">{money(s.supplierTotal)}</span></div><div className="rounded-2xl bg-blue-50 p-2"><b>MO</b><br /><span className="font-black text-blue-700">{money(s.laborTotal)}</span></div><div className="rounded-2xl bg-slate-50 p-2"><b>Marge</b><br /><span className={s.margin >= 0 ? "font-black text-emerald-700" : "font-black text-red-600"}>{money(s.margin)}</span></div><div className="rounded-2xl bg-purple-50 p-2"><b>TVA</b><br /><span className="font-black text-purple-700">{money(Math.abs(s.tvaBalance))}</span></div><div className={s.marginRate >= 0 ? "rounded-2xl bg-emerald-50 p-2" : "rounded-2xl bg-red-50 p-2"}><b>Rentabilité</b><br /><span className={s.marginRate >= 0 ? "font-black text-emerald-700" : "font-black text-red-600"}>{s.marginRate}%</span></div></div><div className="mt-4 grid grid-cols-3 gap-2"><Button variant="secondary" onClick={() => openProjectFullDetail(p)}>Voir</Button><Button variant="secondary" onClick={() => generateProjectPdfFromGestion(p)}>Rapport PDF</Button><Button variant="amber" onClick={() => archiveProject(p, true)}>Archiver</Button></div></div></Card>; })}{searchedActiveProjects.length === 0 && <Card><p className="text-center text-slate-500">Aucun chantier actif trouvé.</p></Card>}</div></div>
+    <Card className="bg-slate-50"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-lg font-black">Chantiers archivés</h3><p className="text-sm text-slate-500">Les chantiers archivés ne sont plus visibles dans Chantiers actifs ni dans Gestion. Leurs factures, retours et documents restent consultables ici.</p></div><Button variant="secondary" onClick={() => setTab("archives")}>Accéder aux archives chantiers</Button></div>{tab === "archives" && <div className="mt-4 grid gap-4">{archivedProjects.map((p: any) => { const s = projectStats(p.id, false); return <div key={p.id} className="rounded-2xl border bg-white p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><Badge tone="slate">Archivé</Badge><h4 className="mt-2 text-xl font-black">{p.name}</h4><p className="text-sm text-slate-500">{p.client || "Client non renseigné"}</p></div><Button variant="green" onClick={() => archiveProject(p, false)}>Réactiver</Button></div><div className="mt-3 grid gap-3 md:grid-cols-4"><div><b>CA HT</b><br />{money(s.revenueTotal)}</div><div><b>Achats HT</b><br />{money(s.supplierTotal)}</div><div><b>Marge</b><br />{money(s.margin)}</div><div><b>TVA</b><br />{money(Math.abs(s.tvaBalance))}</div></div></div>; })}{archivedProjects.length === 0 && <p className="text-sm text-slate-500">Aucun chantier archivé.</p>}</div>}</Card>
   </div>;
+
 }
 
 function Mobile({ projects, refreshAll }: any) {
