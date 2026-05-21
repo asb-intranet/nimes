@@ -1,0 +1,12 @@
+V72 - Module calcul marge chantier / devis
+
+Dans Gestion, le bouton Calcul rentabilité ouvre désormais un vrai module de simulation pour établir les devis.
+
+Ajouts :
+- montant devis HT + TVA + TTC
+- dépenses prévues modifiables : matériaux, sous-traitance, locations, autres
+- personnel affecté avec choix salarié, nombre de jours et coût/jour
+- charges fixes imputées manuellement
+- calcul automatique marge prévue, taux de rentabilité et taux de marque
+- grand récap résultat estimatif
+- aucune migration Supabase nécessaire : outil de simulation local dans l'interface

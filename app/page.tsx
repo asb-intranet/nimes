@@ -2761,6 +2761,15 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
   const [paymentForm, setPaymentForm] = useState({ project_id: "", revenue_id: "", client: "", invoice_number: "", amount_ttc: "", payment_method: "Virement bancaire", payment_date: formatDate(new Date()), notes: "" });
+  const [quoteForm, setQuoteForm] = useState({ project_name: "", client: "", revenue_ht: "", tva_rate: "10", fixed_costs: "0", notes: "" });
+  const [quoteExpenses, setQuoteExpenses] = useState<any[]>([
+    { id: 1, label: "Matériaux", amount: "" },
+    { id: 2, label: "Sous-traitance", amount: "" },
+    { id: 3, label: "Location / engins", amount: "" }
+  ]);
+  const [quoteLabor, setQuoteLabor] = useState<any[]>([
+    { id: 1, employee_id: "", label: "Personnel", days: "1", daily_cost: "" }
+  ]);
   const [selectedDetailProject, setSelectedDetailProject] = useState<any | null>(null);
   const today = new Date();
   const [periodMode, setPeriodMode] = useState("month");
@@ -3159,39 +3168,111 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
   }
 
 
-  if (tab === "calcul-rentabilite") return <div className="space-y-5">
-    <div className="flex flex-wrap items-center justify-between gap-3">
-      <div><h1 className="text-3xl font-black text-slate-900">Calcul rentabilité chantier</h1><p className="text-sm text-slate-500">Vue simple par chantier : CA, achats, main d’œuvre, TVA, marge et pourcentage de rentabilité.</p></div>
-      <Button variant="secondary" onClick={() => setTab("pilotage")}>← Retour Gestion</Button>
-    </div>
-    <div className="grid gap-4 md:grid-cols-5">
-      <Card className="border-l-4 border-emerald-500"><p className="text-xs font-black uppercase text-slate-500">CA HT total</p><p className="mt-2 text-2xl font-black text-emerald-700">{money(chantierStats.revenue)}</p></Card>
-      <Card className="border-l-4 border-red-500"><p className="text-xs font-black uppercase text-slate-500">Achats HT</p><p className="mt-2 text-2xl font-black text-red-600">{money(chantierStats.purchases)}</p></Card>
-      <Card className="border-l-4 border-blue-500"><p className="text-xs font-black uppercase text-slate-500">Main d’œuvre</p><p className="mt-2 text-2xl font-black text-blue-700">{money(chantierStats.labor)}</p></Card>
-      <Card className={chantierStats.margin >= 0 ? "border-l-4 border-emerald-500" : "border-l-4 border-red-500"}><p className="text-xs font-black uppercase text-slate-500">Marge réelle</p><p className={chantierStats.margin >= 0 ? "mt-2 text-2xl font-black text-emerald-700" : "mt-2 text-2xl font-black text-red-600"}>{money(chantierStats.margin)}</p></Card>
-      <Card className="border-l-4 border-purple-500"><p className="text-xs font-black uppercase text-slate-500">Rentabilité moyenne</p><p className="mt-2 text-2xl font-black text-purple-700">{chantierStats.revenue > 0 ? Math.round((chantierStats.margin / chantierStats.revenue) * 100) : 0}%</p></Card>
-    </div>
-    <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-      {searchedActiveProjects.map((p: any) => {
-        const s = projectStats(p.id, false);
-        return <Card key={p.id} className="overflow-hidden p-0">
-          <div className="p-5">
-            <div className="flex items-start justify-between gap-3"><div><h4 className="text-xl font-black text-slate-900">{p.name}</h4><p className="text-sm text-slate-500">{p.client || "Client non renseigné"}</p></div><Badge tone={s.margin >= 0 ? "green" : "red"}>{s.margin >= 0 ? "Rentable" : "À surveiller"}</Badge></div>
-            <div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs">
-              <div className="rounded-2xl bg-emerald-50 p-2"><b>CA HT</b><br /><span className="font-black text-emerald-700">{money(s.revenueTotal)}</span></div>
-              <div className="rounded-2xl bg-red-50 p-2"><b>Achats HT</b><br /><span className="font-black text-red-700">{money(s.supplierTotal)}</span></div>
-              <div className="rounded-2xl bg-blue-50 p-2"><b>MO</b><br /><span className="font-black text-blue-700">{money(s.laborTotal)}</span></div>
-              <div className="rounded-2xl bg-slate-50 p-2"><b>Marge</b><br /><span className={s.margin >= 0 ? "font-black text-emerald-700" : "font-black text-red-600"}>{money(s.margin)}</span></div>
-              <div className="rounded-2xl bg-purple-50 p-2"><b>TVA</b><br /><span className="font-black text-purple-700">{money(Math.abs(s.tvaBalance))}</span><br /><span className="text-[10px] text-slate-500">{s.tvaBalance >= 0 ? "due" : "récup."}</span></div>
-              <div className={s.marginRate >= 0 ? "rounded-2xl bg-emerald-50 p-2" : "rounded-2xl bg-red-50 p-2"}><b>Rentabilité</b><br /><span className={s.marginRate >= 0 ? "font-black text-emerald-700" : "font-black text-red-600"}>{s.marginRate}%</span></div>
-            </div>
-            <div className="mt-4 grid grid-cols-2 gap-2"><Button variant="secondary" onClick={() => openProjectFullDetail(p)}>Voir</Button><Button variant="secondary" onClick={() => generateProjectPdfFromGestion(p)}>Rapport PDF</Button></div>
+  if (tab === "calcul-rentabilite") {
+    const quoteRevenueHT = Number(quoteForm.revenue_ht || 0);
+    const quoteTVA = Math.round((quoteRevenueHT * Number(quoteForm.tva_rate || 0) / 100) * 100) / 100;
+    const quoteTTC = quoteRevenueHT + quoteTVA;
+    const quoteExpensesTotal = quoteExpenses.reduce((s: number, x: any) => s + Number(x.amount || 0), 0);
+    const quoteLaborTotal = quoteLabor.reduce((s: number, x: any) => s + (Number(x.days || 0) * Number(x.daily_cost || 0)), 0);
+    const quoteFixedCosts = Number(quoteForm.fixed_costs || 0);
+    const quoteTotalCosts = quoteExpensesTotal + quoteLaborTotal + quoteFixedCosts;
+    const quoteMargin = quoteRevenueHT - quoteTotalCosts;
+    const quoteMarginRate = quoteRevenueHT > 0 ? Math.round((quoteMargin / quoteRevenueHT) * 100) : 0;
+    const quoteMarkupRate = quoteTotalCosts > 0 ? Math.round((quoteMargin / quoteTotalCosts) * 100) : 0;
+
+    function updateQuoteExpense(id: number, patch: any) {
+      setQuoteExpenses(quoteExpenses.map((x: any) => x.id === id ? { ...x, ...patch } : x));
+    }
+    function addQuoteExpense() {
+      setQuoteExpenses([...quoteExpenses, { id: Date.now(), label: "Nouvelle dépense", amount: "" }]);
+    }
+    function removeQuoteExpense(id: number) {
+      setQuoteExpenses(quoteExpenses.filter((x: any) => x.id !== id));
+    }
+    function updateQuoteLabor(id: number, patch: any) {
+      setQuoteLabor(quoteLabor.map((x: any) => x.id === id ? { ...x, ...patch } : x));
+    }
+    function addQuoteLabor() {
+      setQuoteLabor([...quoteLabor, { id: Date.now(), employee_id: "", label: "Personnel", days: "1", daily_cost: "" }]);
+    }
+    function removeQuoteLabor(id: number) {
+      setQuoteLabor(quoteLabor.filter((x: any) => x.id !== id));
+    }
+    function applyEmployeeToLabor(rowId: number, employeeId: string) {
+      const emp = employees.find((e: any) => e.id === employeeId);
+      updateQuoteLabor(rowId, { employee_id: employeeId, label: emp?.name || emp?.full_name || "Personnel", daily_cost: String(emp?.daily_cost || "") });
+    }
+
+    return <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-3xl font-black text-slate-900">Calcul marge chantier / devis</h1>
+          <p className="text-sm text-slate-500">Simulation avant devis : CA prévu, dépenses, personnel affecté, charges, marge et rentabilité.</p>
+        </div>
+        <Button variant="secondary" onClick={() => setTab("pilotage")}>← Retour Gestion</Button>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-5">
+        <Card className="border-l-4 border-emerald-500"><p className="text-xs font-black uppercase text-slate-500">Devis HT</p><p className="mt-2 text-2xl font-black text-emerald-700">{money(quoteRevenueHT)}</p><p className="text-xs text-slate-500">TTC : {money(quoteTTC)}</p></Card>
+        <Card className="border-l-4 border-red-500"><p className="text-xs font-black uppercase text-slate-500">Dépenses HT</p><p className="mt-2 text-2xl font-black text-red-600">{money(quoteExpensesTotal)}</p><p className="text-xs text-slate-500">Achats / sous-traitance / locations</p></Card>
+        <Card className="border-l-4 border-blue-500"><p className="text-xs font-black uppercase text-slate-500">Main d’œuvre</p><p className="mt-2 text-2xl font-black text-blue-700">{money(quoteLaborTotal)}</p><p className="text-xs text-slate-500">Personnel affecté au devis</p></Card>
+        <Card className={quoteMargin >= 0 ? "border-l-4 border-emerald-500" : "border-l-4 border-red-500"}><p className="text-xs font-black uppercase text-slate-500">Marge prévue</p><p className={quoteMargin >= 0 ? "mt-2 text-2xl font-black text-emerald-700" : "mt-2 text-2xl font-black text-red-600"}>{money(quoteMargin)}</p><p className="text-xs text-slate-500">Résultat estimatif HT</p></Card>
+        <Card className="border-l-4 border-purple-500"><p className="text-xs font-black uppercase text-slate-500">Rentabilité</p><p className="mt-2 text-2xl font-black text-purple-700">{quoteMarginRate}%</p><p className="text-xs text-slate-500">Taux marque : {quoteMarkupRate}%</p></Card>
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-[1.1fr_.9fr]">
+        <Card>
+          <h2 className="mb-4 text-xl font-black">1. Base devis</h2>
+          <div className="grid gap-4 md:grid-cols-3">
+            <Field label="Nom chantier / devis"><Input value={quoteForm.project_name} onChange={(e: any) => setQuoteForm({ ...quoteForm, project_name: e.target.value })} placeholder="Ex : ITE Villa Dupont" /></Field>
+            <Field label="Client"><Input value={quoteForm.client} onChange={(e: any) => setQuoteForm({ ...quoteForm, client: e.target.value })} placeholder="Nom client" /></Field>
+            <Field label="Montant devis HT"><Input type="number" step="0.01" value={quoteForm.revenue_ht} onChange={(e: any) => setQuoteForm({ ...quoteForm, revenue_ht: e.target.value })} placeholder="0.00" /></Field>
+            <Field label="TVA devis"><Select value={quoteForm.tva_rate} onChange={(e: any) => setQuoteForm({ ...quoteForm, tva_rate: e.target.value })}><option value="0">0%</option><option value="5.5">5,5%</option><option value="10">10%</option><option value="20">20%</option></Select></Field>
+            <Field label="Charges fixes imputées HT"><Input type="number" step="0.01" value={quoteForm.fixed_costs} onChange={(e: any) => setQuoteForm({ ...quoteForm, fixed_costs: e.target.value })} placeholder="0.00" /></Field>
+            <Field label="Notes"><Input value={quoteForm.notes} onChange={(e: any) => setQuoteForm({ ...quoteForm, notes: e.target.value })} placeholder="Hypothèses du devis" /></Field>
           </div>
-        </Card>;
-      })}
-      {searchedActiveProjects.length === 0 && <Card><p className="text-center text-slate-500">Aucun chantier actif trouvé.</p></Card>}
-    </div>
-  </div>;
+        </Card>
+
+        <Card className={quoteMargin >= 0 ? "bg-emerald-50" : "bg-red-50"}>
+          <h2 className="text-xl font-black">Résultat de simulation</h2>
+          <div className="mt-4 space-y-3 text-sm">
+            <div className="flex justify-between"><span>CA HT prévu</span><b>{money(quoteRevenueHT)}</b></div>
+            <div className="flex justify-between"><span>TVA collectée</span><b>{money(quoteTVA)}</b></div>
+            <div className="flex justify-between"><span>Total coûts HT</span><b>{money(quoteTotalCosts)}</b></div>
+            <div className="flex justify-between"><span>Dépenses HT</span><b>{money(quoteExpensesTotal)}</b></div>
+            <div className="flex justify-between"><span>Main d’œuvre</span><b>{money(quoteLaborTotal)}</b></div>
+            <div className="flex justify-between"><span>Charges fixes</span><b>{money(quoteFixedCosts)}</b></div>
+            <div className="border-t pt-3"><p className="text-xs font-black uppercase text-slate-500">Marge estimée</p><p className={quoteMargin >= 0 ? "text-4xl font-black text-emerald-700" : "text-4xl font-black text-red-600"}>{money(quoteMargin)}</p><p className={quoteMargin >= 0 ? "text-lg font-black text-emerald-700" : "text-lg font-black text-red-600"}>{quoteMarginRate}% de rentabilité</p></div>
+          </div>
+        </Card>
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-2">
+        <Card>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><h2 className="text-xl font-black">2. Dépenses prévues</h2><Button variant="secondary" onClick={addQuoteExpense}>+ Ajouter dépense</Button></div>
+          <div className="space-y-3">
+            {quoteExpenses.map((x: any) => <div key={x.id} className="grid gap-3 rounded-2xl border bg-white p-3 md:grid-cols-[1fr_160px_110px]">
+              <Field label="Libellé"><Input value={x.label} onChange={(e: any) => updateQuoteExpense(x.id, { label: e.target.value })} /></Field>
+              <Field label="Montant HT"><Input type="number" step="0.01" value={x.amount} onChange={(e: any) => updateQuoteExpense(x.id, { amount: e.target.value })} /></Field>
+              <div className="flex items-end"><Button type="button" variant="danger" className="w-full" onClick={() => removeQuoteExpense(x.id)}>Supprimer</Button></div>
+            </div>)}
+          </div>
+        </Card>
+
+        <Card>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><h2 className="text-xl font-black">3. Personnel affecté</h2><Button variant="secondary" onClick={addQuoteLabor}>+ Ajouter personnel</Button></div>
+          <div className="space-y-3">
+            {quoteLabor.map((x: any) => <div key={x.id} className="grid gap-3 rounded-2xl border bg-white p-3 md:grid-cols-[1fr_100px_130px_120px]">
+              <Field label="Salarié / poste"><Select value={x.employee_id} onChange={(e: any) => applyEmployeeToLabor(x.id, e.target.value)}><option value="">Saisie libre</option>{employees.map((emp: any) => <option key={emp.id} value={emp.id}>{emp.name || emp.full_name || "Salarié"}</option>)}</Select><Input className="mt-2" value={x.label} onChange={(e: any) => updateQuoteLabor(x.id, { label: e.target.value })} placeholder="Poste" /></Field>
+              <Field label="Jours"><Input type="number" step="0.5" value={x.days} onChange={(e: any) => updateQuoteLabor(x.id, { days: e.target.value })} /></Field>
+              <Field label="Coût / jour"><Input type="number" step="0.01" value={x.daily_cost} onChange={(e: any) => updateQuoteLabor(x.id, { daily_cost: e.target.value })} /></Field>
+              <div className="flex items-end"><Button type="button" variant="danger" className="w-full" onClick={() => removeQuoteLabor(x.id)}>Supprimer</Button></div>
+            </div>)}
+          </div>
+        </Card>
+      </div>
+    </div>;
+  }
 
   if (tab === "factures") return <div className="space-y-5">
     <div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-3xl font-black text-slate-900">Créer facturation client</h1><p className="text-sm text-slate-500">Facturation uniquement sur chantiers actifs. Date obligatoire.</p></div><Button variant="secondary" onClick={() => setTab("pilotage")}>← Retour Gestion</Button></div>
@@ -3236,7 +3317,7 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
       </div>
     </Card>
     <div className="grid gap-4 md:grid-cols-5"><Card className="border-l-4 border-emerald-500"><p className="text-xs font-black uppercase text-slate-500">CA HT</p><p className="mt-2 text-2xl font-black text-emerald-700">{money(allStats.revenue)}</p><p className="text-xs text-slate-500">Factures clients</p></Card><Card className="border-l-4 border-blue-500"><p className="text-xs font-black uppercase text-slate-500">TVA collectée</p><p className="mt-2 text-2xl font-black text-blue-700">{money(allStats.revenueTVA)}</p><p className="text-xs text-slate-500">Sur factures clients</p></Card><Card className="border-l-4 border-red-500"><p className="text-xs font-black uppercase text-slate-500">Dépenses HT</p><p className="mt-2 text-2xl font-black text-red-600">{money(allStats.purchases + expensesHT)}</p><p className="text-xs text-slate-500">Achats + charges</p></Card><Card className="border-l-4 border-blue-500"><p className="text-xs font-black uppercase text-slate-500">Factures clientes en attente de règlement</p><p className="mt-2 text-2xl font-black text-blue-700">{money(clientOutstandingTotal)}</p><p className="text-xs text-slate-500">Total à encaisser</p></Card><Card className={tvaBalanceGlobal >= 0 ? "border-l-4 border-red-500" : "border-l-4 border-emerald-500"}><p className="text-xs font-black uppercase text-slate-500">{tvaBalanceGlobal >= 0 ? "Solde TVA due" : "TVA récupérable"}</p><p className={tvaBalanceGlobal >= 0 ? "mt-2 text-2xl font-black text-red-600" : "mt-2 text-2xl font-black text-emerald-700"}>{money(Math.abs(tvaBalanceGlobal))}</p><p className="text-xs text-slate-500">Collectée - déductible</p></Card></div>
-    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">{actionCard("factures", "📄", "Créer facturation client", "Sur chantiers actifs", "bg-emerald-600")}{actionCard("calcul-rentabilite", "📊", "Calcul rentabilité", "Marge réelle par chantier", "bg-amber-600")}{actionCard("paiements", "💶", "Règlements clients", "Factures clientes en attente de règlement", "bg-blue-600")}{actionCard("charges", "🏢", "Charges entreprises", "Gérer les charges fixes", "bg-purple-600")}{actionCard("achats", "🧾", "Récapitulatif des factures d’achats", "Voir le détail des achats", "bg-cyan-600")}</div>
+    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">{actionCard("factures", "📄", "Créer facturation client", "Sur chantiers actifs", "bg-emerald-600")}{actionCard("calcul-rentabilite", "📊", "Calcul rentabilité", "Simulation marge devis", "bg-amber-600")}{actionCard("paiements", "💶", "Règlements clients", "Factures clientes en attente de règlement", "bg-blue-600")}{actionCard("charges", "🏢", "Charges entreprises", "Gérer les charges fixes", "bg-purple-600")}{actionCard("achats", "🧾", "Récapitulatif des factures d’achats", "Voir le détail des achats", "bg-cyan-600")}</div>
     <div className="grid gap-5 xl:grid-cols-3"><Card><div className="mb-4 flex flex-wrap items-center justify-between gap-3"><h3 className="text-lg font-black uppercase text-slate-800">Répartition du CA HT</h3><Button variant="secondary" onClick={generateAccountingPdfFromGestion}>Rapport comptable PDF</Button></div><SimplePie values={searchedAccountingProjects.slice(0, 6).map((p: any) => ({ label: `${p.name}${p.status === "archive" ? " · archivé" : ""}`, value: projectStats(p.id, true).revenueTotal }))} /></Card><Card><h3 className="mb-4 text-lg font-black uppercase text-slate-800">Répartition des dépenses HT</h3><SimplePie values={[{ label: "Achats", value: allStats.purchases }, { label: "Main d’œuvre", value: allStats.labor }, { label: "Charges fixes", value: expensesHT }]} /></Card><Card className={globalResultHT >= 0 ? "border-l-4 border-emerald-500" : "border-l-4 border-red-500"}><div className="mb-4 flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-lg font-black uppercase text-slate-800">Résultat global HT</h3><p className="text-xs text-slate-500">CA, achats, MO et charges fixes</p></div><div className={globalResultHT >= 0 ? "rounded-2xl bg-emerald-50 px-4 py-2 text-right" : "rounded-2xl bg-red-50 px-4 py-2 text-right"}><p className="text-xs font-black uppercase text-slate-500">Résultat</p><p className={globalResultHT >= 0 ? "text-2xl font-black text-emerald-700" : "text-2xl font-black text-red-600"}>{money(globalResultHT)}</p><p className={globalResultHT >= 0 ? "text-lg font-black text-emerald-700" : "text-lg font-black text-red-600"}>{globalMarginRate}% de marge</p></div></div><SimplePie values={[{ label: "CA HT", value: allStats.revenue }, { label: "Achats HT", value: allStats.purchases }, { label: "MO", value: allStats.labor }, { label: "Charges fixes", value: expensesHT }]} /></Card></div>
     <div><div className="mb-4 flex flex-wrap items-center justify-between gap-3"><h3 className="text-xl font-black uppercase text-slate-900">Chantiers actifs — rentabilité</h3><Badge tone="blue">{searchedActiveProjects.length} chantier(s)</Badge></div><div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">{searchedActiveProjects.map((p: any) => { const s = projectStats(p.id, false); return <Card key={p.id} className="overflow-hidden p-0"><div className="p-5"><div className="flex items-start justify-between gap-3"><div><h4 className="text-xl font-black text-slate-900">{p.name}</h4><p className="text-sm text-slate-500">{p.client || "Client non renseigné"}</p></div><Badge tone="green">En cours</Badge></div><div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs"><div className="rounded-2xl bg-emerald-50 p-2"><b>CA HT</b><br /><span className="font-black text-emerald-700">{money(s.revenueTotal)}</span></div><div className="rounded-2xl bg-red-50 p-2"><b>Achats HT</b><br /><span className="font-black text-red-700">{money(s.supplierTotal)}</span></div><div className="rounded-2xl bg-blue-50 p-2"><b>MO</b><br /><span className="font-black text-blue-700">{money(s.laborTotal)}</span></div><div className="rounded-2xl bg-slate-50 p-2"><b>Marge</b><br /><span className={s.margin >= 0 ? "font-black text-emerald-700" : "font-black text-red-600"}>{money(s.margin)}</span></div><div className="rounded-2xl bg-purple-50 p-2"><b>TVA</b><br /><span className="font-black text-purple-700">{money(Math.abs(s.tvaBalance))}</span></div><div className={s.marginRate >= 0 ? "rounded-2xl bg-emerald-50 p-2" : "rounded-2xl bg-red-50 p-2"}><b>Rentabilité</b><br /><span className={s.marginRate >= 0 ? "font-black text-emerald-700" : "font-black text-red-600"}>{s.marginRate}%</span></div></div><div className="mt-4 grid grid-cols-3 gap-2"><Button variant="secondary" onClick={() => openProjectFullDetail(p)}>Voir</Button><Button variant="secondary" onClick={() => generateProjectPdfFromGestion(p)}>Rapport PDF</Button><Button variant="amber" onClick={() => archiveProject(p, true)}>Archiver</Button></div></div></Card>; })}{searchedActiveProjects.length === 0 && <Card><p className="text-center text-slate-500">Aucun chantier actif trouvé.</p></Card>}</div></div>
     <Card className="bg-slate-50"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-lg font-black">Chantiers archivés</h3><p className="text-sm text-slate-500">Les chantiers archivés ne sont plus visibles dans Chantiers actifs ni dans Gestion. Leurs factures, retours et documents restent consultables ici.</p></div><Button variant="secondary" onClick={() => setTab("archives")}>Accéder aux archives chantiers</Button></div>{tab === "archives" && <div className="mt-4 grid gap-4">{archivedProjects.map((p: any) => { const s = projectStats(p.id, false); return <div key={p.id} className="rounded-2xl border bg-white p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><Badge tone="slate">Archivé</Badge><h4 className="mt-2 text-xl font-black">{p.name}</h4><p className="text-sm text-slate-500">{p.client || "Client non renseigné"}</p></div><Button variant="green" onClick={() => archiveProject(p, false)}>Réactiver</Button></div><div className="mt-3 grid gap-3 md:grid-cols-4"><div><b>CA HT</b><br />{money(s.revenueTotal)}</div><div><b>Achats HT</b><br />{money(s.supplierTotal)}</div><div><b>Marge</b><br />{money(s.margin)}</div><div><b>TVA</b><br />{money(Math.abs(s.tvaBalance))}</div></div></div>; })}{archivedProjects.length === 0 && <p className="text-sm text-slate-500">Aucun chantier archivé.</p>}</div>}</Card>
