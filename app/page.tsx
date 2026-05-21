@@ -2761,7 +2761,11 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
   const [paymentForm, setPaymentForm] = useState({ project_id: "", revenue_id: "", client: "", invoice_number: "", amount_ttc: "", payment_method: "Virement bancaire", payment_date: formatDate(new Date()), notes: "" });
-  const [quoteForm, setQuoteForm] = useState({ project_name: "", client: "", revenue_ht: "", tva_rate: "10", fixed_costs: "0", notes: "" });
+  const emptyQuoteForm = { project_id: "", project_name: "", client: "", revenue_ht: "", tva_rate: "10", fixed_costs: "0", notes: "" };
+  const [quoteForm, setQuoteForm] = useState(emptyQuoteForm);
+  const [savedQuoteCalculations, setSavedQuoteCalculations] = useState<any[]>([]);
+  const [quoteCalculationsLoaded, setQuoteCalculationsLoaded] = useState(false);
+  const [editingQuoteCalcId, setEditingQuoteCalcId] = useState<string | null>(null);
   const [quoteExpenses, setQuoteExpenses] = useState<any[]>([
     { id: 1, label: "Matériaux", amount: "" },
     { id: 2, label: "Sous-traitance", amount: "" },
@@ -2776,6 +2780,26 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
   const [periodStart, setPeriodStart] = useState(formatDate(new Date(today.getFullYear(), today.getMonth(), 1)));
   const [periodEnd, setPeriodEnd] = useState(formatDate(new Date(today.getFullYear(), today.getMonth() + 1, 0)));
 
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("asb_quote_profitability_calculations_v1");
+      if (raw) setSavedQuoteCalculations(JSON.parse(raw));
+    } catch (e) {
+      console.warn("Impossible de charger les calculs de marge sauvegardés", e);
+    }
+    setQuoteCalculationsLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    if (!quoteCalculationsLoaded) return;
+    try {
+      localStorage.setItem("asb_quote_profitability_calculations_v1", JSON.stringify(savedQuoteCalculations));
+    } catch (e) {
+      console.warn("Impossible de sauvegarder les calculs de marge", e);
+    }
+  }, [savedQuoteCalculations, quoteCalculationsLoaded]);
+
+
   function money(v: number) { return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(v || 0)); }
   function amountHT(x: any) { return Number(x.amount_ht ?? x.amount ?? 0); }
   function amountTVA(x: any) { return Number(x.amount_tva ?? (amountHT(x) * Number(x.tva_rate || 0) / 100)); }
@@ -2783,6 +2807,7 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
   function taxPayload(amount: string, rate: string) { const ht = Math.round(Number(amount || 0) * 100) / 100; const tva = Math.round((ht * Number(rate || 0) / 100) * 100) / 100; const ttc = Math.round((ht + tva) * 100) / 100; return { amount: ht, amount_ht: ht, tva_rate: Number(rate || 0), amount_tva: tva, amount_ttc: ttc }; }
   function daysBetween(start: string, end: string) { if (!start) return 0; const s = new Date(start); const e = new Date(end || start); return Math.max(0, Math.round((e.getTime() - s.getTime()) / 86400000)) + 1; }
   function employeeCost(employeeId: string) { const emp = employees.find((e: any) => e.id === employeeId); return Number(emp?.daily_cost || 0); }
+  function employeeName(emp: any) { return [emp?.firstname, emp?.lastname].filter(Boolean).join(" ") || emp?.name || emp?.full_name || emp?.email || "Salarié"; }
   function projectLabel(id: string) { const p = projects.find((x: any) => x.id === id); return p ? `${p.name}${p.status === "archive" ? " · archivé" : ""}` : "Chantier"; }
   function dateOnly(value: string) { return value ? String(value).slice(0, 10) : ""; }
   function inPeriod(value: string) { const d = dateOnly(value); if (!d) return false; return d >= periodStart && d <= periodEnd; }
@@ -3179,12 +3204,15 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
     const quoteMargin = quoteRevenueHT - quoteTotalCosts;
     const quoteMarginRate = quoteRevenueHT > 0 ? Math.round((quoteMargin / quoteRevenueHT) * 100) : 0;
     const quoteMarkupRate = quoteTotalCosts > 0 ? Math.round((quoteMargin / quoteTotalCosts) * 100) : 0;
+    const expenseChoices = Array.from(new Set(["Matériaux", "Sous-traitance", "Location / engins", "Fournitures", "Décharge", "Transport", "Autre", ...companyExpenses.map((e: any) => e.name), ...invoices.map((i: any) => i.supplier || i.label)].filter(Boolean)));
+    const activeProjects = projects.filter((p: any) => p.status !== "archive");
+    const selectedQuoteProject = projects.find((p: any) => p.id === quoteForm.project_id);
 
     function updateQuoteExpense(id: number, patch: any) {
       setQuoteExpenses(quoteExpenses.map((x: any) => x.id === id ? { ...x, ...patch } : x));
     }
     function addQuoteExpense() {
-      setQuoteExpenses([...quoteExpenses, { id: Date.now(), label: "Nouvelle dépense", amount: "" }]);
+      setQuoteExpenses([...quoteExpenses, { id: Date.now(), category: "Autre", label: "Nouvelle dépense", amount: "" }]);
     }
     function removeQuoteExpense(id: number) {
       setQuoteExpenses(quoteExpenses.filter((x: any) => x.id !== id));
@@ -3200,7 +3228,40 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
     }
     function applyEmployeeToLabor(rowId: number, employeeId: string) {
       const emp = employees.find((e: any) => e.id === employeeId);
-      updateQuoteLabor(rowId, { employee_id: employeeId, label: emp?.name || emp?.full_name || "Personnel", daily_cost: String(emp?.daily_cost || "") });
+      updateQuoteLabor(rowId, { employee_id: employeeId, label: emp ? employeeName(emp) : "Personnel", daily_cost: String(emp?.daily_cost || "") });
+    }
+    function resetQuoteCalculation() {
+      setEditingQuoteCalcId(null);
+      setQuoteForm(emptyQuoteForm);
+      setQuoteExpenses([{ id: 1, category: "Matériaux", label: "Matériaux", amount: "" }, { id: 2, category: "Sous-traitance", label: "Sous-traitance", amount: "" }, { id: 3, category: "Location / engins", label: "Location / engins", amount: "" }]);
+      setQuoteLabor([{ id: 1, employee_id: "", label: "Personnel", days: "1", daily_cost: "" }]);
+    }
+    function saveQuoteCalculation() {
+      const id = editingQuoteCalcId || String(Date.now());
+      const payload = { id, saved_at: new Date().toISOString(), form: quoteForm, expenses: quoteExpenses, labor: quoteLabor, totals: { revenue_ht: quoteRevenueHT, expenses_ht: quoteExpensesTotal, labor_ht: quoteLaborTotal, fixed_costs: quoteFixedCosts, total_costs: quoteTotalCosts, margin: quoteMargin, margin_rate: quoteMarginRate } };
+      setSavedQuoteCalculations(editingQuoteCalcId ? savedQuoteCalculations.map((x: any) => x.id === id ? payload : x) : [payload, ...savedQuoteCalculations]);
+      setEditingQuoteCalcId(id);
+      alert("Calcul de rentabilité sauvegardé.");
+    }
+    function editQuoteCalculation(item: any) {
+      setEditingQuoteCalcId(item.id);
+      setQuoteForm({ ...emptyQuoteForm, ...(item.form || {}) });
+      setQuoteExpenses(item.expenses || []);
+      setQuoteLabor(item.labor || []);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+    function deleteQuoteCalculation(id: string) {
+      if (!confirm("Supprimer ce calcul de rentabilité ?")) return;
+      setSavedQuoteCalculations(savedQuoteCalculations.filter((x: any) => x.id !== id));
+      if (editingQuoteCalcId === id) resetQuoteCalculation();
+    }
+    async function createProjectFromQuote() {
+      if (quoteForm.project_id) return alert("Ce calcul est déjà rattaché à un chantier existant.");
+      const name = quoteForm.project_name || "Nouveau chantier";
+      const { error } = await supabase.from("projects").insert({ name, client: quoteForm.client || "", description: quoteForm.notes || "Créé depuis le calcul rentabilité", status: "preparation", color: "#f59e0b", progress: 0 });
+      if (error) return alert(error.message);
+      await refreshAll();
+      alert("Chantier créé depuis le calcul de rentabilité.");
     }
 
     return <div className="space-y-5">
@@ -3224,6 +3285,7 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
         <Card>
           <h2 className="mb-4 text-xl font-black">1. Base devis</h2>
           <div className="grid gap-4 md:grid-cols-3">
+            <Field label="Rattacher à un chantier existant"><Select value={quoteForm.project_id} onChange={(e: any) => { const p = projects.find((x: any) => x.id === e.target.value); setQuoteForm({ ...quoteForm, project_id: e.target.value, project_name: p?.name || quoteForm.project_name, client: p?.client || quoteForm.client }); }}><option value="">Aucun / nouveau chantier</option>{activeProjects.map((p: any) => <option key={p.id} value={p.id}>{projectLabel(p.id)}</option>)}</Select></Field>
             <Field label="Nom chantier / devis"><Input value={quoteForm.project_name} onChange={(e: any) => setQuoteForm({ ...quoteForm, project_name: e.target.value })} placeholder="Ex : ITE Villa Dupont" /></Field>
             <Field label="Client"><Input value={quoteForm.client} onChange={(e: any) => setQuoteForm({ ...quoteForm, client: e.target.value })} placeholder="Nom client" /></Field>
             <Field label="Montant devis HT"><Input type="number" step="0.01" value={quoteForm.revenue_ht} onChange={(e: any) => setQuoteForm({ ...quoteForm, revenue_ht: e.target.value })} placeholder="0.00" /></Field>
@@ -3231,6 +3293,7 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
             <Field label="Charges fixes imputées HT"><Input type="number" step="0.01" value={quoteForm.fixed_costs} onChange={(e: any) => setQuoteForm({ ...quoteForm, fixed_costs: e.target.value })} placeholder="0.00" /></Field>
             <Field label="Notes"><Input value={quoteForm.notes} onChange={(e: any) => setQuoteForm({ ...quoteForm, notes: e.target.value })} placeholder="Hypothèses du devis" /></Field>
           </div>
+          <div className="mt-4 flex flex-wrap gap-2"><Button type="button" variant="green" onClick={saveQuoteCalculation}>{editingQuoteCalcId ? "Modifier le calcul" : "Sauvegarder le calcul"}</Button><Button type="button" variant="secondary" onClick={resetQuoteCalculation}>Nouveau calcul</Button><Button type="button" variant="amber" onClick={createProjectFromQuote}>Créer en chantier</Button></div>
         </Card>
 
         <Card className={quoteMargin >= 0 ? "bg-emerald-50" : "bg-red-50"}>
@@ -3251,8 +3314,9 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
         <Card>
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><h2 className="text-xl font-black">2. Dépenses prévues</h2><Button variant="secondary" onClick={addQuoteExpense}>+ Ajouter dépense</Button></div>
           <div className="space-y-3">
-            {quoteExpenses.map((x: any) => <div key={x.id} className="grid gap-3 rounded-2xl border bg-white p-3 md:grid-cols-[1fr_160px_110px]">
-              <Field label="Libellé"><Input value={x.label} onChange={(e: any) => updateQuoteExpense(x.id, { label: e.target.value })} /></Field>
+            {quoteExpenses.map((x: any) => <div key={x.id} className="grid gap-3 rounded-2xl border bg-white p-3 md:grid-cols-[1fr_1fr_160px_110px]">
+              <Field label="Liste dépense"><Select value={x.category || x.label} onChange={(e: any) => updateQuoteExpense(x.id, { category: e.target.value, label: e.target.value })}><option value="">Choisir</option>{expenseChoices.map((name: any) => <option key={name} value={name}>{name}</option>)}</Select></Field>
+              <Field label="Libellé détail"><Input value={x.label} onChange={(e: any) => updateQuoteExpense(x.id, { label: e.target.value })} placeholder="Détail, fournisseur, lot..." /></Field>
               <Field label="Montant HT"><Input type="number" step="0.01" value={x.amount} onChange={(e: any) => updateQuoteExpense(x.id, { amount: e.target.value })} /></Field>
               <div className="flex items-end"><Button type="button" variant="danger" className="w-full" onClick={() => removeQuoteExpense(x.id)}>Supprimer</Button></div>
             </div>)}
@@ -3263,7 +3327,7 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><h2 className="text-xl font-black">3. Personnel affecté</h2><Button variant="secondary" onClick={addQuoteLabor}>+ Ajouter personnel</Button></div>
           <div className="space-y-3">
             {quoteLabor.map((x: any) => <div key={x.id} className="grid gap-3 rounded-2xl border bg-white p-3 md:grid-cols-[1fr_100px_130px_120px]">
-              <Field label="Salarié / poste"><Select value={x.employee_id} onChange={(e: any) => applyEmployeeToLabor(x.id, e.target.value)}><option value="">Saisie libre</option>{employees.map((emp: any) => <option key={emp.id} value={emp.id}>{emp.name || emp.full_name || "Salarié"}</option>)}</Select><Input className="mt-2" value={x.label} onChange={(e: any) => updateQuoteLabor(x.id, { label: e.target.value })} placeholder="Poste" /></Field>
+              <Field label="Salarié / poste"><Select value={x.employee_id} onChange={(e: any) => applyEmployeeToLabor(x.id, e.target.value)}><option value="">Saisie libre</option>{employees.map((emp: any) => <option key={emp.id} value={emp.id}>{employeeName(emp)}{emp.daily_cost ? ` — ${money(Number(emp.daily_cost))}/j` : ""}</option>)}</Select><Input className="mt-2" value={x.label} onChange={(e: any) => updateQuoteLabor(x.id, { label: e.target.value })} placeholder="Poste" /></Field>
               <Field label="Jours"><Input type="number" step="0.5" value={x.days} onChange={(e: any) => updateQuoteLabor(x.id, { days: e.target.value })} /></Field>
               <Field label="Coût / jour"><Input type="number" step="0.01" value={x.daily_cost} onChange={(e: any) => updateQuoteLabor(x.id, { daily_cost: e.target.value })} /></Field>
               <div className="flex items-end"><Button type="button" variant="danger" className="w-full" onClick={() => removeQuoteLabor(x.id)}>Supprimer</Button></div>
@@ -3271,6 +3335,11 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
           </div>
         </Card>
       </div>
+
+      <Card>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-black">Calculs sauvegardés</h2><p className="text-sm text-slate-500">Sauvegarde locale navigateur : modifier, supprimer, reprendre un calcul ou créer un chantier.</p></div><Badge tone="blue">{savedQuoteCalculations.length}</Badge></div>
+        <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="text-xs uppercase text-slate-500"><th className="p-3">Date</th><th className="p-3">Chantier / devis</th><th className="p-3">Client</th><th className="p-3">CA HT</th><th className="p-3">Coûts HT</th><th className="p-3">Marge</th><th className="p-3">Rentabilité</th><th className="p-3">Actions</th></tr></thead><tbody>{savedQuoteCalculations.map((item: any) => <tr key={item.id} className="border-t"><td className="p-3">{item.saved_at ? new Date(item.saved_at).toLocaleDateString("fr-FR") : "—"}</td><td className="p-3 font-bold">{item.form?.project_name || projectLabel(item.form?.project_id)}</td><td className="p-3">{item.form?.client || "—"}</td><td className="p-3">{money(item.totals?.revenue_ht)}</td><td className="p-3">{money(item.totals?.total_costs)}</td><td className={Number(item.totals?.margin || 0) >= 0 ? "p-3 font-black text-emerald-700" : "p-3 font-black text-red-600"}>{money(item.totals?.margin)}</td><td className="p-3 font-black">{item.totals?.margin_rate || 0}%</td><td className="p-3"><div className="flex flex-wrap gap-2"><Button type="button" variant="secondary" onClick={() => editQuoteCalculation(item)}>Modifier</Button><Button type="button" variant="danger" onClick={() => deleteQuoteCalculation(item.id)}>Supprimer</Button></div></td></tr>)}{savedQuoteCalculations.length === 0 && <tr><td colSpan={8} className="p-6 text-center text-slate-500">Aucun calcul sauvegardé.</td></tr>}</tbody></table></div>
+      </Card>
     </div>;
   }
 

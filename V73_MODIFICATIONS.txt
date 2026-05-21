@@ -1,0 +1,11 @@
+V73 - Module calcul rentabilité amélioré
+
+- Gestion > Calcul rentabilité : ajout du rattachement à un chantier existant via liste déroulante.
+- Personnel affecté : liste déroulante des salariés de la société avec reprise automatique du coût journée.
+- Dépenses prévues : liste déroulante des catégories/dépenses courantes + dépenses déjà connues dans Gestion.
+- Ajout, suppression et modification des lignes dépenses/personnel conservés.
+- Ajout d'une sauvegarde locale des simulations de marge : sauvegarder, reprendre/modifier, supprimer.
+- Ajout du bouton "Créer en chantier" pour transformer une simulation non rattachée en chantier.
+- Amélioration des libellés salariés : prénom + nom quand disponibles.
+
+Note : les calculs sauvegardés sont stockés localement dans le navigateur pour éviter une migration Supabase obligatoire.
