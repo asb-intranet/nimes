@@ -1,0 +1,12 @@
+V55 - Calcul marge devis / chantier
+
+Ajout dans Gestion :
+- Onglet "Calcul marge chantier".
+- Création / modification / duplication / suppression de simulations.
+- Prix de vente HT prévu + TVA client + remise.
+- Dépenses prévues avec catégorie, HT, TVA achat.
+- Personnel prévu avec salarié, jours, coût journalier.
+- Calcul automatique : coûts HT, main-d'œuvre, marge HT, taux de marge, prix mini conseillé, TVA collectée, TVA déductible, solde TVA.
+- Bouton "Transformer en chantier" : crée un chantier en préparation sans transférer automatiquement les lignes de simulation.
+
+Supabase : lancer supabase/schema-complet-v55.sql

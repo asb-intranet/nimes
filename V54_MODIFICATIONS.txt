@@ -1,0 +1,8 @@
+V54 - Gestion des règlements manuels
+
+- Ajout d'un onglet Gestion des règlements dans Gestion.
+- Module indépendant : aucune intégration dans pilotage, CA, TVA, marge ou chantier.
+- Colonnes : date, client/fournisseur, libellé, montant, moyen de paiement, statut, note, actions.
+- Actions : ajouter, modifier, supprimer, marquer payé.
+- Filtré par période uniquement pour l'affichage du tableau.
+- Nouveau SQL Supabase : supabase/schema-complet-v54.sql
