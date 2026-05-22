@@ -1,0 +1,8 @@
+V77 - Version stable Vercel
+
+- package-lock corrigé : suppression des URLs internes OpenAI/artifactory, remplacées par registry.npmjs.org
+- suppression de la commande install personnalisée Vercel pour laisser Vercel installer normalement
+- versions des dépendances figées pour éviter les mises à jour surprises
+- ajout d’un moteur Node compatible Vercel
+- suppression du cache TypeScript et anciens fichiers version inutiles
+- conservation des modifications V76 : règlements verts payés, noms salariés planning, grille chantiers PC.
