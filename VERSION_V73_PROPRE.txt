@@ -1,0 +1,21 @@
+V73 PROPRE - Module calcul rentabilité salariés/dépenses
+
+Contenu conservé :
+- Code Next.js : app/, components/, lib/
+- Configuration déploiement : package.json, next.config.js, vercel.json, tailwind, tsconfig
+- Logo ASB : public/logo-asb.png
+- Migrations SQL Supabase : dossier supabase/
+- Exemple variables : .env.local.example
+
+Nettoyage effectué :
+- Suppression des anciens fichiers de notes V11 à V72 présents à la racine
+- Suppression des fichiers de vérification/correctifs anciens
+- Suppression du cache TypeScript tsconfig.tsbuildinfo
+- Suppression éventuelle des fichiers système inutiles (.DS_Store, Thumbs.db, logs)
+
+Fonction ajoutée en V73 :
+- Calcul rentabilité / marge chantier dans Gestion
+- Sélection chantier
+- Sélection salariés en liste déroulante
+- Sélection dépenses en liste déroulante
+- Ajout / modification / suppression / sauvegarde des calculs
