@@ -24,6 +24,25 @@ const menu = [
 const statusLabels: any = { preparation: "À préparer", en_cours: "En cours", termine: "Terminé", archive: "Archivé" };
 const statusTone: any = { preparation: "amber", en_cours: "green", termine: "blue", archive: "slate" };
 
+const projectColorPalette = [
+  { name: "Bleu", value: "#2563eb" },
+  { name: "Bleu foncé", value: "#1e3a8a" },
+  { name: "Vert", value: "#16a34a" },
+  { name: "Vert forêt", value: "#166534" },
+  { name: "Orange", value: "#f97316" },
+  { name: "Rouge", value: "#dc2626" },
+  { name: "Bordeaux", value: "#991b1b" },
+  { name: "Violet", value: "#7c3aed" },
+  { name: "Rose", value: "#db2777" },
+  { name: "Jaune chantier", value: "#facc15" },
+  { name: "Turquoise", value: "#14b8a6" },
+  { name: "Cyan", value: "#06b6d4" },
+  { name: "Gris", value: "#64748b" },
+  { name: "Anthracite", value: "#0f172a" },
+  { name: "Marron", value: "#92400e" }
+];
+
+
 function cleanFileName(name: string) {
   const extension = name.includes(".") ? name.split(".").pop() : "";
   const base = name.replace(/\.[^/.]+$/, "");
@@ -66,6 +85,13 @@ function addDays(date: Date, days: number) {
   const d = new Date(date);
   d.setDate(d.getDate() + days);
   return d;
+}
+
+function daysBetween(start: string, end: string) {
+  if (!start) return 0;
+  const s = new Date(start);
+  const e = new Date(end || start);
+  return Math.max(0, Math.round((e.getTime() - s.getTime()) / 86400000)) + 1;
 }
 
 function monthDays(date: Date) {
@@ -506,8 +532,21 @@ function Projects({ projects, photos, docs, notes, materials, vigilance, invoice
           <Field label="Client"><Input value={form.client} onChange={(e: any) => setForm({ ...form, client: e.target.value })} /></Field>
           <Field label="Adresse"><Input value={form.address} onChange={(e: any) => setForm({ ...form, address: e.target.value })} /></Field>
           <Field label="Statut"><Select value={form.status} onChange={(e: any) => setForm({ ...form, status: e.target.value })}><option value="preparation">À préparer</option><option value="en_cours">En cours</option><option value="termine">Terminé</option><option value="archive">Archivé</option></Select></Field>
-          <Field label="Couleur"><Input type="color" value={form.color} onChange={(e: any) => setForm({ ...form, color: e.target.value })} /></Field>
-          
+          <div className="md:col-span-2">
+            <div className="mb-2 text-xs font-bold uppercase text-slate-500">Couleur chantier prédéfinie</div>
+            <div className="grid grid-cols-3 gap-2 rounded-3xl border border-slate-100 bg-slate-50 p-3 sm:grid-cols-5">
+              {projectColorPalette.map((c) => {
+                const selected = form.color === c.value;
+                return (
+                  <button key={c.value} type="button" onClick={() => setForm({ ...form, color: c.value })} className={`rounded-2xl border p-2 text-left text-[11px] font-black transition ${selected ? "border-slate-900 bg-white shadow-sm ring-2 ring-slate-900" : "border-white bg-white/80 hover:border-slate-300"}`}>
+                    <span className="mb-1 block h-7 rounded-xl" style={{ background: c.value }} />
+                    {c.name}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           <Field label="Avancement %"><Input type="number" min="0" max="100" value={form.progress} onChange={(e: any) => setForm({ ...form, progress: Number(e.target.value) })} /></Field>
           <div className="md:col-span-3"><Field label="Description"><Textarea value={form.description} onChange={(e: any) => setForm({ ...form, description: e.target.value })} /></Field></div>
           <Button className="md:col-span-3">{editingId ? "Modifier chantier" : "Créer chantier"}</Button>
@@ -1368,6 +1407,46 @@ function Planning({ projects, employees, links, planning, requests = [], refresh
     });
   }
 
+  const monthWeeks = Array.from({ length: 6 }, (_, w) => month.slice(w * 7, w * 7 + 7));
+
+  function compactMonthEventsForWeek(weekDays: Date[]) {
+    const weekStartKey = formatDate(weekDays[0]);
+    const weekEndKey = formatDate(weekDays[6]);
+    const term = search.trim().toLowerCase();
+    const grouped: any = {};
+
+    planning.forEach((p: any) => {
+      const project = projects.find((x: any) => x.id === p.project_id);
+      if (!project || project.status === "archive") return;
+      const start = p.start_date || "";
+      const end = p.end_date || p.start_date || "";
+      if (!start || start > weekEndKey || end < weekStartKey) return;
+      if (employeeFilter !== "all" && p.employee_id !== employeeFilter) return;
+      if (term && !`${project.name || ""} ${project.client || ""} ${project.address || ""} ${p.title || ""}`.toLowerCase().includes(term)) return;
+
+      const key = `${p.project_id}-${p.title || "planning"}-${start}-${end}`;
+      if (!grouped[key]) grouped[key] = { ...p, employee_ids: [], start_date: start, end_date: end };
+      if (p.employee_id && !grouped[key].employee_ids.includes(p.employee_id)) grouped[key].employee_ids.push(p.employee_id);
+    });
+
+    const events = Object.values(grouped).sort((a: any, b: any) => {
+      const spanA = daysBetween(a.start_date, a.end_date || a.start_date);
+      const spanB = daysBetween(b.start_date, b.end_date || b.start_date);
+      return (a.start_date || "").localeCompare(b.start_date || "") || spanB - spanA;
+    });
+
+    const lanes: any[] = [];
+    return events.map((e: any) => {
+      const startKey = e.start_date < weekStartKey ? weekStartKey : e.start_date;
+      const endKey = (e.end_date || e.start_date) > weekEndKey ? weekEndKey : (e.end_date || e.start_date);
+      const startIndex = weekDays.findIndex((d) => formatDate(d) === startKey);
+      const endIndex = weekDays.findIndex((d) => formatDate(d) === endKey);
+      let lane = lanes.findIndex((lastEnd) => lastEnd < startIndex);
+      if (lane === -1) { lane = lanes.length; lanes.push(endIndex); } else { lanes[lane] = endIndex; }
+      return { ...e, startIndex: Math.max(0, startIndex), endIndex: Math.max(0, endIndex), lane };
+    });
+  }
+
   if (showForm) {
     return (
       <div className="pb-24">
@@ -1496,45 +1575,71 @@ function Planning({ projects, employees, links, planning, requests = [], refresh
         </div>
       </Card>
 
-      <Card className="mb-5">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <Card className="mb-5 overflow-hidden p-3 sm:p-5">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div>
-            <p className="text-xs font-black uppercase text-slate-500">Agenda visuel</p>
-            <h3 className="text-xl font-black capitalize">{monthLabel}</h3>
+            <p className="text-[10px] font-black uppercase text-slate-500 sm:text-xs">Agenda mensuel type Google</p>
+            <h3 className="text-lg font-black capitalize sm:text-xl">{monthLabel}</h3>
           </div>
-          <div className="flex gap-2">
-            <Button variant="secondary" onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))}>← Mois</Button>
+          <div className="flex flex-wrap gap-1 sm:gap-2">
+            <Button variant="secondary" onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))}>←</Button>
             <Button variant="secondary" onClick={() => setCursor(new Date())}>Aujourd’hui</Button>
-            <Button variant="secondary" onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))}>Mois →</Button>
+            <Button variant="secondary" onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))}>→</Button>
           </div>
         </div>
-        <div className="grid grid-cols-7 overflow-hidden rounded-3xl border bg-white text-xs md:text-sm">
-          {["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"].map((d) => <div key={d} className="border-b bg-slate-50 p-3 text-center font-black text-slate-500">{d}</div>)}
-          {month.map((day) => {
-            const key = formatDate(day);
-            const inMonth = day.getMonth() === cursor.getMonth();
-            const dayEvents = eventsForDate(day);
-            return (
-              <div key={key} className={`min-h-28 border-b border-r p-2 ${inMonth ? "bg-white" : "bg-slate-50 text-slate-400"}`}>
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="font-black">{day.getDate()}</span>
-                  {dayEvents.length > 0 && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-black text-slate-600">{dayEvents.length}</span>}
+
+        <div className="overflow-hidden rounded-3xl border bg-white">
+          <div className="grid grid-cols-7 border-b bg-slate-50 text-center text-[10px] font-black uppercase text-slate-500 sm:text-xs">
+            {["L", "M", "M", "J", "V", "S", "D"].map((d, i) => <div key={`${d}-${i}`} className="py-2 sm:py-3">{d}</div>)}
+          </div>
+
+          <div className="divide-y">
+            {monthWeeks.map((weekDays, weekIndex) => {
+              const weekEvents = compactMonthEventsForWeek(weekDays);
+              const visibleEvents = weekEvents.filter((e: any) => e.lane < 3);
+              const hiddenCount = weekEvents.length - visibleEvents.length;
+              return (
+                <div key={weekIndex} className="relative h-[86px] sm:h-[104px]">
+                  <div className="absolute inset-0 grid grid-cols-7">
+                    {weekDays.map((day) => {
+                      const key = formatDate(day);
+                      const inMonth = day.getMonth() === cursor.getMonth();
+                      const isToday = key === formatDate(new Date());
+                      return (
+                        <div key={key} className={`border-r px-1 py-1 last:border-r-0 ${inMonth ? "bg-white" : "bg-slate-50 text-slate-300"}`}>
+                          <div className={`mx-auto flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-black sm:h-6 sm:w-6 sm:text-xs ${isToday ? "bg-slate-900 text-white" : ""}`}>{day.getDate()}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="absolute left-0 right-0 top-7 sm:top-8">
+                    {visibleEvents.map((e: any) => {
+                      const bg = projectColor(e.project_id);
+                      const textColor = isLightColor(bg) ? "#0f172a" : "white";
+                      const left = `${(e.startIndex / 7) * 100}%`;
+                      const width = `${((e.endIndex - e.startIndex + 1) / 7) * 100}%`;
+                      const top = `${e.lane * 18}px`;
+                      const names = (e.employee_ids || []).map((id: string) => employeeName(id).split(" ")[0]).join(", ");
+                      return (
+                        <button
+                          key={`${e.project_id}-${e.title}-${e.start_date}-${e.end_date}-${e.lane}`}
+                          type="button"
+                          onClick={() => openProjectFull(e.project_id)}
+                          className="absolute h-4 truncate rounded-md px-1.5 text-left text-[9px] font-black leading-4 shadow-sm sm:h-5 sm:rounded-lg sm:px-2 sm:text-[11px] sm:leading-5"
+                          style={{ left, width, top, background: bg, color: textColor }}
+                          title={`${projectNameLocal(e.project_id)} · ${e.title || "Planning"}${names ? ` · ${names}` : ""}`}
+                        >
+                          {projectNameLocal(e.project_id)}
+                        </button>
+                      );
+                    })}
+                    {hiddenCount > 0 && <div className="absolute right-1 top-[55px] rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-black text-slate-500 sm:top-[62px]">+{hiddenCount}</div>}
+                  </div>
                 </div>
-                <div className="space-y-1">
-                  {dayEvents.slice(0, 3).map((e: any) => {
-                    const bg = projectColor(e.project_id);
-                    const textColor = isLightColor(bg) ? "#0f172a" : "white";
-                    return (
-                      <button key={e.id} type="button" onClick={() => openEditPlanning(e)} className="block w-full truncate rounded-xl px-2 py-1 text-left text-[11px] font-black" style={{ background: bg, color: textColor }}>
-                        {projectNameLocal(e.project_id)}
-                      </button>
-                    );
-                  })}
-                  {dayEvents.length > 3 && <div className="text-[11px] font-bold text-slate-500">+ {dayEvents.length - 3} autre(s)</div>}
-                </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       </Card>
 

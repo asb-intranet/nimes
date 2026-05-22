@@ -1,0 +1,14 @@
+V75 - Agenda mobile type Google Agenda
+
+Modifications principales :
+- Vue mensuelle compacte pour afficher le mois entier sur téléphone.
+- Barres horizontales continues sur plusieurs jours pour les chantiers.
+- Regroupement des lignes planning par chantier/tâche/période pour éviter les doublons salariés dans l'agenda mensuel.
+- Clic sur une barre chantier : ouverture de la fiche chantier en pleine page.
+- Création et modification du planning conservées sur page dédiée.
+- Palette de 15 couleurs chantier prédéfinies dans la création/modification chantier.
+- Suppression de la palette couleur libre pour garder un rendu homogène.
+
+Contrôle :
+- Vérification TypeScript effectuée avec succès : tsc --noEmit.
+- Build Next.js : compilation réussie, puis arrêt environnement sur collecte page data/EPIPE pendant le build local.
