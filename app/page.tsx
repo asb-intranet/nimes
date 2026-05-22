@@ -1260,7 +1260,7 @@ function Planning({ projects, employees, links, planning, requests = [], refresh
     setEditing(null);
     setForm(emptyForm);
     setShowForm(true);
-    setTimeout(() => document.getElementById("planning-form")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+    setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 50);
   }
 
   function openEditPlanning(item: any) {
@@ -1276,7 +1276,7 @@ function Planning({ projects, employees, links, planning, requests = [], refresh
       notes: item.notes || ""
     });
     setShowForm(true);
-    setTimeout(() => document.getElementById("planning-form")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+    setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 50);
   }
 
   function openProjectFull(projectId: string) {
@@ -1353,6 +1353,71 @@ function Planning({ projects, employees, links, planning, requests = [], refresh
 
   const weekStart = startOfWeek(cursor);
   const week = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  const month = monthDays(cursor);
+  const monthLabel = cursor.toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
+
+  function eventsForDate(date: Date) {
+    const key = formatDate(date);
+    const term = search.trim().toLowerCase();
+    return planning.filter((p: any) => {
+      const project = projects.find((x: any) => x.id === p.project_id);
+      const matchDate = (p.start_date || "") <= key && (p.end_date || p.start_date || "") >= key;
+      const matchEmployee = employeeFilter === "all" || p.employee_id === employeeFilter;
+      const matchSearch = !term || `${project?.name || ""} ${project?.client || ""} ${project?.address || ""} ${p.title || ""}`.toLowerCase().includes(term);
+      return matchDate && matchEmployee && matchSearch && project?.status !== "archive";
+    });
+  }
+
+  if (showForm) {
+    return (
+      <div className="pb-24">
+        <div className="sticky top-0 z-30 mb-5 rounded-3xl border bg-white/95 p-4 shadow-sm backdrop-blur">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold uppercase text-slate-500">Planning</p>
+              <h2 className="text-2xl font-black">{editing ? "Modifier un planning" : "Créer un planning"}</h2>
+              <p className="text-sm text-slate-500">Page dédiée, plus lisible sur tablette/mobile. La couleur vient automatiquement du chantier.</p>
+            </div>
+            <Button type="button" variant="secondary" onClick={() => { setShowForm(false); setEditing(null); setForm(emptyForm); }}>← Retour agenda</Button>
+          </div>
+        </div>
+
+        <Card id="planning-form" className="border-l-8" style={{ borderLeftColor: form.project_id ? projectColor(form.project_id) : "#e2e8f0" }}>
+          <form onSubmit={savePlanning} className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <Field label="Chantier"><Select value={form.project_id} onChange={(e: any) => setForm({ ...form, project_id: e.target.value, employee_ids: [] })}><option value="">Choisir chantier</option>{activeProjects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field>
+            <Field label="Tâche"><Input value={form.title} onChange={(e: any) => setForm({ ...form, title: e.target.value })} placeholder="Ex : Pose isolation, RDV client..." /></Field>
+            <Field label="Date début"><Input type="date" value={form.start_date} onChange={(e: any) => setForm({ ...form, start_date: e.target.value })} /></Field>
+            <Field label="Date fin"><Input type="date" value={form.end_date} onChange={(e: any) => setForm({ ...form, end_date: e.target.value })} /></Field>
+            <Field label="Heure début"><Input type="time" value={form.start_time} onChange={(e: any) => setForm({ ...form, start_time: e.target.value })} /></Field>
+            <Field label="Heure fin"><Input type="time" value={form.end_time} onChange={(e: any) => setForm({ ...form, end_time: e.target.value })} /></Field>
+
+            <div className="md:col-span-2 xl:col-span-3">
+              <div className="mb-2 text-xs font-bold uppercase text-slate-500">Salariés à planifier</div>
+              <div className="grid gap-2 rounded-3xl border border-slate-100 bg-slate-50 p-3 md:grid-cols-2 xl:grid-cols-4">
+                {formEmployees.map((emp: any) => {
+                  const checked = (form.employee_ids || []).includes(emp.id);
+                  const isAssigned = assignedIds.includes(emp.id);
+                  return (
+                    <label key={emp.id} className={`flex cursor-pointer items-center justify-between gap-2 rounded-2xl border p-3 text-sm font-bold ${checked ? "border-slate-900 bg-white shadow-sm" : "border-slate-200 bg-white/70"}`}>
+                      <span>{emp.firstname} {emp.lastname} {!isAssigned && form.project_id ? <span className="ml-1 text-xs text-amber-600">à ajouter</span> : null}</span>
+                      <input type="checkbox" checked={checked} onChange={() => toggleEmployee(emp.id)} />
+                    </label>
+                  );
+                })}
+                {employees.length === 0 && <p className="text-sm text-slate-500">Aucun salarié enregistré.</p>}
+              </div>
+            </div>
+
+            <div className="md:col-span-2 xl:col-span-3"><Field label="Notes"><Textarea value={form.notes} onChange={(e: any) => setForm({ ...form, notes: e.target.value })} /></Field></div>
+            <div className="flex flex-wrap gap-2 md:col-span-2 xl:col-span-3">
+              <Button>{editing ? "Enregistrer la modification" : "Ajouter au planning"}</Button>
+              <Button type="button" variant="secondary" onClick={() => { setShowForm(false); setEditing(null); setForm(emptyForm); }}>Annuler</Button>
+            </div>
+          </form>
+        </Card>
+      </div>
+    );
+  }
 
   if (selectedProject) {
     const projectEvents = planning.filter((p: any) => p.project_id === selectedProject.id);
@@ -1415,43 +1480,7 @@ function Planning({ projects, employees, links, planning, requests = [], refresh
         <Button onClick={openCreatePlanning}>+ Créer planning</Button>
       </div>
 
-      {showForm && (
-        <Card id="planning-form" className="mb-6 border-l-8" style={{ borderLeftColor: form.project_id ? projectColor(form.project_id) : "#e2e8f0" }}>
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <h3 className="text-lg font-black">{editing ? "Modifier planning" : "Créer planning"}</h3>
-              <p className="text-sm text-slate-500">La couleur est automatique : elle vient du chantier sélectionné.</p>
-            </div>
-            <Button type="button" variant="secondary" onClick={() => { setShowForm(false); setEditing(null); setForm(emptyForm); }}>Fermer</Button>
-          </div>
-          <form onSubmit={savePlanning} className="grid gap-3 md:grid-cols-3">
-            <Field label="Chantier"><Select value={form.project_id} onChange={(e: any) => setForm({ ...form, project_id: e.target.value, employee_ids: [] })}><option value="">Choisir chantier</option>{activeProjects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field>
-            <Field label="Tâche"><Input value={form.title} onChange={(e: any) => setForm({ ...form, title: e.target.value })} placeholder="Ex : Pose isolation, RDV client..." /></Field>
-            <Field label="Date début"><Input type="date" value={form.start_date} onChange={(e: any) => setForm({ ...form, start_date: e.target.value })} /></Field>
-            <Field label="Date fin"><Input type="date" value={form.end_date} onChange={(e: any) => setForm({ ...form, end_date: e.target.value })} /></Field>
-            <Field label="Début"><Input type="time" value={form.start_time} onChange={(e: any) => setForm({ ...form, start_time: e.target.value })} /></Field>
-            <Field label="Fin"><Input type="time" value={form.end_time} onChange={(e: any) => setForm({ ...form, end_time: e.target.value })} /></Field>
-            <div className="md:col-span-3">
-              <div className="mb-1 text-xs font-bold uppercase text-slate-500">Salariés</div>
-              <div className="grid gap-2 rounded-3xl border border-slate-100 bg-slate-50 p-3 md:grid-cols-3">
-                {formEmployees.map((emp: any) => {
-                  const checked = (form.employee_ids || []).includes(emp.id);
-                  const isAssigned = assignedIds.includes(emp.id);
-                  return (
-                    <label key={emp.id} className={`flex cursor-pointer items-center justify-between gap-2 rounded-2xl border p-3 text-sm font-bold ${checked ? "border-slate-900 bg-white" : "border-slate-200 bg-white/60"}`}>
-                      <span>{emp.firstname} {emp.lastname} {!isAssigned && form.project_id ? <span className="ml-1 text-xs text-amber-600">à ajouter</span> : null}</span>
-                      <input type="checkbox" checked={checked} onChange={() => toggleEmployee(emp.id)} />
-                    </label>
-                  );
-                })}
-                {employees.length === 0 && <p className="text-sm text-slate-500">Aucun salarié enregistré.</p>}
-              </div>
-            </div>
-            <div className="md:col-span-3"><Field label="Notes"><Textarea value={form.notes} onChange={(e: any) => setForm({ ...form, notes: e.target.value })} /></Field></div>
-            <Button className="md:col-span-3">{editing ? "Enregistrer la modification" : "Ajouter au planning"}</Button>
-          </form>
-        </Card>
-      )}
+
 
       <Card className="mb-5">
         <div className="flex flex-wrap items-end justify-between gap-3">
@@ -1464,6 +1493,48 @@ function Planning({ projects, employees, links, planning, requests = [], refresh
             <div className="min-w-48 rounded-2xl bg-slate-50 px-4 py-3 text-center font-black">Semaine du {formatDate(weekStart)}</div>
             <Button variant="secondary" onClick={() => setCursor(addDays(cursor, 7))}>Semaine →</Button>
           </div>
+        </div>
+      </Card>
+
+      <Card className="mb-5">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-black uppercase text-slate-500">Agenda visuel</p>
+            <h3 className="text-xl font-black capitalize">{monthLabel}</h3>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))}>← Mois</Button>
+            <Button variant="secondary" onClick={() => setCursor(new Date())}>Aujourd’hui</Button>
+            <Button variant="secondary" onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))}>Mois →</Button>
+          </div>
+        </div>
+        <div className="grid grid-cols-7 overflow-hidden rounded-3xl border bg-white text-xs md:text-sm">
+          {["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"].map((d) => <div key={d} className="border-b bg-slate-50 p-3 text-center font-black text-slate-500">{d}</div>)}
+          {month.map((day) => {
+            const key = formatDate(day);
+            const inMonth = day.getMonth() === cursor.getMonth();
+            const dayEvents = eventsForDate(day);
+            return (
+              <div key={key} className={`min-h-28 border-b border-r p-2 ${inMonth ? "bg-white" : "bg-slate-50 text-slate-400"}`}>
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="font-black">{day.getDate()}</span>
+                  {dayEvents.length > 0 && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-black text-slate-600">{dayEvents.length}</span>}
+                </div>
+                <div className="space-y-1">
+                  {dayEvents.slice(0, 3).map((e: any) => {
+                    const bg = projectColor(e.project_id);
+                    const textColor = isLightColor(bg) ? "#0f172a" : "white";
+                    return (
+                      <button key={e.id} type="button" onClick={() => openEditPlanning(e)} className="block w-full truncate rounded-xl px-2 py-1 text-left text-[11px] font-black" style={{ background: bg, color: textColor }}>
+                        {projectNameLocal(e.project_id)}
+                      </button>
+                    );
+                  })}
+                  {dayEvents.length > 3 && <div className="text-[11px] font-bold text-slate-500">+ {dayEvents.length - 3} autre(s)</div>}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </Card>
 

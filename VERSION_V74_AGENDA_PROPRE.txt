@@ -1,0 +1,11 @@
+V74 - Agenda visuel + création planning sur page dédiée
+
+Modifications :
+- Planning transformé en agenda visuel type Google Agenda avec vue mensuelle.
+- Bouton + Créer planning ouvre maintenant une vraie page dédiée.
+- Modification planning ouvre aussi la page dédiée.
+- Retour agenda depuis la page de création/modification.
+- Conservation de la vue semaine par salariés en dessous.
+- Recherche chantier et filtre salarié conservés.
+- Couleur automatique du chantier conservée pour chaque événement.
+- Vérification TypeScript effectuée avec succès : npx tsc --noEmit.
