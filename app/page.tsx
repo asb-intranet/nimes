@@ -501,6 +501,7 @@ function Projects({ projects, photos, docs, notes, materials, vigilance, invoice
   }
 
   const activeProjects = projects.filter((p: any) => p.status !== "archive");
+  const activeEmployees = employees.filter((e: any) => e.active !== false && e.archived !== true);
   const archivedProjects = projects.filter((p: any) => p.status === "archive");
   const activeProjectIds = new Set(activeProjects.map((p: any) => p.id));
 
@@ -1334,6 +1335,9 @@ function Planning({ projects, employees, links, planning, requests = [], refresh
     setForm({ ...form, employee_ids: current.includes(employeeId) ? current.filter((id: string) => id !== employeeId) : [...current, employeeId] });
   }
 
+  const activeEmployees = employees.filter((e: any) => e.active !== false && e.archived !== true);
+  function employeeSnapshot(employeeId: string) { const emp = employees.find((e: any) => e.id === employeeId); return { employee_name_snapshot: emp ? `${emp.firstname || ""} ${emp.lastname || ""}`.trim() : null, employee_daily_cost_snapshot: Number(emp?.daily_cost || 0) }; }
+
   async function ensureProjectAssignments(projectId: string, employeeIds: string[]) {
     const missing = employeeIds
       .filter((employeeId: string) => !links.find((l: any) => l.project_id === projectId && l.employee_id === employeeId))
@@ -1363,10 +1367,10 @@ function Planning({ projects, employees, links, planning, requests = [], refresh
     };
 
     if (editing) {
-      const { error } = await supabase.from("employee_planning").update({ ...basePayload, employee_id: form.employee_ids[0] }).eq("id", editing.id);
+      const { error } = await supabase.from("employee_planning").update({ ...basePayload, employee_id: form.employee_ids[0], ...employeeSnapshot(form.employee_ids[0]) }).eq("id", editing.id);
       if (error) return alert(error.message);
     } else {
-      const rows = form.employee_ids.map((employee_id: string) => ({ ...basePayload, employee_id }));
+      const rows = form.employee_ids.map((employee_id: string) => ({ ...basePayload, employee_id, ...employeeSnapshot(employee_id) }));
       const { error } = await supabase.from("employee_planning").insert(rows);
       if (error) return alert(error.message);
     }
@@ -1489,7 +1493,7 @@ function Planning({ projects, employees, links, planning, requests = [], refresh
                     </label>
                   );
                 })}
-                {employees.length === 0 && <p className="text-sm text-slate-500">Aucun salarié enregistré.</p>}
+                {activeEmployees.length === 0 && <p className="text-sm text-slate-500">Aucun salarié actif enregistré.</p>}
               </div>
             </div>
 
@@ -1711,6 +1715,7 @@ function Employees({ employees, projects, refreshAll }: any) {
   const [employeeId, setEmployeeId] = useState("");
   const [projectId, setProjectId] = useState("");
   const [assignments, setAssignments] = useState<any[]>([]);
+  const [showArchived, setShowArchived] = useState(false);
 
   useEffect(() => { loadAssignments(); }, []);
   async function loadAssignments() { const { data } = await supabase.from("employee_projects").select("*"); setAssignments(data || []); }
@@ -1732,19 +1737,24 @@ function Employees({ employees, projects, refreshAll }: any) {
     await refreshEmployeesAll();
   }
   function editEmployee(emp: any) { setEditingId(emp.id); setShowEmployeeForm(true); setForm({ firstname: emp.firstname || "", lastname: emp.lastname || "", position: emp.position || "", role: emp.role || "terrain", phone: emp.phone || "", email: emp.email || "", daily_cost: String(emp.daily_cost || "") }); window.scrollTo({ top: 0, behavior: "smooth" }); }
-  async function deleteEmployee(emp: any) { if (!confirm(`Supprimer le salarié "${emp.firstname} ${emp.lastname}" ?`)) return; const { error } = await supabase.from("employees").delete().eq("id", emp.id); if (error) return alert(error.message); await refreshEmployeesAll(); }
+  async function deleteEmployee(emp: any) { if (!confirm(`Archiver le salarié "${emp.firstname} ${emp.lastname}" ?\n\nIl sera masqué des nouvelles listes mais l’historique planning, chantier et gestion restera conservé.`)) return; const { error } = await supabase.from("employees").update({ active: false, archived: true, archived_at: new Date().toISOString() }).eq("id", emp.id); if (error) return alert(error.message + "\n\nLance le script supabase/schema-v80-archivage-salaries.sql si les colonnes active/archived manquent."); await refreshEmployeesAll(); }
+  async function restoreEmployee(emp: any) { const { error } = await supabase.from("employees").update({ active: true, archived: false, archived_at: null }).eq("id", emp.id); if (error) return alert(error.message); await refreshEmployeesAll(); }
   async function assign(e: any) { e.preventDefault(); if (!employeeId || !projectId) return alert("Choisis un salarié et un chantier"); const already = assignments.find((a: any) => a.employee_id === employeeId && a.project_id === projectId); if (already) return alert("Ce salarié est déjà affecté à ce chantier"); const { error } = await supabase.from("employee_projects").insert({ employee_id: employeeId, project_id: projectId }); if (error) return alert(error.message); await refreshEmployeesAll(); }
   async function removeAssignment(assignment: any) { if (!confirm("Retirer cette affectation ?")) return; const { error } = await supabase.from("employee_projects").delete().eq("id", assignment.id); if (error) return alert(error.message); await refreshEmployeesAll(); }
   function employeeName(id: string) { const e = employees.find((x: any) => x.id === id); return e ? `${e.firstname} ${e.lastname}` : "Salarié inconnu"; }
   function projectNameLocal(id: string) { return projects.find((p: any) => p.id === id)?.name || "Chantier inconnu"; }
   const activeProjects = projects.filter((p: any) => p.status !== "archive");
+  const activeEmployees = employees.filter((e: any) => e.active !== false && e.archived !== true);
+  const archivedEmployees = employees.filter((e: any) => e.active === false || e.archived === true);
+  const visibleEmployees = showArchived ? employees : activeEmployees;
   const activeAssignments = assignments.filter((a: any) => activeProjects.find((p: any) => p.id === a.project_id));
   return (
     <div>
-      <Section title="Gestion salariés" subtitle="Création, modification, coût journée et affectation aux chantiers." />
+      <Section title="Gestion salariés" subtitle="Création, modification, coût journée, archivage sécurisé et affectation aux chantiers." />
       <Button className="mb-4" onClick={() => { if (showEmployeeForm && !editingId) { setShowEmployeeForm(false); } else { setShowEmployeeForm(true); setEditingId(null); setForm({ firstname: "", lastname: "", position: "", role: "terrain", phone: "", email: "", daily_cost: "" }); } }}>
         {showEmployeeForm ? (editingId ? "Formulaire salarié ouvert" : "Fermer création salarié") : "+ Créer salarié"}
       </Button>
+      <Button className="mb-4 ml-2" variant="secondary" onClick={() => setShowArchived(!showArchived)}>{showArchived ? "Masquer archivés" : `Voir archivés (${archivedEmployees.length})`}</Button>
       <div className="grid gap-6 lg:grid-cols-2">
         {showEmployeeForm && <Card><h3 className="mb-4 font-black">{editingId ? "Modifier salarié" : "Créer salarié"}</h3><form onSubmit={saveEmployee} className="space-y-3">
           <Field label="Prénom"><Input value={form.firstname} onChange={(e: any) => setForm({ ...form, firstname: e.target.value })} /></Field>
@@ -1756,9 +1766,9 @@ function Employees({ employees, projects, refreshAll }: any) {
           <Field label="Coût journée €"><Input type="number" value={form.daily_cost} onChange={(e: any) => setForm({ ...form, daily_cost: e.target.value })} /></Field>
           <div className="flex gap-2"><Button>{editingId ? "Enregistrer" : "Ajouter salarié"}</Button>{editingId && <Button type="button" variant="secondary" onClick={() => { setEditingId(null); setForm({ firstname: "", lastname: "", position: "", role: "terrain", phone: "", email: "", daily_cost: "" }); }}>Annuler</Button>}</div>
         </form></Card>}
-        <Card><h3 className="mb-4 font-black">Affecter un salarié à un chantier</h3><form onSubmit={assign} className="space-y-3"><Field label="Salarié"><Select value={employeeId} onChange={(e: any) => setEmployeeId(e.target.value)}><option value="">Choisir salarié</option>{employees.map((e: any) => <option key={e.id} value={e.id}>{e.firstname} {e.lastname} — {e.position || e.role}</option>)}</Select></Field><Field label="Chantier"><Select value={projectId} onChange={(e: any) => setProjectId(e.target.value)}><option value="">Choisir chantier actif</option>{activeProjects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field><Button>Affecter au chantier</Button><p className="text-xs text-slate-500">Les affectations détaillées restent visibles dans chaque fiche chantier pour garder cette page légère.</p></form></Card>
+        <Card><h3 className="mb-4 font-black">Affecter un salarié à un chantier</h3><form onSubmit={assign} className="space-y-3"><Field label="Salarié"><Select value={employeeId} onChange={(e: any) => setEmployeeId(e.target.value)}><option value="">Choisir salarié</option>{activeEmployees.map((e: any) => <option key={e.id} value={e.id}>{e.firstname} {e.lastname} — {e.position || e.role}</option>)}</Select></Field><Field label="Chantier"><Select value={projectId} onChange={(e: any) => setProjectId(e.target.value)}><option value="">Choisir chantier actif</option>{activeProjects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field><Button>Affecter au chantier</Button><p className="text-xs text-slate-500">Les affectations détaillées restent visibles dans chaque fiche chantier pour garder cette page légère.</p></form></Card>
       </div>
-      <div className="mt-6 grid gap-4 md:grid-cols-3">{employees.map((e: any) => { const employeeAssignments = activeAssignments.filter((a: any) => a.employee_id === e.id); return <Card key={e.id}><div className="flex items-start justify-between gap-3"><div><h3 className="font-black">{e.firstname} {e.lastname}</h3><p className="text-sm text-slate-500">{e.position}</p><p className="text-sm font-bold text-slate-700">{e.daily_cost ? `${e.daily_cost} €/jour` : "Coût journée non renseigné"}</p></div><Badge>{e.role}</Badge></div><div className="mt-4 space-y-1"><p className="text-xs font-bold uppercase text-slate-500">Chantiers affectés</p>{employeeAssignments.map((a: any) => <div key={a.id} className="rounded-xl bg-slate-50 px-3 py-2 text-xs font-bold">{projectNameLocal(a.project_id)}</div>)}{employeeAssignments.length === 0 && <p className="text-xs text-slate-400">Aucune affectation active.</p>}</div><div className="mt-4 grid grid-cols-2 gap-2"><Button variant="secondary" onClick={() => editEmployee(e)}>Modifier</Button><Button variant="danger" onClick={() => deleteEmployee(e)}>Supprimer</Button></div></Card>; })}</div>
+      <div className="mt-6 grid gap-4 md:grid-cols-3">{visibleEmployees.map((e: any) => { const employeeAssignments = activeAssignments.filter((a: any) => a.employee_id === e.id); return <Card key={e.id}><div className="flex items-start justify-between gap-3"><div><h3 className="font-black">{e.firstname} {e.lastname}</h3><p className="text-sm text-slate-500">{e.position}</p><p className="text-sm font-bold text-slate-700">{e.daily_cost ? `${e.daily_cost} €/jour` : "Coût journée non renseigné"}</p></div><div className="flex flex-col items-end gap-2"><Badge>{e.role}</Badge>{(e.active === false || e.archived === true) && <Badge tone="amber">Archivé</Badge>}</div></div><div className="mt-4 space-y-1"><p className="text-xs font-bold uppercase text-slate-500">Chantiers affectés</p>{employeeAssignments.map((a: any) => <div key={a.id} className="rounded-xl bg-slate-50 px-3 py-2 text-xs font-bold">{projectNameLocal(a.project_id)}</div>)}{employeeAssignments.length === 0 && <p className="text-xs text-slate-400">Aucune affectation active.</p>}</div><div className="mt-4 grid grid-cols-2 gap-2"><Button variant="secondary" onClick={() => editEmployee(e)}>Modifier</Button>{(e.active === false || e.archived === true) ? <Button variant="green" onClick={() => restoreEmployee(e)}>Réactiver</Button> : <Button variant="danger" onClick={() => deleteEmployee(e)}>Archiver</Button>}</div></Card>; })}</div>
     </div>
   );
 }
@@ -2984,7 +2994,7 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
   function amountTTC(x: any) { return Number(x.amount_ttc ?? (amountHT(x) + amountTVA(x))); }
   function taxPayload(amount: string, rate: string) { const ht = Math.round(Number(amount || 0) * 100) / 100; const tva = Math.round((ht * Number(rate || 0) / 100) * 100) / 100; const ttc = Math.round((ht + tva) * 100) / 100; return { amount: ht, amount_ht: ht, tva_rate: Number(rate || 0), amount_tva: tva, amount_ttc: ttc }; }
   function daysBetween(start: string, end: string) { if (!start) return 0; const s = new Date(start); const e = new Date(end || start); return Math.max(0, Math.round((e.getTime() - s.getTime()) / 86400000)) + 1; }
-  function employeeCost(employeeId: string) { const emp = employees.find((e: any) => e.id === employeeId); return Number(emp?.daily_cost || 0); }
+  function employeeCost(employeeId: string, row?: any) { if (row && row.employee_daily_cost_snapshot !== undefined && row.employee_daily_cost_snapshot !== null) return Number(row.employee_daily_cost_snapshot || 0); const emp = employees.find((e: any) => e.id === employeeId); return Number(emp?.daily_cost || 0); }
   function employeeName(emp: any) { return [emp?.firstname, emp?.lastname].filter(Boolean).join(" ") || emp?.name || emp?.full_name || emp?.email || "Salarié"; }
   function employeeNameById(id: string) { const emp = employees.find((e: any) => e.id === id); return emp ? employeeName(emp) : "Salarié non renseigné"; }
   function projectLabel(id: string) { const p = projects.find((x: any) => x.id === id); return p ? `${p.name}${p.status === "archive" ? " · archivé" : ""}` : "Chantier"; }
@@ -3005,6 +3015,7 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
   const periodLabel = `${periodStart.split("-").reverse().join("/")} → ${periodEnd.split("-").reverse().join("/")}`;
 
   const activeProjects = projects.filter((p: any) => p.status !== "archive");
+  const activeEmployees = employees.filter((e: any) => e.active !== false && e.archived !== true);
   const archivedProjects = projects.filter((p: any) => p.status === "archive");
   const activeProjectIds = new Set(activeProjects.map((p: any) => p.id));
   const searchedActiveProjects = activeProjects.filter((p: any) => {
@@ -3035,7 +3046,7 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
     const revenueTotal = myRevenues.reduce((s: number, r: any) => s + amountHT(r), 0);
     const revenueTVA = myRevenues.reduce((s: number, r: any) => s + amountTVA(r), 0);
     const netDeductibleTVA = Math.max(0, supplierTVA - returnsTVA);
-    const laborTotal = planning.filter((p: any) => p.project_id === projectId && (!usePeriodFilter || overlapsPeriod(p.start_date, p.end_date))).reduce((s: number, p: any) => s + daysBetween(p.start_date, p.end_date) * employeeCost(p.employee_id), 0);
+    const laborTotal = planning.filter((p: any) => p.project_id === projectId && (!usePeriodFilter || overlapsPeriod(p.start_date, p.end_date))).reduce((s: number, p: any) => s + daysBetween(p.start_date, p.end_date) * employeeCost(p.employee_id, p), 0);
     const margin = revenueTotal - supplierTotal - laborTotal;
     const marginRate = revenueTotal > 0 ? Math.round((margin / revenueTotal) * 100) : 0;
     return { grossSupplierTotal, supplierTotal, supplierTVA, returnsTotal, returnsTVA, revenueTotal, revenueTVA, netDeductibleTVA, laborTotal, margin, marginRate, tvaBalance: revenueTVA - netDeductibleTVA };
@@ -3199,7 +3210,7 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
     const statusLabel = s.margin >= 0 ? "Rentable" : "À surveiller";
     const employeeLabel = (id: string) => {
       const e = employees.find((x: any) => x.id === id);
-      return e ? `${e.firstname || ""} ${e.lastname || ""}`.trim() || "Salarié" : "Salarié non défini";
+      return e ? `${e.firstname || ""} ${e.lastname || ""}`.trim() || "Salarié" : (planning.find((p: any) => p.employee_id === id)?.employee_name_snapshot || "Salarié non défini");
     };
     const pct = (value: number, total: number) => total > 0 ? Math.max(0, Math.round((value / total) * 100)) : 0;
     const revenueTTC = projectRevenues.reduce((sum: number, r: any) => sum + amountTTC(r), 0);
@@ -3295,7 +3306,7 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
             <div class="section">
               <h2>Temps salariés / planning</h2>
               <table><thead><tr><th>Salarié</th><th>Début</th><th>Fin</th><th class="num">Jours</th><th class="num">Coût jour</th><th class="num">Coût estimé</th></tr></thead><tbody>
-                ${projectPlanning.map((pl: any) => { const days = daysBetween(pl.start_date, pl.end_date); const cost = employeeCost(pl.employee_id); return `<tr><td><b>${employeeLabel(pl.employee_id)}</b></td><td>${pl.start_date || ""}</td><td>${pl.end_date || ""}</td><td class="num">${days}</td><td class="num">${money(cost)}</td><td class="num">${money(days * cost)}</td></tr>`; }).join("") || `<tr><td colspan="6">Aucun temps salarié lié au chantier.</td></tr>`}
+                ${projectPlanning.map((pl: any) => { const days = daysBetween(pl.start_date, pl.end_date); const cost = employeeCost(pl.employee_id, pl); return `<tr><td><b>${employeeLabel(pl.employee_id)}</b></td><td>${pl.start_date || ""}</td><td>${pl.end_date || ""}</td><td class="num">${days}</td><td class="num">${money(cost)}</td><td class="num">${money(days * cost)}</td></tr>`; }).join("") || `<tr><td colspan="6">Aucun temps salarié lié au chantier.</td></tr>`}
               </tbody></table>
             </div>
             <p class="note">Document interne ASB — rapport de gestion et rentabilité. Ne pas transmettre au client sans validation.</p>
@@ -3416,7 +3427,7 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
     }
     function applyEmployeeToLabor(rowId: number, employeeId: string) {
       const emp = employees.find((e: any) => e.id === employeeId);
-      updateQuoteLabor(rowId, { employee_id: employeeId, label: emp ? employeeName(emp) : "Personnel", daily_cost: String(emp?.daily_cost || "") });
+      updateQuoteLabor(rowId, { employee_id: employeeId, employee_name_snapshot: emp ? employeeName(emp) : "Personnel", employee_daily_cost_snapshot: Number(emp?.daily_cost || 0), label: emp ? employeeName(emp) : "Personnel", daily_cost: String(emp?.daily_cost || "") });
     }
     function resetQuoteCalculation() {
       setEditingQuoteCalcId(null);
@@ -3426,7 +3437,8 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
     }
     async function saveQuoteCalculation() {
       const id = editingQuoteCalcId || String(Date.now());
-      const payload = { id, saved_at: new Date().toISOString(), updated_at: new Date().toISOString(), form: quoteForm, expenses: quoteExpenses, labor: quoteLabor, totals: { revenue_ht: quoteRevenueHT, revenue_tva: quoteTVA, revenue_ttc: quoteTTC, expenses_ht: quoteExpensesTotal, expenses_tva: quoteExpensesTVA, expenses_ttc: quoteExpensesTTC, labor_ht: quoteLaborTotal, fixed_costs: quoteFixedCosts, total_costs: quoteTotalCosts, tva_balance: quoteTvaBalance, margin: quoteMargin, margin_rate: quoteMarginRate, markup_rate: quoteMarkupRate } };
+      const frozenLabor = quoteLabor.map((l: any) => ({ ...l, employee_name_snapshot: l.employee_name_snapshot || l.label || employeeNameById(l.employee_id), employee_daily_cost_snapshot: Number(l.employee_daily_cost_snapshot ?? l.daily_cost ?? 0), daily_cost: String(l.daily_cost || l.employee_daily_cost_snapshot || 0) }));
+      const payload = { id, saved_at: new Date().toISOString(), updated_at: new Date().toISOString(), form: quoteForm, expenses: quoteExpenses, labor: frozenLabor, totals: { revenue_ht: quoteRevenueHT, revenue_tva: quoteTVA, revenue_ttc: quoteTTC, expenses_ht: quoteExpensesTotal, expenses_tva: quoteExpensesTVA, expenses_ttc: quoteExpensesTTC, labor_ht: quoteLaborTotal, fixed_costs: quoteFixedCosts, total_costs: quoteTotalCosts, tva_balance: quoteTvaBalance, margin: quoteMargin, margin_rate: quoteMarginRate, markup_rate: quoteMarkupRate } };
       const { error } = await supabase.from("quote_calculations").upsert(payload);
       if (error) {
         alert("Sauvegarde Supabase impossible. Lance le script supabase/schema-v78-calcul-marge.sql puis redéploie. En attendant, sauvegarde locale sur cet appareil uniquement.\n\n" + error.message);
@@ -3530,7 +3542,7 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><h2 className="text-xl font-black">3. Personnel affecté</h2><Button variant="secondary" onClick={addQuoteLabor}>+ Ajouter personnel</Button></div>
           <div className="space-y-3">
             {quoteLabor.map((x: any) => <div key={x.id} className="grid gap-3 rounded-2xl border bg-white p-3 md:grid-cols-[1fr_100px_130px_120px]">
-              <Field label="Salarié / poste"><Select value={x.employee_id} onChange={(e: any) => applyEmployeeToLabor(x.id, e.target.value)}><option value="">Saisie libre</option>{employees.map((emp: any) => <option key={emp.id} value={emp.id}>{employeeName(emp)}{emp.daily_cost ? ` — ${money(Number(emp.daily_cost))}/j` : ""}</option>)}</Select><Input className="mt-2" value={x.label} onChange={(e: any) => updateQuoteLabor(x.id, { label: e.target.value })} placeholder="Poste" /></Field>
+              <Field label="Salarié / poste"><Select value={x.employee_id} onChange={(e: any) => applyEmployeeToLabor(x.id, e.target.value)}><option value="">Saisie libre</option>{activeEmployees.map((emp: any) => <option key={emp.id} value={emp.id}>{employeeName(emp)}{emp.daily_cost ? ` — ${money(Number(emp.daily_cost))}/j` : ""}</option>)}</Select><Input className="mt-2" value={x.label} onChange={(e: any) => updateQuoteLabor(x.id, { label: e.target.value })} placeholder="Poste" /></Field>
               <Field label="Jours"><Input type="number" step="0.5" value={x.days} onChange={(e: any) => updateQuoteLabor(x.id, { days: e.target.value })} /></Field>
               <Field label="Coût / jour"><Input type="number" step="0.01" value={x.daily_cost} onChange={(e: any) => updateQuoteLabor(x.id, { daily_cost: e.target.value })} /></Field>
               <div className="flex items-end"><Button type="button" variant="danger" className="w-full" onClick={() => removeQuoteLabor(x.id)}>Supprimer</Button></div>
