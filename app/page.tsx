@@ -140,6 +140,7 @@ export default function Page() {
   const [earthworkReturns, setEarthworkReturns] = useState<any[]>([]);
   const [companyExpenses, setCompanyExpenses] = useState<any[]>([]);
   const [clientPayments, setClientPayments] = useState<any[]>([]);
+  const [quoteCalculations, setQuoteCalculations] = useState<any[]>([]);
   const [dataWarning, setDataWarning] = useState<string>("");
   
   useEffect(() => {
@@ -160,7 +161,7 @@ export default function Page() {
   }, []);
 
   async function refreshAll() {
-    const [p, ph, d, e, l, n, v, r, pl, mat, vig, inv, rev, ret, ew, ewph, ewd, ewn, ewm, ewv, ewp, ewr, ewi, ewrev, ewret, ce, cp] = await Promise.all([
+    const [p, ph, d, e, l, n, v, r, pl, mat, vig, inv, rev, ret, ew, ewph, ewd, ewn, ewm, ewv, ewp, ewr, ewi, ewrev, ewret, ce, cp, qc] = await Promise.all([
       supabase.from("projects").select("*").order("created_at", { ascending: false }),
       supabase.from("chantier_photos").select("*").order("created_at", { ascending: false }),
       supabase.from("chantier_documents").select("*").order("created_at", { ascending: false }),
@@ -187,7 +188,8 @@ export default function Page() {
       supabase.from("earthwork_revenues").select("*").order("billing_date", { ascending: false }),
       supabase.from("earthwork_returns").select("*").order("return_date", { ascending: false }),
       supabase.from("company_expenses").select("*").order("expense_date", { ascending: false }),
-      supabase.from("client_payments").select("*").order("payment_date", { ascending: false })
+      supabase.from("client_payments").select("*").order("payment_date", { ascending: false }),
+      supabase.from("quote_calculations").select("*").order("updated_at", { ascending: false })
     ]);
 
     const errors = [p, ph, d, e, l, n, v, r, pl, mat, vig, inv, rev, ret, ew, ewph, ewd, ewn, ewm, ewv, ewp, ewr, ewi, ewrev, ewret, ce, cp].filter((x: any) => x?.error).map((x: any) => x.error.message);
@@ -220,6 +222,7 @@ export default function Page() {
     setEarthworkReturns(ewret.data || []);
     setCompanyExpenses(ce.data || []);
     setClientPayments(cp.data || []);
+    setQuoteCalculations(qc.data || []);
   }
 
   async function signIn(e: any) {
@@ -338,7 +341,7 @@ export default function Page() {
           {active === "vehicles" && userRole === "admin" && <Vehicles vehicles={vehicles} refreshAll={refreshAll} />}
           {active === "requests" && userRole === "admin" && <Requests requests={requests} projects={projects} employees={employees} refreshAll={refreshAll} projectName={projectName} />}
           {active === "mobile" && userRole === "admin" && <Mobile projects={projects} refreshAll={refreshAll} />}
-          {active === "management" && userRole === "admin" && <Management projects={projects} photos={photos} docs={docs} notes={notes} materials={materials} vigilance={vigilance} employees={employees} planning={planning} invoices={invoices} revenues={revenues} returns={returns} companyExpenses={companyExpenses} clientPayments={clientPayments} refreshAll={refreshAll} />}
+          {active === "management" && userRole === "admin" && <Management projects={projects} photos={photos} docs={docs} notes={notes} materials={materials} vigilance={vigilance} employees={employees} planning={planning} invoices={invoices} revenues={revenues} returns={returns} companyExpenses={companyExpenses} clientPayments={clientPayments} quoteCalculations={quoteCalculations} refreshAll={refreshAll} />}
         </section>
       </main>
     </div>
@@ -2927,7 +2930,7 @@ function Storekeeper({ projects, materials, invoices = [], returns = [], refresh
 }
 
 
-function Management({ projects, photos = [], docs = [], notes = [], materials = [], vigilance = [], employees, planning, invoices, revenues, returns = [], companyExpenses = [], clientPayments = [], refreshAll }: any) {
+function Management({ projects, photos = [], docs = [], notes = [], materials = [], vigilance = [], employees, planning, invoices, revenues, returns = [], companyExpenses = [], clientPayments = [], quoteCalculations = [], refreshAll }: any) {
   const [tab, setTab] = useState("pilotage");
   const [projectSearch, setProjectSearch] = useState("");
   const [selectedProjectFilter, setSelectedProjectFilter] = useState("");
@@ -2940,15 +2943,15 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
   const [paymentForm, setPaymentForm] = useState({ project_id: "", revenue_id: "", client: "", invoice_number: "", amount_ttc: "", payment_method: "Virement bancaire", payment_date: formatDate(new Date()), notes: "" });
-  const emptyQuoteForm = { project_id: "", project_name: "", client: "", revenue_ht: "", tva_rate: "10", fixed_costs: "0", notes: "" };
+  const emptyQuoteForm = { project_id: "", project_name: "", client: "", revenue_ht: "", input_mode: "HT", tva_rate: "10", fixed_costs: "0", notes: "" };
   const [quoteForm, setQuoteForm] = useState(emptyQuoteForm);
   const [savedQuoteCalculations, setSavedQuoteCalculations] = useState<any[]>([]);
   const [quoteCalculationsLoaded, setQuoteCalculationsLoaded] = useState(false);
   const [editingQuoteCalcId, setEditingQuoteCalcId] = useState<string | null>(null);
   const [quoteExpenses, setQuoteExpenses] = useState<any[]>([
-    { id: 1, label: "Matériaux", amount: "" },
-    { id: 2, label: "Sous-traitance", amount: "" },
-    { id: 3, label: "Location / engins", amount: "" }
+    { id: 1, label: "Matériaux", amount: "", tva_rate: "20", amount_mode: "HT" },
+    { id: 2, label: "Sous-traitance", amount: "", tva_rate: "20", amount_mode: "HT" },
+    { id: 3, label: "Location / engins", amount: "", tva_rate: "20", amount_mode: "HT" }
   ]);
   const [quoteLabor, setQuoteLabor] = useState<any[]>([
     { id: 1, employee_id: "", label: "Personnel", days: "1", daily_cost: "" }
@@ -2960,23 +2963,19 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
   const [periodEnd, setPeriodEnd] = useState(formatDate(new Date(today.getFullYear(), today.getMonth() + 1, 0)));
 
   useEffect(() => {
+    if (quoteCalculations.length > 0) {
+      setSavedQuoteCalculations(quoteCalculations);
+      setQuoteCalculationsLoaded(true);
+      return;
+    }
     try {
       const raw = localStorage.getItem("asb_quote_profitability_calculations_v1");
       if (raw) setSavedQuoteCalculations(JSON.parse(raw));
     } catch (e) {
-      console.warn("Impossible de charger les calculs de marge sauvegardés", e);
+      console.warn("Impossible de charger les anciens calculs locaux", e);
     }
     setQuoteCalculationsLoaded(true);
-  }, []);
-
-  useEffect(() => {
-    if (!quoteCalculationsLoaded) return;
-    try {
-      localStorage.setItem("asb_quote_profitability_calculations_v1", JSON.stringify(savedQuoteCalculations));
-    } catch (e) {
-      console.warn("Impossible de sauvegarder les calculs de marge", e);
-    }
-  }, [savedQuoteCalculations, quoteCalculationsLoaded]);
+  }, [quoteCalculations]);
 
 
   function money(v: number) { return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(v || 0)); }
@@ -3374,13 +3373,20 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
 
 
   if (tab === "calcul-rentabilite") {
-    const quoteRevenueHT = Number(quoteForm.revenue_ht || 0);
-    const quoteTVA = Math.round((quoteRevenueHT * Number(quoteForm.tva_rate || 0) / 100) * 100) / 100;
+    const quoteInputAmount = Number(quoteForm.revenue_ht || 0);
+    const quoteRate = Number(quoteForm.tva_rate || 0);
+    const quoteRevenueHT = quoteForm.input_mode === "TTC" ? Math.round((quoteInputAmount / (1 + quoteRate / 100)) * 100) / 100 : quoteInputAmount;
+    const quoteTVA = Math.round((quoteRevenueHT * quoteRate / 100) * 100) / 100;
     const quoteTTC = quoteRevenueHT + quoteTVA;
-    const quoteExpensesTotal = quoteExpenses.reduce((s: number, x: any) => s + Number(x.amount || 0), 0);
+    function quoteExpenseHT(x: any) { const rate = Number(x.tva_rate ?? 20); const amount = Number(x.amount || 0); return x.amount_mode === "TTC" ? Math.round((amount / (1 + rate / 100)) * 100) / 100 : amount; }
+    function quoteExpenseTVA(x: any) { const ht = quoteExpenseHT(x); return Math.round((ht * Number(x.tva_rate ?? 20) / 100) * 100) / 100; }
+    const quoteExpensesTotal = quoteExpenses.reduce((s: number, x: any) => s + quoteExpenseHT(x), 0);
+    const quoteExpensesTVA = quoteExpenses.reduce((s: number, x: any) => s + quoteExpenseTVA(x), 0);
+    const quoteExpensesTTC = quoteExpensesTotal + quoteExpensesTVA;
     const quoteLaborTotal = quoteLabor.reduce((s: number, x: any) => s + (Number(x.days || 0) * Number(x.daily_cost || 0)), 0);
     const quoteFixedCosts = Number(quoteForm.fixed_costs || 0);
     const quoteTotalCosts = quoteExpensesTotal + quoteLaborTotal + quoteFixedCosts;
+    const quoteTvaBalance = quoteTVA - quoteExpensesTVA;
     const quoteMargin = quoteRevenueHT - quoteTotalCosts;
     const quoteMarginRate = quoteRevenueHT > 0 ? Math.round((quoteMargin / quoteRevenueHT) * 100) : 0;
     const quoteMarkupRate = quoteTotalCosts > 0 ? Math.round((quoteMargin / quoteTotalCosts) * 100) : 0;
@@ -3392,7 +3398,7 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
       setQuoteExpenses(quoteExpenses.map((x: any) => x.id === id ? { ...x, ...patch } : x));
     }
     function addQuoteExpense() {
-      setQuoteExpenses([...quoteExpenses, { id: Date.now(), category: "Autre", label: "Nouvelle dépense", amount: "" }]);
+      setQuoteExpenses([...quoteExpenses, { id: Date.now(), category: "Autre", label: "Nouvelle dépense", amount: "", tva_rate: "20", amount_mode: "HT" }]);
     }
     function removeQuoteExpense(id: number) {
       setQuoteExpenses(quoteExpenses.filter((x: any) => x.id !== id));
@@ -3413,14 +3419,20 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
     function resetQuoteCalculation() {
       setEditingQuoteCalcId(null);
       setQuoteForm(emptyQuoteForm);
-      setQuoteExpenses([{ id: 1, category: "Matériaux", label: "Matériaux", amount: "" }, { id: 2, category: "Sous-traitance", label: "Sous-traitance", amount: "" }, { id: 3, category: "Location / engins", label: "Location / engins", amount: "" }]);
+      setQuoteExpenses([{ id: 1, category: "Matériaux", label: "Matériaux", amount: "", tva_rate: "20", amount_mode: "HT" }, { id: 2, category: "Sous-traitance", label: "Sous-traitance", amount: "", tva_rate: "20", amount_mode: "HT" }, { id: 3, category: "Location / engins", label: "Location / engins", amount: "", tva_rate: "20", amount_mode: "HT" }]);
       setQuoteLabor([{ id: 1, employee_id: "", label: "Personnel", days: "1", daily_cost: "" }]);
     }
-    function saveQuoteCalculation() {
+    async function saveQuoteCalculation() {
       const id = editingQuoteCalcId || String(Date.now());
-      const payload = { id, saved_at: new Date().toISOString(), form: quoteForm, expenses: quoteExpenses, labor: quoteLabor, totals: { revenue_ht: quoteRevenueHT, expenses_ht: quoteExpensesTotal, labor_ht: quoteLaborTotal, fixed_costs: quoteFixedCosts, total_costs: quoteTotalCosts, margin: quoteMargin, margin_rate: quoteMarginRate } };
+      const payload = { id, saved_at: new Date().toISOString(), updated_at: new Date().toISOString(), form: quoteForm, expenses: quoteExpenses, labor: quoteLabor, totals: { revenue_ht: quoteRevenueHT, revenue_tva: quoteTVA, revenue_ttc: quoteTTC, expenses_ht: quoteExpensesTotal, expenses_tva: quoteExpensesTVA, expenses_ttc: quoteExpensesTTC, labor_ht: quoteLaborTotal, fixed_costs: quoteFixedCosts, total_costs: quoteTotalCosts, tva_balance: quoteTvaBalance, margin: quoteMargin, margin_rate: quoteMarginRate, markup_rate: quoteMarkupRate } };
+      const { error } = await supabase.from("quote_calculations").upsert(payload);
+      if (error) {
+        alert("Sauvegarde Supabase impossible. Lance le script supabase/schema-v78-calcul-marge.sql puis redéploie. En attendant, sauvegarde locale sur cet appareil uniquement.\n\n" + error.message);
+        try { localStorage.setItem("asb_quote_profitability_calculations_v1", JSON.stringify(editingQuoteCalcId ? savedQuoteCalculations.map((x: any) => x.id === id ? payload : x) : [payload, ...savedQuoteCalculations])); } catch {}
+      }
       setSavedQuoteCalculations(editingQuoteCalcId ? savedQuoteCalculations.map((x: any) => x.id === id ? payload : x) : [payload, ...savedQuoteCalculations]);
       setEditingQuoteCalcId(id);
+      await refreshAll();
       alert("Calcul de rentabilité sauvegardé.");
     }
     function editQuoteCalculation(item: any) {
@@ -3430,10 +3442,13 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
       setQuoteLabor(item.labor || []);
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
-    function deleteQuoteCalculation(id: string) {
+    async function deleteQuoteCalculation(id: string) {
       if (!confirm("Supprimer ce calcul de rentabilité ?")) return;
+      const { error } = await supabase.from("quote_calculations").delete().eq("id", id);
+      if (error) console.warn("Suppression Supabase impossible, suppression locale uniquement", error.message);
       setSavedQuoteCalculations(savedQuoteCalculations.filter((x: any) => x.id !== id));
       if (editingQuoteCalcId === id) resetQuoteCalculation();
+      await refreshAll();
     }
     async function createProjectFromQuote() {
       if (quoteForm.project_id) return alert("Ce calcul est déjà rattaché à un chantier existant.");
@@ -3454,11 +3469,11 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
       </div>
 
       <div className="grid gap-4 md:grid-cols-5">
-        <Card className="border-l-4 border-emerald-500"><p className="text-xs font-black uppercase text-slate-500">Devis HT</p><p className="mt-2 text-2xl font-black text-emerald-700">{money(quoteRevenueHT)}</p><p className="text-xs text-slate-500">TTC : {money(quoteTTC)}</p></Card>
-        <Card className="border-l-4 border-red-500"><p className="text-xs font-black uppercase text-slate-500">Dépenses HT</p><p className="mt-2 text-2xl font-black text-red-600">{money(quoteExpensesTotal)}</p><p className="text-xs text-slate-500">Achats / sous-traitance / locations</p></Card>
+        <Card className="border-l-4 border-emerald-500"><p className="text-xs font-black uppercase text-slate-500">Devis HT</p><p className="mt-2 text-2xl font-black text-emerald-700">{money(quoteRevenueHT)}</p><p className="text-xs text-slate-500">TVA : {money(quoteTVA)} · TTC : {money(quoteTTC)}</p></Card>
+        <Card className="border-l-4 border-red-500"><p className="text-xs font-black uppercase text-slate-500">Dépenses HT</p><p className="mt-2 text-2xl font-black text-red-600">{money(quoteExpensesTotal)}</p><p className="text-xs text-slate-500">TVA récup. : {money(quoteExpensesTVA)}</p></Card>
         <Card className="border-l-4 border-blue-500"><p className="text-xs font-black uppercase text-slate-500">Main d’œuvre</p><p className="mt-2 text-2xl font-black text-blue-700">{money(quoteLaborTotal)}</p><p className="text-xs text-slate-500">Personnel affecté au devis</p></Card>
         <Card className={quoteMargin >= 0 ? "border-l-4 border-emerald-500" : "border-l-4 border-red-500"}><p className="text-xs font-black uppercase text-slate-500">Marge prévue</p><p className={quoteMargin >= 0 ? "mt-2 text-2xl font-black text-emerald-700" : "mt-2 text-2xl font-black text-red-600"}>{money(quoteMargin)}</p><p className="text-xs text-slate-500">Résultat estimatif HT</p></Card>
-        <Card className="border-l-4 border-purple-500"><p className="text-xs font-black uppercase text-slate-500">Rentabilité</p><p className="mt-2 text-2xl font-black text-purple-700">{quoteMarginRate}%</p><p className="text-xs text-slate-500">Taux marque : {quoteMarkupRate}%</p></Card>
+        <Card className="border-l-4 border-purple-500"><p className="text-xs font-black uppercase text-slate-500">TVA nette</p><p className={quoteTvaBalance >= 0 ? "mt-2 text-2xl font-black text-purple-700" : "mt-2 text-2xl font-black text-emerald-700"}>{money(Math.abs(quoteTvaBalance))}</p><p className="text-xs text-slate-500">{quoteTvaBalance >= 0 ? "À reverser" : "Crédit TVA"} · Marge {quoteMarginRate}%</p></Card>
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[1.1fr_.9fr]">
@@ -3468,7 +3483,8 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
             <Field label="Rattacher à un chantier existant"><Select value={quoteForm.project_id} onChange={(e: any) => { const p = projects.find((x: any) => x.id === e.target.value); setQuoteForm({ ...quoteForm, project_id: e.target.value, project_name: p?.name || quoteForm.project_name, client: p?.client || quoteForm.client }); }}><option value="">Aucun / nouveau chantier</option>{activeProjects.map((p: any) => <option key={p.id} value={p.id}>{projectLabel(p.id)}</option>)}</Select></Field>
             <Field label="Nom chantier / devis"><Input value={quoteForm.project_name} onChange={(e: any) => setQuoteForm({ ...quoteForm, project_name: e.target.value })} placeholder="Ex : ITE Villa Dupont" /></Field>
             <Field label="Client"><Input value={quoteForm.client} onChange={(e: any) => setQuoteForm({ ...quoteForm, client: e.target.value })} placeholder="Nom client" /></Field>
-            <Field label="Montant devis HT"><Input type="number" step="0.01" value={quoteForm.revenue_ht} onChange={(e: any) => setQuoteForm({ ...quoteForm, revenue_ht: e.target.value })} placeholder="0.00" /></Field>
+            <Field label={quoteForm.input_mode === "TTC" ? "Montant devis TTC" : "Montant devis HT"}><Input type="number" step="0.01" value={quoteForm.revenue_ht} onChange={(e: any) => setQuoteForm({ ...quoteForm, revenue_ht: e.target.value })} placeholder="0.00" /></Field>
+            <Field label="Saisie devis"><Select value={quoteForm.input_mode || "HT"} onChange={(e: any) => setQuoteForm({ ...quoteForm, input_mode: e.target.value })}><option value="HT">Je saisis en HT</option><option value="TTC">Je saisis en TTC</option></Select></Field>
             <Field label="TVA devis"><Select value={quoteForm.tva_rate} onChange={(e: any) => setQuoteForm({ ...quoteForm, tva_rate: e.target.value })}><option value="0">0%</option><option value="5.5">5,5%</option><option value="10">10%</option><option value="20">20%</option></Select></Field>
             <Field label="Charges fixes imputées HT"><Input type="number" step="0.01" value={quoteForm.fixed_costs} onChange={(e: any) => setQuoteForm({ ...quoteForm, fixed_costs: e.target.value })} placeholder="0.00" /></Field>
             <Field label="Notes"><Input value={quoteForm.notes} onChange={(e: any) => setQuoteForm({ ...quoteForm, notes: e.target.value })} placeholder="Hypothèses du devis" /></Field>
@@ -3480,9 +3496,12 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
           <h2 className="text-xl font-black">Résultat de simulation</h2>
           <div className="mt-4 space-y-3 text-sm">
             <div className="flex justify-between"><span>CA HT prévu</span><b>{money(quoteRevenueHT)}</b></div>
-            <div className="flex justify-between"><span>TVA collectée</span><b>{money(quoteTVA)}</b></div>
+            <div className="flex justify-between"><span>TVA collectée client</span><b>{money(quoteTVA)}</b></div>
+            <div className="flex justify-between"><span>CA TTC client</span><b>{money(quoteTTC)}</b></div>
             <div className="flex justify-between"><span>Total coûts HT</span><b>{money(quoteTotalCosts)}</b></div>
             <div className="flex justify-between"><span>Dépenses HT</span><b>{money(quoteExpensesTotal)}</b></div>
+            <div className="flex justify-between"><span>TVA récupérable dépenses</span><b>{money(quoteExpensesTVA)}</b></div>
+            <div className="flex justify-between"><span>TVA nette</span><b>{quoteTvaBalance >= 0 ? "à reverser " : "crédit "}{money(Math.abs(quoteTvaBalance))}</b></div>
             <div className="flex justify-between"><span>Main d’œuvre</span><b>{money(quoteLaborTotal)}</b></div>
             <div className="flex justify-between"><span>Charges fixes</span><b>{money(quoteFixedCosts)}</b></div>
             <div className="border-t pt-3"><p className="text-xs font-black uppercase text-slate-500">Marge estimée</p><p className={quoteMargin >= 0 ? "text-4xl font-black text-emerald-700" : "text-4xl font-black text-red-600"}>{money(quoteMargin)}</p><p className={quoteMargin >= 0 ? "text-lg font-black text-emerald-700" : "text-lg font-black text-red-600"}>{quoteMarginRate}% de rentabilité</p></div>
@@ -3494,10 +3513,12 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
         <Card>
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><h2 className="text-xl font-black">2. Dépenses prévues</h2><Button variant="secondary" onClick={addQuoteExpense}>+ Ajouter dépense</Button></div>
           <div className="space-y-3">
-            {quoteExpenses.map((x: any) => <div key={x.id} className="grid gap-3 rounded-2xl border bg-white p-3 md:grid-cols-[1fr_1fr_160px_110px]">
+            {quoteExpenses.map((x: any) => <div key={x.id} className="grid gap-3 rounded-2xl border bg-white p-3 md:grid-cols-[1fr_1fr_120px_100px_95px_110px]">
               <Field label="Liste dépense"><Select value={x.category || x.label} onChange={(e: any) => updateQuoteExpense(x.id, { category: e.target.value, label: e.target.value })}><option value="">Choisir</option>{expenseChoices.map((name: any) => <option key={name} value={name}>{name}</option>)}</Select></Field>
               <Field label="Libellé détail"><Input value={x.label} onChange={(e: any) => updateQuoteExpense(x.id, { label: e.target.value })} placeholder="Détail, fournisseur, lot..." /></Field>
-              <Field label="Montant HT"><Input type="number" step="0.01" value={x.amount} onChange={(e: any) => updateQuoteExpense(x.id, { amount: e.target.value })} /></Field>
+              <Field label={x.amount_mode === "TTC" ? "Montant TTC" : "Montant HT"}><Input type="number" step="0.01" value={x.amount} onChange={(e: any) => updateQuoteExpense(x.id, { amount: e.target.value })} /></Field>
+              <Field label="Saisie"><Select value={x.amount_mode || "HT"} onChange={(e: any) => updateQuoteExpense(x.id, { amount_mode: e.target.value })}><option value="HT">HT</option><option value="TTC">TTC</option></Select></Field>
+              <Field label="TVA"><Select value={x.tva_rate ?? "20"} onChange={(e: any) => updateQuoteExpense(x.id, { tva_rate: e.target.value })}><option value="0">0%</option><option value="5.5">5,5%</option><option value="10">10%</option><option value="20">20%</option></Select></Field>
               <div className="flex items-end"><Button type="button" variant="danger" className="w-full" onClick={() => removeQuoteExpense(x.id)}>Supprimer</Button></div>
             </div>)}
           </div>
@@ -3517,8 +3538,8 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
       </div>
 
       <Card>
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-black">Calculs sauvegardés</h2><p className="text-sm text-slate-500">Sauvegarde locale navigateur : modifier, supprimer, reprendre un calcul ou créer un chantier.</p></div><Badge tone="blue">{savedQuoteCalculations.length}</Badge></div>
-        <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="text-xs uppercase text-slate-500"><th className="p-3">Date</th><th className="p-3">Chantier / devis</th><th className="p-3">Client</th><th className="p-3">CA HT</th><th className="p-3">Coûts HT</th><th className="p-3">Marge</th><th className="p-3">Rentabilité</th><th className="p-3">Actions</th></tr></thead><tbody>{savedQuoteCalculations.map((item: any) => <tr key={item.id} className="border-t"><td className="p-3">{item.saved_at ? new Date(item.saved_at).toLocaleDateString("fr-FR") : "—"}</td><td className="p-3 font-bold">{item.form?.project_name || projectLabel(item.form?.project_id)}</td><td className="p-3">{item.form?.client || "—"}</td><td className="p-3">{money(item.totals?.revenue_ht)}</td><td className="p-3">{money(item.totals?.total_costs)}</td><td className={Number(item.totals?.margin || 0) >= 0 ? "p-3 font-black text-emerald-700" : "p-3 font-black text-red-600"}>{money(item.totals?.margin)}</td><td className="p-3 font-black">{item.totals?.margin_rate || 0}%</td><td className="p-3"><div className="flex flex-wrap gap-2"><Button type="button" variant="secondary" onClick={() => editQuoteCalculation(item)}>Modifier</Button><Button type="button" variant="danger" onClick={() => deleteQuoteCalculation(item.id)}>Supprimer</Button></div></td></tr>)}{savedQuoteCalculations.length === 0 && <tr><td colSpan={8} className="p-6 text-center text-slate-500">Aucun calcul sauvegardé.</td></tr>}</tbody></table></div>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-black">Calculs sauvegardés</h2><p className="text-sm text-slate-500">Sauvegarde Supabase centralisée : visible sur téléphone, tablette et ordinateur après synchronisation.</p></div><Badge tone="blue">{savedQuoteCalculations.length}</Badge></div>
+        <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="text-xs uppercase text-slate-500"><th className="p-3">Date</th><th className="p-3">Chantier / devis</th><th className="p-3">Client</th><th className="p-3">CA HT</th><th className="p-3">TVA nette</th><th className="p-3">Coûts HT</th><th className="p-3">Marge</th><th className="p-3">Rentabilité</th><th className="p-3">Actions</th></tr></thead><tbody>{savedQuoteCalculations.map((item: any) => <tr key={item.id} className="border-t"><td className="p-3">{item.saved_at ? new Date(item.saved_at).toLocaleDateString("fr-FR") : "—"}</td><td className="p-3 font-bold">{item.form?.project_name || projectLabel(item.form?.project_id)}</td><td className="p-3">{item.form?.client || "—"}</td><td className="p-3">{money(item.totals?.revenue_ht)}</td><td className="p-3">{money(Math.abs(Number(item.totals?.tva_balance || 0)))}</td><td className="p-3">{money(item.totals?.total_costs)}</td><td className={Number(item.totals?.margin || 0) >= 0 ? "p-3 font-black text-emerald-700" : "p-3 font-black text-red-600"}>{money(item.totals?.margin)}</td><td className="p-3 font-black">{item.totals?.margin_rate || 0}%</td><td className="p-3"><div className="flex flex-wrap gap-2"><Button type="button" variant="secondary" onClick={() => editQuoteCalculation(item)}>Modifier</Button><Button type="button" variant="danger" onClick={() => deleteQuoteCalculation(item.id)}>Supprimer</Button></div></td></tr>)}{savedQuoteCalculations.length === 0 && <tr><td colSpan={9} className="p-6 text-center text-slate-500">Aucun calcul sauvegardé.</td></tr>}</tbody></table></div>
       </Card>
     </div>;
   }

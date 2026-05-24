@@ -1,0 +1,10 @@
+V78 - Calcul marge chantier amélioré
+
+- TVA intégrée dans le calcul de marge chantier/devis.
+- Bascule de saisie HT/TTC pour le devis.
+- TVA par ligne de dépense avec saisie HT ou TTC.
+- TVA collectée, TVA récupérable et TVA nette visibles.
+- Sauvegarde centralisée Supabase via table quote_calculations.
+- Ancienne sauvegarde locale conservée en secours si le script SQL n'est pas encore appliqué.
+
+IMPORTANT : exécuter supabase/schema-v78-calcul-marge.sql une fois dans Supabase SQL Editor pour synchroniser téléphone/tablette/PC.
