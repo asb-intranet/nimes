@@ -3188,7 +3188,9 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
   }
 
   function generateProjectPdfFromGestion(project: any) {
-    const s = projectStats(project.id);
+    // IMPORTANT V79 : le rapport PDF doit utiliser exactement le même périmètre que la vue complète chantier.
+    // La vue complète affiche toute la vie du chantier, sans filtre de période.
+    const s = projectStats(project.id, false);
     const projectRevenues = revenues.filter((r: any) => r.project_id === project.id);
     const projectInvoices = invoices.filter((i: any) => i.project_id === project.id);
     const projectReturns = returns.filter((r: any) => r.project_id === project.id);
@@ -3236,7 +3238,7 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
             <div class="header">
               <div>
                 <img class="logo" src="/logo-asb.png" />
-                <h1 class="title">Rapport gestion / rentabilité V37</h1>
+                <h1 class="title">Rapport gestion / rentabilité V79</h1>
                 <p><b>${project.name}</b> · ${project.client || ""}</p>
                 <p class="muted">${project.address || ""}</p>
               </div>
@@ -3347,7 +3349,7 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
     const projectPlanning = planning.filter((x: any) => x.project_id === p.id);
     return <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div><Button variant="secondary" onClick={() => setTab("pilotage")}>← Retour Gestion</Button><h1 className="mt-3 text-3xl font-black text-slate-900">Vue complète chantier — {p.name}</h1><p className="text-sm text-slate-500">Gestion financière + informations chantier + photos + documents.</p></div>
+        <div><Button variant="secondary" onClick={() => setTab("pilotage")}>← Retour Gestion</Button><h1 className="mt-3 text-3xl font-black text-slate-900">Vue complète chantier — {p.name}</h1><p className="text-sm text-slate-500">Gestion financière complète du chantier, sans filtre de période, identique au rapport PDF.</p></div>
         <Button variant="secondary" onClick={() => generateProjectPdfFromGestion(p)}>Rapport PDF</Button>
       </div>
       <div className="grid gap-4 md:grid-cols-6"><Card className="border-l-4 border-emerald-500"><p className="text-xs font-black uppercase text-slate-500">CA HT</p><p className="mt-2 text-xl font-black text-emerald-700">{money(s.revenueTotal)}</p></Card><Card className="border-l-4 border-red-500"><p className="text-xs font-black uppercase text-slate-500">Achats HT</p><p className="mt-2 text-xl font-black text-red-600">{money(s.supplierTotal)}</p></Card><Card className="border-l-4 border-blue-500"><p className="text-xs font-black uppercase text-slate-500">MO</p><p className="mt-2 text-xl font-black text-blue-700">{money(s.laborTotal)}</p></Card><Card className="border-l-4 border-slate-500"><p className="text-xs font-black uppercase text-slate-500">Marge</p><p className={s.margin >= 0 ? "mt-2 text-xl font-black text-emerald-700" : "mt-2 text-xl font-black text-red-600"}>{money(s.margin)}</p></Card><Card className="border-l-4 border-purple-500"><p className="text-xs font-black uppercase text-slate-500">TVA</p><p className="mt-2 text-xl font-black text-purple-700">{money(Math.abs(s.tvaBalance))}</p><p className="text-xs text-slate-500">{s.tvaBalance >= 0 ? "TVA due" : "TVA récupérable"}</p></Card><Card className="border-l-4 border-emerald-500"><p className="text-xs font-black uppercase text-slate-500">Rentabilité</p><p className={s.marginRate >= 0 ? "mt-2 text-xl font-black text-emerald-700" : "mt-2 text-xl font-black text-red-600"}>{s.marginRate}%</p></Card></div>
