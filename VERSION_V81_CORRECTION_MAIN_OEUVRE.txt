@@ -1,0 +1,6 @@
+V81 - Correction urgente Gestion main d'œuvre à zéro
+
+- Corrige le calcul de main d'œuvre dans Gestion.
+- Si un planning ancien n'a pas de coût figé valide, le calcul reprend le coût journalier salarié.
+- Les snapshots valides déjà enregistrés (>0) restent prioritaires.
+- Ajoute le script Supabase : supabase/schema-v81-correction-main-oeuvre.sql

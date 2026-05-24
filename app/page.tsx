@@ -2994,9 +2994,16 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
   function amountTTC(x: any) { return Number(x.amount_ttc ?? (amountHT(x) + amountTVA(x))); }
   function taxPayload(amount: string, rate: string) { const ht = Math.round(Number(amount || 0) * 100) / 100; const tva = Math.round((ht * Number(rate || 0) / 100) * 100) / 100; const ttc = Math.round((ht + tva) * 100) / 100; return { amount: ht, amount_ht: ht, tva_rate: Number(rate || 0), amount_tva: tva, amount_ttc: ttc }; }
   function daysBetween(start: string, end: string) { if (!start) return 0; const s = new Date(start); const e = new Date(end || start); return Math.max(0, Math.round((e.getTime() - s.getTime()) / 86400000)) + 1; }
-  function employeeCost(employeeId: string, row?: any) { if (row && row.employee_daily_cost_snapshot !== undefined && row.employee_daily_cost_snapshot !== null) return Number(row.employee_daily_cost_snapshot || 0); const emp = employees.find((e: any) => e.id === employeeId); return Number(emp?.daily_cost || 0); }
+  function employeeCost(employeeId: string, row?: any) {
+    // V81 : ne jamais laisser les anciennes lignes planning tomber à 0.
+    // En V80, la colonne snapshot pouvait être créée avec default 0 : on l'utilise seulement si elle est réellement > 0.
+    const snapshot = Number(row?.employee_daily_cost_snapshot || 0);
+    if (snapshot > 0) return snapshot;
+    const emp = employees.find((e: any) => e.id === employeeId);
+    return Number(emp?.daily_cost || 0);
+  }
   function employeeName(emp: any) { return [emp?.firstname, emp?.lastname].filter(Boolean).join(" ") || emp?.name || emp?.full_name || emp?.email || "Salarié"; }
-  function employeeNameById(id: string) { const emp = employees.find((e: any) => e.id === id); return emp ? employeeName(emp) : "Salarié non renseigné"; }
+  function employeeNameById(id: string, row?: any) { const savedName = String(row?.employee_name_snapshot || "").trim(); if (savedName) return savedName; const emp = employees.find((e: any) => e.id === id); return emp ? employeeName(emp) : "Salarié non renseigné"; }
   function projectLabel(id: string) { const p = projects.find((x: any) => x.id === id); return p ? `${p.name}${p.status === "archive" ? " · archivé" : ""}` : "Chantier"; }
   function dateOnly(value: string) { return value ? String(value).slice(0, 10) : ""; }
   function inPeriod(value: string) { const d = dateOnly(value); if (!d) return false; return d >= periodStart && d <= periodEnd; }
