@@ -1,0 +1,10 @@
+V85 - Correctif permissions sauvegarde calculs de rentabilité
+
+À lancer dans Supabase SQL Editor :
+supabase/schema-v85-permissions-quote-calculations.sql
+
+Corrige :
+- permission denied for table quote_calculations
+- droits SELECT / INSERT / UPDATE / DELETE pour anon et authenticated
+- policy RLS unique quote_calculations_app_all
+- message d'erreur mis à jour dans l'application
