@@ -1548,7 +1548,7 @@ function Planning({ projects, employees, links, planning, requests = [], refresh
           <h3 className="mb-4 text-xl font-black">Planning du chantier</h3>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {projectEvents.map((e: any) => (
-              <div key={e.id} className="rounded-3xl p-4 shadow-sm" style={{ background: projectColor(e.project_id), color: isLightColor(projectColor(e.project_id)) ? "#0f172a" : "white" }}>
+              <div key={e.id} className="rounded-3xl p-4 shadow-sm" style={{ background: projectColor(e.project_id), color: "#0f172a" }}>
                 <div className="text-lg font-black">{e.title}</div>
                 <div className="mt-1 text-sm opacity-90">{employeeName(e.employee_id)}</div>
                 <div className="mt-2 text-sm font-bold">{e.start_date}{e.end_date && e.end_date !== e.start_date ? ` → ${e.end_date}` : ""}</div>
@@ -2540,7 +2540,7 @@ function EarthworkDetail({ item, photos, docs, notes, materials, vigilance, plan
         <Card className="bg-red-50 border-l-8 border-red-500"><h3 className="mb-3 text-xl font-black text-red-950">⚠️ Vigilance terrassement</h3><form onSubmit={addVigilance} className="space-y-3"><Field label="Titre"><Input value={vigTitle} onChange={(e: any) => setVigTitle(e.target.value)} /></Field><Field label="Détail"><Textarea value={vigContent} onChange={(e: any) => setVigContent(e.target.value)} /></Field><Field label="Photo ou document"><Input type="file" onChange={(e: any) => setVigilanceFile(e.target.files?.[0] || null)} /></Field><div className="flex gap-2"><Button variant="danger">{editingVigilanceId ? "Modifier" : "Ajouter"}</Button>{editingVigilanceId && <Button type="button" variant="secondary" onClick={() => { setEditingVigilanceId(null); setVigTitle(""); setVigContent(""); setVigilanceFile(null); }}>Annuler</Button>}</div></form><div className="mt-4 space-y-2">{myVigilance.map((v: any) => <div key={v.id} className="rounded-2xl bg-white p-3"><b>{v.title}</b><pre className="mt-2 whitespace-pre-wrap text-sm">{v.content}</pre>{v.attachment_url && <a href={v.attachment_url} target="_blank" className="mt-2 inline-block font-bold underline">Voir pièce jointe</a>}<div className="mt-2 flex gap-2"><Button variant="secondary" onClick={() => editVigilance(v)}>Modifier</Button><Button variant="danger" onClick={() => deleteRow("earthwork_vigilance", v.id)}>Supprimer</Button></div></div>)}</div></Card>
       </div>
 
-      <Card><h3 className="mb-3 font-black">Planning terrassement autonome</h3><form onSubmit={savePlanning} className="grid gap-3 md:grid-cols-3"><Field label="Tâche"><Input value={plan.title} onChange={(e: any) => setPlan({ ...plan, title: e.target.value })} /></Field><Field label="Début"><Input type="date" value={plan.start_date} onChange={(e: any) => setPlan({ ...plan, start_date: e.target.value })} /></Field><Field label="Fin"><Input type="date" value={plan.end_date} onChange={(e: any) => setPlan({ ...plan, end_date: e.target.value })} /></Field><div className="flex gap-2 md:col-span-3"><Button>{editingPlanningId ? "Modifier planning" : "Ajouter au planning"}</Button>{editingPlanningId && <Button type="button" variant="secondary" onClick={() => { setEditingPlanningId(null); setPlan({ title: "", start_date: "", end_date: "", start_time: "", end_time: "", color: item.color || "#92400e", notes: "" }); }}>Annuler</Button>}</div></form><div className="mt-4 space-y-2">{myPlanning.map((p: any) => <div key={p.id} className="rounded-2xl p-3 text-white" style={{ background: p.color || item.color || "#92400e" }}><b>{p.title}</b><br />{p.start_date} → {p.end_date}<div className="mt-2 flex gap-2"><button onClick={() => editPlanning(p)} className="rounded-xl bg-white/20 px-3 py-1 text-xs">Modifier</button><button onClick={() => deleteRow("earthwork_planning", p.id)} className="rounded-xl bg-white/20 px-3 py-1 text-xs">Supprimer</button></div></div>)}</div></Card>
+      <Card><h3 className="mb-3 font-black">Planning terrassement autonome</h3><form onSubmit={savePlanning} className="grid gap-3 md:grid-cols-3"><Field label="Tâche"><Input value={plan.title} onChange={(e: any) => setPlan({ ...plan, title: e.target.value })} /></Field><Field label="Début"><Input type="date" value={plan.start_date} onChange={(e: any) => setPlan({ ...plan, start_date: e.target.value })} /></Field><Field label="Fin"><Input type="date" value={plan.end_date} onChange={(e: any) => setPlan({ ...plan, end_date: e.target.value })} /></Field><div className="flex gap-2 md:col-span-3"><Button>{editingPlanningId ? "Modifier planning" : "Ajouter au planning"}</Button>{editingPlanningId && <Button type="button" variant="secondary" onClick={() => { setEditingPlanningId(null); setPlan({ title: "", start_date: "", end_date: "", start_time: "", end_time: "", color: item.color || "#92400e", notes: "" }); }}>Annuler</Button>}</div></form><div className="mt-4 space-y-2">{myPlanning.map((p: any) => <div key={p.id} className="rounded-2xl p-3 text-slate-950" style={{ background: p.color || item.color || "#92400e" }}><b>{p.title}</b><br />{p.start_date} → {p.end_date}<div className="mt-2 flex gap-2"><button onClick={() => editPlanning(p)} className="rounded-xl bg-white/70 px-3 py-1 text-xs text-slate-950">Modifier</button><button onClick={() => deleteRow("earthwork_planning", p.id)} className="rounded-xl bg-white/70 px-3 py-1 text-xs text-slate-950">Supprimer</button></div></div>)}</div></Card>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card><h3 className="mb-3 font-black">Photos terrassement</h3><form onSubmit={addPhoto} className="space-y-3"><Field label="Titre"><Input value={photoTitle} onChange={(e: any) => setPhotoTitle(e.target.value)} /></Field><Input name="photo" type="file" accept="image/*" /><Button>Ajouter photo</Button></form><div className="mt-4 grid grid-cols-2 gap-3">{myPhotos.map((p: any) => <div key={p.id}><img src={p.file_url} className="h-32 w-full rounded-2xl object-cover" /><Button variant="danger" className="mt-2" onClick={() => deleteRow("earthwork_photos", p.id)}>Supprimer</Button></div>)}</div></Card>
@@ -2966,6 +2966,8 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
   const [quoteLabor, setQuoteLabor] = useState<any[]>([
     { id: 1, employee_id: "", label: "Personnel", days: "1", daily_cost: "" }
   ]);
+  const [editingPurchaseInvoiceId, setEditingPurchaseInvoiceId] = useState<string | null>(null);
+  const [purchaseInvoiceForm, setPurchaseInvoiceForm] = useState({ project_id: "", supplier: "", invoice_number: "", category: "matériaux", amount: "", tva_rate: "20", invoice_date: formatDate(new Date()), notes: "" });
   const [selectedDetailProject, setSelectedDetailProject] = useState<any | null>(null);
   const today = new Date();
   const [periodMode, setPeriodMode] = useState("month");
@@ -2973,17 +2975,9 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
   const [periodEnd, setPeriodEnd] = useState(formatDate(new Date(today.getFullYear(), today.getMonth() + 1, 0)));
 
   useEffect(() => {
-    if (quoteCalculations.length > 0) {
-      setSavedQuoteCalculations(quoteCalculations);
-      setQuoteCalculationsLoaded(true);
-      return;
-    }
-    try {
-      const raw = localStorage.getItem("asb_quote_profitability_calculations_v1");
-      if (raw) setSavedQuoteCalculations(JSON.parse(raw));
-    } catch (e) {
-      console.warn("Impossible de charger les anciens calculs locaux", e);
-    }
+    // V82 : source unique = Supabase.
+    // On ne recharge plus le localStorage appareil par appareil, car cela créait des listes différentes entre téléphone, tablette et ordinateur.
+    setSavedQuoteCalculations(Array.isArray(quoteCalculations) ? quoteCalculations : []);
     setQuoteCalculationsLoaded(true);
   }, [quoteCalculations]);
 
@@ -3088,6 +3082,47 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
   const activeInvoices = invoices.filter((i: any) => activeProjectIds.has(i.project_id));
   const periodActiveInvoices = activeInvoices.filter((i: any) => inPeriod(i.invoice_date || i.created_at));
   const purchaseSummary = { count: periodActiveInvoices.length, ht: periodActiveInvoices.reduce((s: number, i: any) => s + amountHT(i), 0), tva: periodActiveInvoices.reduce((s: number, i: any) => s + amountTVA(i), 0), ttc: periodActiveInvoices.reduce((s: number, i: any) => s + amountTTC(i), 0) };
+
+  function resetPurchaseInvoiceForm() {
+    setEditingPurchaseInvoiceId(null);
+    setPurchaseInvoiceForm({ project_id: "", supplier: "", invoice_number: "", category: "matériaux", amount: "", tva_rate: "20", invoice_date: formatDate(new Date()), notes: "" });
+  }
+
+  function editPurchaseInvoice(inv: any) {
+    setEditingPurchaseInvoiceId(inv.id);
+    setPurchaseInvoiceForm({
+      project_id: inv.project_id || "",
+      supplier: inv.supplier || "",
+      invoice_number: inv.invoice_number || inv.label || "",
+      category: inv.category || "matériaux",
+      amount: String(amountHT(inv) || ""),
+      tva_rate: String(inv.tva_rate ?? 20),
+      invoice_date: inv.invoice_date || formatDate(new Date()),
+      notes: inv.notes || ""
+    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function savePurchaseInvoice(e: any) {
+    e.preventDefault();
+    if (!editingPurchaseInvoiceId) return alert("Sélectionne une facture à modifier depuis le tableau.");
+    if (!purchaseInvoiceForm.project_id || !purchaseInvoiceForm.supplier || !purchaseInvoiceForm.amount || !purchaseInvoiceForm.invoice_date) return alert("Chantier, fournisseur, montant et date obligatoires.");
+    const payload = {
+      project_id: purchaseInvoiceForm.project_id,
+      supplier: purchaseInvoiceForm.supplier,
+      invoice_number: purchaseInvoiceForm.invoice_number || null,
+      label: purchaseInvoiceForm.invoice_number || purchaseInvoiceForm.supplier,
+      category: purchaseInvoiceForm.category,
+      ...taxPayload(purchaseInvoiceForm.amount, purchaseInvoiceForm.tva_rate),
+      invoice_date: purchaseInvoiceForm.invoice_date || null,
+      notes: purchaseInvoiceForm.notes
+    };
+    const { error } = await supabase.from("invoices").update(payload).eq("id", editingPurchaseInvoiceId);
+    if (error) return alert("Modification facture impossible : " + error.message);
+    resetPurchaseInvoiceForm();
+    await refreshAll();
+    alert("Facture d’achat modifiée.");
+  }
   function paymentsForRevenue(r: any) { return clientPayments.filter((p: any) => (p.revenue_id && p.revenue_id === r.id) || (!p.revenue_id && p.project_id === r.project_id && p.invoice_number && (p.invoice_number === r.invoice_number || p.invoice_number === r.label))); }
   function paidForRevenue(r: any) { return paymentsForRevenue(r).reduce((s: number, p: any) => s + Number(p.amount_ttc || 0), 0); }
   function remainingForRevenue(r: any) { return Math.max(0, Math.round((amountTTC(r) - paidForRevenue(r)) * 100) / 100); }
@@ -3446,15 +3481,15 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
       const id = editingQuoteCalcId || String(Date.now());
       const frozenLabor = quoteLabor.map((l: any) => ({ ...l, employee_name_snapshot: l.employee_name_snapshot || l.label || employeeNameById(l.employee_id), employee_daily_cost_snapshot: Number(l.employee_daily_cost_snapshot ?? l.daily_cost ?? 0), daily_cost: String(l.daily_cost || l.employee_daily_cost_snapshot || 0) }));
       const payload = { id, saved_at: new Date().toISOString(), updated_at: new Date().toISOString(), form: quoteForm, expenses: quoteExpenses, labor: frozenLabor, totals: { revenue_ht: quoteRevenueHT, revenue_tva: quoteTVA, revenue_ttc: quoteTTC, expenses_ht: quoteExpensesTotal, expenses_tva: quoteExpensesTVA, expenses_ttc: quoteExpensesTTC, labor_ht: quoteLaborTotal, fixed_costs: quoteFixedCosts, total_costs: quoteTotalCosts, tva_balance: quoteTvaBalance, margin: quoteMargin, margin_rate: quoteMarginRate, markup_rate: quoteMarkupRate } };
-      const { error } = await supabase.from("quote_calculations").upsert(payload);
+      const { error } = await supabase.from("quote_calculations").upsert(payload, { onConflict: "id" });
       if (error) {
-        alert("Sauvegarde Supabase impossible. Lance le script supabase/schema-v78-calcul-marge.sql puis redéploie. En attendant, sauvegarde locale sur cet appareil uniquement.\n\n" + error.message);
-        try { localStorage.setItem("asb_quote_profitability_calculations_v1", JSON.stringify(editingQuoteCalcId ? savedQuoteCalculations.map((x: any) => x.id === id ? payload : x) : [payload, ...savedQuoteCalculations])); } catch {}
+        alert("Sauvegarde centralisée impossible. Lance le script Supabase V82, puis réessaie. Aucun enregistrement local séparé n’est créé pour éviter les écarts téléphone/tablette/ordinateur.\n\n" + error.message);
+        return;
       }
       setSavedQuoteCalculations(editingQuoteCalcId ? savedQuoteCalculations.map((x: any) => x.id === id ? payload : x) : [payload, ...savedQuoteCalculations]);
       setEditingQuoteCalcId(id);
       await refreshAll();
-      alert("Calcul de rentabilité sauvegardé.");
+      alert("Calcul de rentabilité sauvegardé et synchronisé Supabase.");
     }
     function editQuoteCalculation(item: any) {
       setEditingQuoteCalcId(item.id);
@@ -3466,7 +3501,7 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
     async function deleteQuoteCalculation(id: string) {
       if (!confirm("Supprimer ce calcul de rentabilité ?")) return;
       const { error } = await supabase.from("quote_calculations").delete().eq("id", id);
-      if (error) console.warn("Suppression Supabase impossible, suppression locale uniquement", error.message);
+      if (error) return alert("Suppression centralisée impossible : " + error.message);
       setSavedQuoteCalculations(savedQuoteCalculations.filter((x: any) => x.id !== id));
       if (editingQuoteCalcId === id) resetQuoteCalculation();
       await refreshAll();
@@ -3559,7 +3594,7 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
       </div>
 
       <Card>
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-black">Calculs sauvegardés</h2><p className="text-sm text-slate-500">Sauvegarde Supabase centralisée : visible sur téléphone, tablette et ordinateur après synchronisation.</p></div><Badge tone="blue">{savedQuoteCalculations.length}</Badge></div>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-black">Calculs sauvegardés</h2><p className="text-sm text-slate-500">Sauvegarde Supabase centralisée uniquement : visible sur téléphone, tablette et ordinateur après rafraîchissement. Plus de sauvegarde locale appareil par appareil.</p></div><Badge tone="blue">{savedQuoteCalculations.length}</Badge></div>
         <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="text-xs uppercase text-slate-500"><th className="p-3">Date</th><th className="p-3">Chantier / devis</th><th className="p-3">Client</th><th className="p-3">CA HT</th><th className="p-3">TVA nette</th><th className="p-3">Coûts HT</th><th className="p-3">Marge</th><th className="p-3">Rentabilité</th><th className="p-3">Actions</th></tr></thead><tbody>{savedQuoteCalculations.map((item: any) => <tr key={item.id} className="border-t"><td className="p-3">{item.saved_at ? new Date(item.saved_at).toLocaleDateString("fr-FR") : "—"}</td><td className="p-3 font-bold">{item.form?.project_name || projectLabel(item.form?.project_id)}</td><td className="p-3">{item.form?.client || "—"}</td><td className="p-3">{money(item.totals?.revenue_ht)}</td><td className="p-3">{money(Math.abs(Number(item.totals?.tva_balance || 0)))}</td><td className="p-3">{money(item.totals?.total_costs)}</td><td className={Number(item.totals?.margin || 0) >= 0 ? "p-3 font-black text-emerald-700" : "p-3 font-black text-red-600"}>{money(item.totals?.margin)}</td><td className="p-3 font-black">{item.totals?.margin_rate || 0}%</td><td className="p-3"><div className="flex flex-wrap gap-2"><Button type="button" variant="secondary" onClick={() => editQuoteCalculation(item)}>Modifier</Button><Button type="button" variant="danger" onClick={() => deleteQuoteCalculation(item.id)}>Supprimer</Button></div></td></tr>)}{savedQuoteCalculations.length === 0 && <tr><td colSpan={9} className="p-6 text-center text-slate-500">Aucun calcul sauvegardé.</td></tr>}</tbody></table></div>
       </Card>
     </div>;
@@ -3578,9 +3613,10 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
   </div>;
 
   if (tab === "achats") return <div className="space-y-5">
-    <div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-3xl font-black text-slate-900">Récapitulatif des factures d’achats</h1><p className="text-sm text-slate-500">Vue détaillée filtrée par période comptable.</p></div><Button variant="secondary" onClick={() => setTab("pilotage")}>← Retour Gestion</Button></div>
+    <div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-3xl font-black text-slate-900">Récapitulatif des factures d’achats</h1><p className="text-sm text-slate-500">Vue détaillée filtrée par période comptable avec modification directe des factures.</p></div><Button variant="secondary" onClick={() => setTab("pilotage")}>← Retour Gestion</Button></div>
     <Card><div className="grid gap-4 md:grid-cols-4"><div><b>Nombre de factures</b><p className="text-2xl font-black">{purchaseSummary.count}</p></div><div><b>Total HT</b><p className="text-2xl font-black">{money(purchaseSummary.ht)}</p></div><div><b>Total TVA</b><p className="text-2xl font-black">{money(purchaseSummary.tva)}</p></div><div><b>Total TTC</b><p className="text-2xl font-black">{money(purchaseSummary.ttc)}</p></div></div></Card>
-    <Card><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="text-xs uppercase text-slate-500"><th className="p-3">Date</th><th className="p-3">Fournisseur</th><th className="p-3">N° facture</th><th className="p-3">Chantier</th><th className="p-3">Montant HT</th><th className="p-3">TVA</th><th className="p-3">Montant TTC</th></tr></thead><tbody>{visiblePurchaseInvoices.map((i: any) => <tr key={i.id} className="border-t"><td className="p-3">{i.invoice_date || "-"}</td><td className="p-3 font-bold">{i.supplier || "Fournisseur"}</td><td className="p-3">{i.invoice_number || i.label || "-"}</td><td className="p-3">{projectLabel(i.project_id)}</td><td className="p-3">{money(amountHT(i))}</td><td className="p-3">{money(amountTVA(i))}</td><td className="p-3 font-black">{money(amountTTC(i))}</td></tr>)}{visiblePurchaseInvoices.length === 0 && <tr><td colSpan={7} className="p-6 text-center text-slate-500">Aucune facture d’achat sur cette période.</td></tr>}</tbody></table></div></Card>
+    {editingPurchaseInvoiceId && <Card className="border-l-4 border-cyan-500"><h3 className="mb-4 text-xl font-black">Modifier la facture d’achat</h3><form onSubmit={savePurchaseInvoice} className="grid gap-4 md:grid-cols-6"><Field label="Chantier"><Select required value={purchaseInvoiceForm.project_id} onChange={(e: any) => setPurchaseInvoiceForm({ ...purchaseInvoiceForm, project_id: e.target.value })}><option value="">Choisir</option>{projects.map((p: any) => <option key={p.id} value={p.id}>{projectLabel(p.id)}</option>)}</Select></Field><Field label="Fournisseur"><Input required value={purchaseInvoiceForm.supplier} onChange={(e: any) => setPurchaseInvoiceForm({ ...purchaseInvoiceForm, supplier: e.target.value })} /></Field><Field label="N° facture"><Input value={purchaseInvoiceForm.invoice_number} onChange={(e: any) => setPurchaseInvoiceForm({ ...purchaseInvoiceForm, invoice_number: e.target.value })} /></Field><Field label="Catégorie"><Select value={purchaseInvoiceForm.category} onChange={(e: any) => setPurchaseInvoiceForm({ ...purchaseInvoiceForm, category: e.target.value })}><option value="matériaux">Matériaux</option><option value="sous-traitance">Sous-traitance</option><option value="location matériel">Location matériel</option><option value="carburant">Carburant</option><option value="transport">Transport</option><option value="évacuation">Évacuation</option><option value="autre">Autre</option></Select></Field><Field label="Montant HT"><Input required type="number" step="0.01" value={purchaseInvoiceForm.amount} onChange={(e: any) => setPurchaseInvoiceForm({ ...purchaseInvoiceForm, amount: e.target.value })} /></Field><Field label="TVA"><Select value={purchaseInvoiceForm.tva_rate} onChange={(e: any) => setPurchaseInvoiceForm({ ...purchaseInvoiceForm, tva_rate: e.target.value })}><option value="0">0%</option><option value="5.5">5,5%</option><option value="10">10%</option><option value="20">20%</option></Select></Field><Field label="Date facture"><Input required type="date" value={purchaseInvoiceForm.invoice_date} onChange={(e: any) => setPurchaseInvoiceForm({ ...purchaseInvoiceForm, invoice_date: e.target.value })} /></Field><Field label="Notes"><Input value={purchaseInvoiceForm.notes} onChange={(e: any) => setPurchaseInvoiceForm({ ...purchaseInvoiceForm, notes: e.target.value })} /></Field><div className="rounded-2xl bg-slate-50 p-3 text-sm md:col-span-6"><b>Aperçu</b> · HT {money(Number(purchaseInvoiceForm.amount || 0))} · TVA {money(Number(purchaseInvoiceForm.amount || 0) * Number(purchaseInvoiceForm.tva_rate || 0) / 100)} · TTC {money(Number(purchaseInvoiceForm.amount || 0) * (1 + Number(purchaseInvoiceForm.tva_rate || 0) / 100))}</div><div className="flex gap-3 md:col-span-6"><Button variant="green">Enregistrer modification</Button><Button type="button" variant="secondary" onClick={resetPurchaseInvoiceForm}>Annuler</Button></div></form></Card>}
+    <Card><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="text-xs uppercase text-slate-500"><th className="p-3">Date</th><th className="p-3">Fournisseur</th><th className="p-3">N° facture</th><th className="p-3">Chantier</th><th className="p-3">Montant HT</th><th className="p-3">TVA</th><th className="p-3">Montant TTC</th><th className="p-3">Actions</th></tr></thead><tbody>{visiblePurchaseInvoices.map((i: any) => <tr key={i.id} className={editingPurchaseInvoiceId === i.id ? "border-t bg-cyan-50" : "border-t"}><td className="p-3">{i.invoice_date || "-"}</td><td className="p-3 font-bold">{i.supplier || "Fournisseur"}</td><td className="p-3">{i.invoice_number || i.label || "-"}</td><td className="p-3">{projectLabel(i.project_id)}</td><td className="p-3">{money(amountHT(i))}</td><td className="p-3">{money(amountTVA(i))}</td><td className="p-3 font-black">{money(amountTTC(i))}</td><td className="p-3"><Button variant="secondary" onClick={() => editPurchaseInvoice(i)}>Modifier</Button></td></tr>)}{visiblePurchaseInvoices.length === 0 && <tr><td colSpan={8} className="p-6 text-center text-slate-500">Aucune facture d’achat sur cette période.</td></tr>}</tbody></table></div></Card>
   </div>;
 
   return <div className="space-y-5">
