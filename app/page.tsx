@@ -5,12 +5,13 @@ import { supabase } from "@/lib/supabase";
 import { Card, Button, Field, Input, Select, Textarea, Section, Badge } from "@/components/Ui";
 import {
   Building2, Camera, FileText, Users, Truck, MessageSquare, Smartphone,
-  LayoutDashboard, LogOut, Pencil, Trash2, CalendarDays, Package, HardHat, Euro, ClipboardList, Wrench, Shovel, MapPinned, Image as ImageIcon
+  LayoutDashboard, LogOut, Pencil, Trash2, CalendarDays, Package, HardHat, Euro, ClipboardList, Wrench, Shovel, MapPinned, Image as ImageIcon, Download
 } from "lucide-react";
 
 const menu = [
   { id: "dashboard", title: "Tableau de bord", icon: LayoutDashboard },
   { id: "projects", title: "Chantiers", icon: Building2 },
+  { id: "clients", title: "Clients / CDC", icon: ClipboardList },
   { id: "storekeeper", title: "Magasinier", icon: Package },
   { id: "earthworks", title: "Terrassement", icon: HardHat },
   { id: "planning", title: "Planning", icon: CalendarDays },
@@ -71,6 +72,10 @@ function formatDate(d: Date) {
   const month = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function money(v: any) {
+  return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(v || 0));
 }
 
 function formatDisplayDate(value: any) {
@@ -162,6 +167,8 @@ export default function Page() {
   const [companyExpenses, setCompanyExpenses] = useState<any[]>([]);
   const [clientPayments, setClientPayments] = useState<any[]>([]);
   const [quoteCalculations, setQuoteCalculations] = useState<any[]>([]);
+  const [clientSpecs, setClientSpecs] = useState<any[]>([]);
+  const [clientSpecItems, setClientSpecItems] = useState<any[]>([]);
   const [dataWarning, setDataWarning] = useState<string>("");
   
   useEffect(() => {
@@ -182,7 +189,7 @@ export default function Page() {
   }, []);
 
   async function refreshAll() {
-    const [p, ph, d, e, l, n, v, r, pl, mat, vig, inv, rev, ret, ew, ewph, ewd, ewn, ewm, ewv, ewp, ewr, ewi, ewrev, ewret, ce, cp, qc] = await Promise.all([
+    const [p, ph, d, e, l, n, v, r, pl, mat, vig, inv, rev, ret, ew, ewph, ewd, ewn, ewm, ewv, ewp, ewr, ewi, ewrev, ewret, ce, cp, qc, cs, csi] = await Promise.all([
       supabase.from("projects").select("*").order("created_at", { ascending: false }),
       supabase.from("chantier_photos").select("*").order("created_at", { ascending: false }),
       supabase.from("chantier_documents").select("*").order("created_at", { ascending: false }),
@@ -210,7 +217,9 @@ export default function Page() {
       supabase.from("earthwork_returns").select("*").order("return_date", { ascending: false }),
       supabase.from("company_expenses").select("*").order("expense_date", { ascending: false }),
       supabase.from("client_payments").select("*").order("payment_date", { ascending: false }),
-      supabase.from("quote_calculations").select("*").order("updated_at", { ascending: false })
+      supabase.from("quote_calculations").select("*").order("updated_at", { ascending: false }),
+      supabase.from("client_specs").select("*").order("created_at", { ascending: false }),
+      supabase.from("client_spec_items").select("*").order("position", { ascending: true })
     ]);
 
     const errors = [p, ph, d, e, l, n, v, r, pl, mat, vig, inv, rev, ret, ew, ewph, ewd, ewn, ewm, ewv, ewp, ewr, ewi, ewrev, ewret, ce, cp].filter((x: any) => x?.error).map((x: any) => x.error.message);
@@ -244,6 +253,8 @@ export default function Page() {
     setCompanyExpenses(ce.data || []);
     setClientPayments(cp.data || []);
     setQuoteCalculations(qc.data || []);
+    setClientSpecs(cs.data || []);
+    setClientSpecItems(csi.data || []);
   }
 
   async function signIn(e: any) {
@@ -354,6 +365,7 @@ export default function Page() {
 
         <section className="p-5 pb-28 lg:p-8">
           {active === "dashboard" && userRole === "admin" && <Dashboard projects={projects} photos={photos} docs={docs} requests={requests} materials={materials} setActive={setActive} />}
+          {active === "clients" && userRole === "admin" && <ClientSpecs specs={clientSpecs} items={clientSpecItems} projects={projects} refreshAll={refreshAll} />}
           {active === "storekeeper" && userRole === "admin" && <Storekeeper projects={projects} materials={materials} invoices={invoices} returns={returns} refreshAll={refreshAll} />}
           {active === "projects" && <Projects projects={projects} photos={photos} docs={docs} notes={notes} materials={materials} vigilance={vigilance} invoices={invoices} revenues={revenues} returns={returns} employees={employees} links={links} planning={planning} refreshAll={refreshAll} />}
           {active === "earthworks" && <Earthworks earthworks={earthworks} photos={earthworkPhotos} docs={earthworkDocs} notes={earthworkNotes} materials={earthworkMaterials} vigilance={earthworkVigilance} planning={earthworkPlanning} rentals={earthworkRentals} earthworkInvoices={earthworkInvoices} earthworkRevenues={earthworkRevenues} earthworkReturns={earthworkReturns} refreshAll={refreshAll} />}
@@ -369,6 +381,167 @@ export default function Page() {
   );
 }
 
+
+function ClientSpecs({ specs, items, projects, refreshAll }: any) {
+  const emptySpec = { title: "", client_name: "", project_id: "", address: "", notes: "" };
+  const emptyItem = { title: "", supplier: "", reference: "", quantity: 1, unit_price_ht: 0, tva_rate: 20, visual_url: "", notes: "" };
+  const [selectedId, setSelectedId] = useState<string>(specs?.[0]?.id || "");
+  const [specForm, setSpecForm] = useState<any>(emptySpec);
+  const [itemForm, setItemForm] = useState<any>(emptyItem);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!selectedId && specs?.length) setSelectedId(specs[0].id);
+  }, [specs, selectedId]);
+
+  const selected = specs.find((s: any) => s.id === selectedId);
+  const specItems = items.filter((i: any) => i.spec_id === selectedId).sort((a: any, b: any) => (a.position || 0) - (b.position || 0));
+  const totalHT = specItems.reduce((sum: number, i: any) => sum + (Number(i.quantity || 0) * Number(i.unit_price_ht || 0)), 0);
+  const totalTVA = specItems.reduce((sum: number, i: any) => sum + (Number(i.quantity || 0) * Number(i.unit_price_ht || 0) * Number(i.tva_rate || 0) / 100), 0);
+  const totalTTC = totalHT + totalTVA;
+
+  function setupWarning(error: any) {
+    if (error?.message?.includes("client_specs") || error?.message?.includes("client_spec_items") || error?.code === "42P01") {
+      alert("Tables manquantes. Lance le fichier supabase/schema-client-specs-v89.sql dans Supabase SQL Editor, puis reviens ici.");
+      return true;
+    }
+    return false;
+  }
+
+  async function createSpec(e: any) {
+    e.preventDefault();
+    setSaving(true);
+    const payload = { ...specForm, project_id: specForm.project_id || null, status: "brouillon" };
+    const { data, error } = await supabase.from("client_specs").insert(payload).select("*").single();
+    setSaving(false);
+    if (error) { if (!setupWarning(error)) alert(error.message); return; }
+    setSpecForm(emptySpec);
+    setSelectedId(data.id);
+    await refreshAll();
+  }
+
+  async function addItem(e: any) {
+    e.preventDefault();
+    if (!selectedId) return alert("Crée ou sélectionne un cahier des charges client d'abord.");
+    setSaving(true);
+    let visualUrl = itemForm.visual_url;
+    const file = e.currentTarget.visual_file?.files?.[0];
+    if (file) {
+      try { visualUrl = await uploadFile("chantier-documents", file); }
+      catch (err: any) { alert("Upload visuel impossible : " + err.message); setSaving(false); return; }
+    }
+    const payload = { ...itemForm, spec_id: selectedId, visual_url: visualUrl, position: specItems.length + 1, quantity: Number(itemForm.quantity || 0), unit_price_ht: Number(itemForm.unit_price_ht || 0), tva_rate: Number(itemForm.tva_rate || 0) };
+    const { error } = await supabase.from("client_spec_items").insert(payload);
+    setSaving(false);
+    if (error) { if (!setupWarning(error)) alert(error.message); return; }
+    setItemForm(emptyItem);
+    e.currentTarget.reset();
+    await refreshAll();
+  }
+
+  async function deleteItem(id: string) {
+    if (!confirm("Supprimer cette ligne du cahier des charges ?")) return;
+    const { error } = await supabase.from("client_spec_items").delete().eq("id", id);
+    if (error) return alert(error.message);
+    await refreshAll();
+  }
+
+  async function deleteSpec(id: string) {
+    if (!confirm("Supprimer ce cahier des charges client ?")) return;
+    await supabase.from("client_spec_items").delete().eq("spec_id", id);
+    const { error } = await supabase.from("client_specs").delete().eq("id", id);
+    if (error) return alert(error.message);
+    setSelectedId("");
+    await refreshAll();
+  }
+
+  function exportPdf() {
+    if (!selected) return alert("Sélectionne un cahier des charges.");
+    const rows = specItems.map((i: any) => {
+      const lineHT = Number(i.quantity || 0) * Number(i.unit_price_ht || 0);
+      const visual = i.visual_url ? `<img src="${i.visual_url}" class="visual"/>` : `<div class="empty">Visuel</div>`;
+      return `<tr><td>${visual}</td><td><b>${i.title || "Produit"}</b><br/><span>${i.notes || ""}</span></td><td>${i.supplier || ""}</td><td>${i.reference || ""}</td><td class="num">${i.quantity || 0}</td><td class="num">${money(Number(i.unit_price_ht || 0))}</td><td class="num">${i.tva_rate || 0}%</td><td class="num"><b>${money(lineHT)}</b></td></tr>`;
+    }).join("");
+    const html = `<html><head><title>Cahier des charges - ${selected.title}</title><style>@page{size:A4;margin:10mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;background:#e5e7eb;color:#0f172a;margin:0}.page{max-width:1100px;margin:auto;background:white;padding:30px}.hero{display:flex;justify-content:space-between;gap:18px;border-radius:28px;background:linear-gradient(135deg,#0f172a,#1e293b);color:white;padding:24px}.logo{height:78px;background:white;border-radius:18px;padding:10px}.kicker{font-size:12px;text-transform:uppercase;letter-spacing:.12em;color:#cbd5e1;font-weight:900}.title{font-size:34px;font-weight:900;margin:6px 0 0;letter-spacing:-.04em}.meta{margin-top:14px;color:#cbd5e1}.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:18px}.card{border:1px solid #e2e8f0;border-radius:22px;padding:15px;background:#f8fafc}.card b{font-size:11px;text-transform:uppercase;color:#64748b}.value{font-size:25px;font-weight:900;margin-top:6px}table{width:100%;border-collapse:separate;border-spacing:0 10px;margin-top:18px;font-size:12px}th{text-align:left;background:#0f172a;color:white;padding:10px}td{background:#f8fafc;border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;padding:10px;vertical-align:middle}td:first-child{border-left:1px solid #e2e8f0;border-radius:16px 0 0 16px}td:last-child{border-right:1px solid #e2e8f0;border-radius:0 16px 16px 0}.visual{width:92px;height:70px;object-fit:cover;border-radius:14px}.empty{width:92px;height:70px;border-radius:14px;background:#e2e8f0;display:flex;align-items:center;justify-content:center;color:#64748b;font-weight:900}.num{text-align:right;white-space:nowrap}.footer{margin-top:20px;font-size:11px;color:#64748b}.notes{margin-top:18px;border-left:8px solid #f97316;background:#fff7ed;border-radius:20px;padding:14px}@media print{body{background:white}.page{padding:0}}</style></head><body><div class="page"><div class="hero"><div><div class="kicker">Cahier des charges client</div><div class="title">${selected.title || "Sélection matériaux"}</div><div class="meta"><b>${selected.client_name || "Client"}</b> · ${selected.address || ""}<br/>Document de chiffrage · ${formatDisplayDate(new Date())}</div></div><img src="/logo-asb.png" class="logo"/></div><div class="cards"><div class="card"><b>Total HT</b><div class="value">${money(totalHT)}</div></div><div class="card"><b>TVA estimée</b><div class="value">${money(totalTVA)}</div></div><div class="card"><b>Total TTC</b><div class="value">${money(totalTTC)}</div></div></div>${selected.notes ? `<div class="notes"><b>Notes client / choix techniques</b><br/>${selected.notes}</div>` : ""}<table><thead><tr><th>Visuel</th><th>Désignation</th><th>Fournisseur</th><th>Référence</th><th class="num">Qté</th><th class="num">PU HT</th><th class="num">TVA</th><th class="num">Total HT</th></tr></thead><tbody>${rows || `<tr><td colspan="8">Aucune ligne produit.</td></tr>`}</tbody></table><p class="footer">ASB — document de préparation chiffrage. Les prix et disponibilités fournisseurs sont à vérifier avant commande.</p></div></body></html>`;
+    const w = window.open("", "_blank");
+    if (!w) return alert("Popup bloquée. Autorise les popups pour générer le PDF.");
+    w.document.write(html); w.document.close(); setTimeout(() => w.print(), 500);
+  }
+
+  function exportExcel() {
+    if (!selected) return alert("Sélectionne un cahier des charges.");
+    const rows = specItems.map((i: any) => `<tr><td>${i.title || ""}</td><td>${i.supplier || ""}</td><td>${i.reference || ""}</td><td>${i.quantity || 0}</td><td>${Number(i.unit_price_ht || 0)}</td><td>${i.tva_rate || 0}</td><td>${Number(i.quantity || 0) * Number(i.unit_price_ht || 0)}</td><td>${i.visual_url || ""}</td><td>${i.notes || ""}</td></tr>`).join("");
+    const html = `<table><tr><th colspan="9">Cahier des charges client ASB - ${selected.title || ""}</th></tr><tr><td>Client</td><td colspan="8">${selected.client_name || ""}</td></tr><tr><td>Adresse</td><td colspan="8">${selected.address || ""}</td></tr><tr><th>Désignation</th><th>Fournisseur</th><th>Référence</th><th>Quantité</th><th>PU HT</th><th>TVA %</th><th>Total HT</th><th>Visuel</th><th>Notes</th></tr>${rows}<tr><td colspan="6"><b>Total HT</b></td><td><b>${totalHT}</b></td></tr><tr><td colspan="6"><b>Total TVA</b></td><td><b>${totalTVA}</b></td></tr><tr><td colspan="6"><b>Total TTC</b></td><td><b>${totalTTC}</b></td></tr></table>`;
+    const blob = new Blob(["\ufeff" + html], { type: "application/vnd.ms-excel;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `cahier-des-charges-asb-${(selected.title || "client").replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.xls`;
+    a.click();
+  }
+
+  return <div>
+    <Section title="Module client — cahiers des charges" subtitle="Prépare les sélections client pour tes chiffrages : prix, quantités, fournisseur, référence, visuel, puis export PDF ou Excel avec logo ASB." />
+    <div className="grid gap-5 xl:grid-cols-[420px_1fr]">
+      <div className="space-y-5">
+        <Card className="border-l-8 border-slate-900">
+          <h3 className="text-xl font-black">Créer un cahier des charges</h3>
+          <form onSubmit={createSpec} className="mt-4 space-y-3">
+            <Field label="Titre"><Input required value={specForm.title} onChange={(e: any) => setSpecForm({ ...specForm, title: e.target.value })} placeholder="Salle de bains Mme Dupont" /></Field>
+            <Field label="Client"><Input value={specForm.client_name} onChange={(e: any) => setSpecForm({ ...specForm, client_name: e.target.value })} /></Field>
+            <Field label="Chantier lié"><Select value={specForm.project_id} onChange={(e: any) => setSpecForm({ ...specForm, project_id: e.target.value })}><option value="">Aucun</option>{projects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field>
+            <Field label="Adresse"><Input value={specForm.address} onChange={(e: any) => setSpecForm({ ...specForm, address: e.target.value })} /></Field>
+            <Field label="Notes"><Textarea value={specForm.notes} onChange={(e: any) => setSpecForm({ ...specForm, notes: e.target.value })} placeholder="Choix client, gamme souhaitée, contraintes..." /></Field>
+            <Button disabled={saving} className="w-full">Créer</Button>
+          </form>
+        </Card>
+        <Card>
+          <h3 className="mb-3 text-xl font-black">Documents clients</h3>
+          <div className="space-y-2">
+            {specs.map((s: any) => <button key={s.id} onClick={() => setSelectedId(s.id)} className={`w-full rounded-2xl border p-3 text-left ${selectedId === s.id ? "border-slate-900 bg-slate-900 text-white" : "border-slate-100 bg-slate-50 text-slate-900"}`}><b>{s.title}</b><br/><span className="text-xs opacity-75">{s.client_name || "Client non renseigné"} · {formatDisplayDate(s.created_at)}</span></button>)}
+            {specs.length === 0 && <p className="text-sm text-slate-500">Aucun cahier des charges pour le moment.</p>}
+          </div>
+        </Card>
+      </div>
+      <div className="space-y-5">
+        {selected ? <>
+          <Card className="overflow-hidden border-0 bg-gradient-to-br from-slate-950 to-slate-800 text-white shadow-xl">
+            <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
+              <div><p className="text-xs font-black uppercase tracking-[0.22em] text-orange-300">Cahier des charges client</p><h2 className="mt-2 text-3xl font-black">{selected.title}</h2><p className="mt-2 text-sm text-slate-300">{selected.client_name || "Client"} · {selected.address || "Adresse non renseignée"}</p></div>
+              <img src="/logo-asb.png" className="h-20 w-fit rounded-2xl bg-white p-2" />
+            </div>
+            <div className="mt-6 grid grid-cols-3 gap-3 text-slate-900">
+              <div className="rounded-2xl bg-white p-4"><p className="text-xs font-black uppercase text-slate-500">Total HT</p><p className="text-2xl font-black">{money(totalHT)}</p></div>
+              <div className="rounded-2xl bg-white p-4"><p className="text-xs font-black uppercase text-slate-500">TVA</p><p className="text-2xl font-black">{money(totalTVA)}</p></div>
+              <div className="rounded-2xl bg-orange-400 p-4"><p className="text-xs font-black uppercase text-orange-950">Total TTC</p><p className="text-2xl font-black">{money(totalTTC)}</p></div>
+            </div>
+            <div className="mt-5 flex flex-wrap gap-2"><Button type="button" variant="secondary" onClick={exportPdf}><Download size={16} className="mr-2"/> Export PDF</Button><Button type="button" variant="amber" onClick={exportExcel}><Download size={16} className="mr-2"/> Export Excel</Button><Button type="button" variant="danger" onClick={() => deleteSpec(selected.id)}>Supprimer</Button></div>
+          </Card>
+          <Card>
+            <h3 className="text-xl font-black">Ajouter une ligne produit</h3>
+            <form onSubmit={addItem} className="mt-4 grid gap-3 md:grid-cols-3">
+              <Field label="Désignation"><Input required value={itemForm.title} onChange={(e: any) => setItemForm({ ...itemForm, title: e.target.value })} placeholder="Meuble vasque, faïence..." /></Field>
+              <Field label="Fournisseur"><Input value={itemForm.supplier} onChange={(e: any) => setItemForm({ ...itemForm, supplier: e.target.value })} placeholder="Leroy Merlin, Cedeo..." /></Field>
+              <Field label="Référence"><Input value={itemForm.reference} onChange={(e: any) => setItemForm({ ...itemForm, reference: e.target.value })} /></Field>
+              <Field label="Quantité"><Input type="number" step="0.01" value={itemForm.quantity} onChange={(e: any) => setItemForm({ ...itemForm, quantity: e.target.value })} /></Field>
+              <Field label="Prix unitaire HT"><Input type="number" step="0.01" value={itemForm.unit_price_ht} onChange={(e: any) => setItemForm({ ...itemForm, unit_price_ht: e.target.value })} /></Field>
+              <Field label="TVA %"><Input type="number" step="0.01" value={itemForm.tva_rate} onChange={(e: any) => setItemForm({ ...itemForm, tva_rate: e.target.value })} /></Field>
+              <Field label="Visuel photo"><Input name="visual_file" type="file" accept="image/*" /></Field>
+              <Field label="Lien visuel existant"><Input value={itemForm.visual_url} onChange={(e: any) => setItemForm({ ...itemForm, visual_url: e.target.value })} placeholder="Optionnel" /></Field>
+              <Field label="Notes"><Input value={itemForm.notes} onChange={(e: any) => setItemForm({ ...itemForm, notes: e.target.value })} /></Field>
+              <div className="md:col-span-3"><Button disabled={saving}>+ Ajouter la ligne</Button></div>
+            </form>
+          </Card>
+          <div className="grid gap-4 lg:grid-cols-2">
+            {specItems.map((i: any) => { const ht = Number(i.quantity || 0) * Number(i.unit_price_ht || 0); return <Card key={i.id} className="flex gap-4">
+              <div className="h-28 w-32 shrink-0 overflow-hidden rounded-2xl bg-slate-100">{i.visual_url ? <img src={i.visual_url} className="h-full w-full object-cover"/> : <div className="flex h-full items-center justify-center text-xs font-black text-slate-400">VISUEL</div>}</div>
+              <div className="min-w-0 flex-1"><div className="flex items-start justify-between gap-2"><div><h4 className="font-black">{i.title}</h4><p className="text-xs text-slate-500">{i.supplier || "Fournisseur"} · réf. {i.reference || "—"}</p></div><button onClick={() => deleteItem(i.id)} className="rounded-xl bg-red-50 px-2 py-1 text-xs font-black text-red-700">Suppr.</button></div><div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs"><div className="rounded-xl bg-slate-50 p-2"><b>Qté</b><br/>{i.quantity}</div><div className="rounded-xl bg-slate-50 p-2"><b>PU HT</b><br/>{money(i.unit_price_ht)}</div><div className="rounded-xl bg-orange-50 p-2 text-orange-900"><b>Total</b><br/>{money(ht)}</div></div>{i.notes && <p className="mt-2 text-xs text-slate-500">{i.notes}</p>}</div>
+            </Card>; })}
+          </div>
+        </> : <Card><p className="text-sm text-slate-500">Crée ou sélectionne un cahier des charges pour commencer.</p></Card>}
+      </div>
+    </div>
+  </div>;
+}
 
 
 function Dashboard({ projects, photos, docs, requests, materials = [], setActive }: any) {
@@ -1302,8 +1475,9 @@ function Planning({ projects, employees, links, planning, requests = [], refresh
     return e ? `${e.firstname} ${e.lastname}` : "Salarié inconnu";
   }
 
-  function projectNameLocal(id: string) {
-    return projects.find((p: any) => p.id === id)?.name || "Chantier inconnu";
+  function projectNameLocal(id: string, row?: any) {
+    const project = projects.find((p: any) => p.id === id);
+    return project?.name || row?.project_name_snapshot || row?.project_name || row?.chantier_name || "Chantier archivé";
   }
 
   function projectColor(id: string) {
@@ -1448,12 +1622,11 @@ function Planning({ projects, employees, links, planning, requests = [], refresh
 
     planning.forEach((p: any) => {
       const project = projects.find((x: any) => x.id === p.project_id);
-      if (!project) return;
       const start = p.start_date || "";
       const end = p.end_date || p.start_date || "";
       if (!start || start > weekEndKey || end < weekStartKey) return;
       if (employeeFilter !== "all" && p.employee_id !== employeeFilter) return;
-      if (term && !`${project.name || ""} ${project.client || ""} ${project.address || ""} ${p.title || ""}`.toLowerCase().includes(term)) return;
+      if (term && !`${project?.name || p.project_name_snapshot || ""} ${project?.client || ""} ${project?.address || ""} ${p.title || ""}`.toLowerCase().includes(term)) return;
 
       const key = `${p.project_id}-${p.title || "planning"}-${start}-${end}`;
       if (!grouped[key]) grouped[key] = { ...p, employee_ids: [], start_date: start, end_date: end };
@@ -1659,9 +1832,9 @@ function Planning({ projects, employees, links, planning, requests = [], refresh
                           onClick={() => openProjectFull(e.project_id)}
                           className="absolute h-5 truncate rounded-lg border border-black/10 px-2 text-left text-[10px] font-black leading-5 shadow-md sm:h-6 sm:rounded-xl sm:px-3 sm:text-[12px] sm:leading-6"
                           style={{ left, width, top, background: bg, color: textColor, boxShadow: "0 6px 14px rgba(15,23,42,.18)" }}
-                          title={`${projectNameLocal(e.project_id)} · ${e.title || "Planning"}${names ? ` · ${names}` : ""}`}
+                          title={`${projectNameLocal(e.project_id, e)} · ${e.title || "Planning"}${names ? ` · ${names}` : ""}`}
                         >
-                          {projectNameLocal(e.project_id)}
+                          {projectNameLocal(e.project_id, e)}
                         </button>
                       );
                     })}
@@ -1703,7 +1876,7 @@ function Planning({ projects, employees, links, planning, requests = [], refresh
                         return (
                           <div key={e.id} className="rounded-2xl border border-black/10 p-3 text-left shadow-md" style={{ background: bg, color: textColor }}>
                             <button type="button" onClick={() => openProjectFull(e.project_id)} className="block w-full text-left">
-                              <div className="text-sm font-black leading-tight">{projectNameLocal(e.project_id)}</div>
+                              <div className="text-sm font-black leading-tight">{projectNameLocal(e.project_id, e)}</div>
                               <div className="mt-1 text-xs opacity-90">{e.title}</div>
                               <div className="mt-1 text-[11px] opacity-80">{projectAddress(e.project_id)}</div>
                               {(e.start_time || e.end_time) && <div className="mt-2 text-xs font-black">{e.start_time || ""}{e.end_time ? ` - ${e.end_time}` : ""}</div>}
@@ -2581,8 +2754,9 @@ function Storekeeper({ projects, materials, invoices = [], returns = [], refresh
   const [showCreateMaterial, setShowCreateMaterial] = useState(false);
   const [fullMaterial, setFullMaterial] = useState<any>(null);
 
-  function projectNameLocal(id: string) {
-    return projects.find((p: any) => p.id === id)?.name || "Chantier inconnu";
+  function projectNameLocal(id: string, row?: any) {
+    const project = projects.find((p: any) => p.id === id);
+    return project?.name || row?.project_name_snapshot || row?.project_name || row?.chantier_name || "Chantier archivé";
   }
 
   const money = (v: number) => new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v || 0);
