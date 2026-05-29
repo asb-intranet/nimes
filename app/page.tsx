@@ -401,7 +401,9 @@ function ClientSpecs({ specs, items, projects, refreshAll }: any) {
   const totalTTC = totalHT + totalTVA;
 
   function setupWarning(error: any) {
-    if (error?.message?.includes("client_specs") || error?.message?.includes("client_spec_items") || error?.code === "42P01") {
+    // 42P01 = table inexistante. Les erreurs RLS contiennent aussi le nom de la table,
+    // donc il ne faut pas afficher "tables manquantes" pour toutes les erreurs client_specs.
+    if (error?.code === "42P01") {
       alert("Tables manquantes. Lance le fichier supabase/schema-client-specs-v89.sql dans Supabase SQL Editor, puis reviens ici.");
       return true;
     }
