@@ -1417,7 +1417,7 @@ function Planning({ projects, employees, links, planning, requests = [], refresh
       const matchDate = (p.start_date || "") <= key && (p.end_date || p.start_date || "") >= key;
       const matchEmployee = p.employee_id === employeeId;
       const matchSearch = !term || `${project?.name || ""} ${project?.client || ""} ${project?.address || ""} ${p.title || ""}`.toLowerCase().includes(term);
-      return matchDate && matchEmployee && matchSearch && project?.status !== "archive";
+      return matchDate && matchEmployee && matchSearch;
     });
   }
 
@@ -1434,7 +1434,7 @@ function Planning({ projects, employees, links, planning, requests = [], refresh
       const matchDate = (p.start_date || "") <= key && (p.end_date || p.start_date || "") >= key;
       const matchEmployee = employeeFilter === "all" || p.employee_id === employeeFilter;
       const matchSearch = !term || `${project?.name || ""} ${project?.client || ""} ${project?.address || ""} ${p.title || ""}`.toLowerCase().includes(term);
-      return matchDate && matchEmployee && matchSearch && project?.status !== "archive";
+      return matchDate && matchEmployee && matchSearch;
     });
   }
 
@@ -1448,7 +1448,7 @@ function Planning({ projects, employees, links, planning, requests = [], refresh
 
     planning.forEach((p: any) => {
       const project = projects.find((x: any) => x.id === p.project_id);
-      if (!project || project.status === "archive") return;
+      if (!project) return;
       const start = p.start_date || "";
       const end = p.end_date || p.start_date || "";
       if (!start || start > weekEndKey || end < weekStartKey) return;
