@@ -404,7 +404,7 @@ function ClientSpecs({ specs, items, projects, refreshAll }: any) {
     // 42P01 = table inexistante. Les erreurs RLS contiennent aussi le nom de la table,
     // donc il ne faut pas afficher "tables manquantes" pour toutes les erreurs client_specs.
     if (error?.code === "42P01") {
-      alert("Tables manquantes. Lance le fichier supabase/schema-client-specs-v89.sql dans Supabase SQL Editor, puis reviens ici.");
+      alert("Tables manquantes. Lance le fichier supabase/schema-client-specs-v91.sql dans Supabase SQL Editor, puis reviens ici.");
       return true;
     }
     return false;
@@ -413,7 +413,7 @@ function ClientSpecs({ specs, items, projects, refreshAll }: any) {
   async function createSpec(e: any) {
     e.preventDefault();
     setSaving(true);
-    const payload = { ...specForm, project_id: specForm.project_id || null, status: "brouillon" };
+    const payload = { ...specForm, project_id: specForm.project_id || null, status: specForm.status || "brouillon" };
     const { data, error } = await supabase.from("client_specs").insert(payload).select("*").single();
     setSaving(false);
     if (error) { if (!setupWarning(error)) alert(error.message); return; }
@@ -429,7 +429,7 @@ function ClientSpecs({ specs, items, projects, refreshAll }: any) {
     let visualUrl = itemForm.visual_url;
     const file = e.currentTarget.visual_file?.files?.[0];
     if (file) {
-      try { visualUrl = await uploadFile("chantier-documents", file); }
+      try { visualUrl = await uploadFile("client-specs", file); }
       catch (err: any) { alert("Upload visuel impossible : " + err.message); setSaving(false); return; }
     }
     const payload = { ...itemForm, spec_id: selectedId, visual_url: visualUrl, position: specItems.length + 1, quantity: Number(itemForm.quantity || 0), unit_price_ht: Number(itemForm.unit_price_ht || 0), tva_rate: Number(itemForm.tva_rate || 0) };
@@ -482,7 +482,7 @@ function ClientSpecs({ specs, items, projects, refreshAll }: any) {
   }
 
   return <div>
-    <Section title="Module client — cahiers des charges" subtitle="Prépare les sélections client pour tes chiffrages : prix, quantités, fournisseur, référence, visuel, puis export PDF ou Excel avec logo ASB." />
+    <Section title="Clients / CDC — Cahier des charges premium" subtitle="Prépare des sélections clients propres pour tes chiffrages : visuels, fournisseurs, références, quantités, prix, PDF et Excel avec logo ASB." />
     <div className="grid gap-5 xl:grid-cols-[420px_1fr]">
       <div className="space-y-5">
         <Card className="border-l-8 border-slate-900">
@@ -492,6 +492,7 @@ function ClientSpecs({ specs, items, projects, refreshAll }: any) {
             <Field label="Client"><Input value={specForm.client_name} onChange={(e: any) => setSpecForm({ ...specForm, client_name: e.target.value })} /></Field>
             <Field label="Chantier lié"><Select value={specForm.project_id} onChange={(e: any) => setSpecForm({ ...specForm, project_id: e.target.value })}><option value="">Aucun</option>{projects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field>
             <Field label="Adresse"><Input value={specForm.address} onChange={(e: any) => setSpecForm({ ...specForm, address: e.target.value })} /></Field>
+            <Field label="Statut"><Select value={specForm.status || "brouillon"} onChange={(e: any) => setSpecForm({ ...specForm, status: e.target.value })}><option value="brouillon">Brouillon</option><option value="valide">Validé</option><option value="commande">Commandé</option></Select></Field>
             <Field label="Notes"><Textarea value={specForm.notes} onChange={(e: any) => setSpecForm({ ...specForm, notes: e.target.value })} placeholder="Choix client, gamme souhaitée, contraintes..." /></Field>
             <Button disabled={saving} className="w-full">Créer</Button>
           </form>
@@ -508,7 +509,7 @@ function ClientSpecs({ specs, items, projects, refreshAll }: any) {
         {selected ? <>
           <Card className="overflow-hidden border-0 bg-gradient-to-br from-slate-950 to-slate-800 text-white shadow-xl">
             <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
-              <div><p className="text-xs font-black uppercase tracking-[0.22em] text-orange-300">Cahier des charges client</p><h2 className="mt-2 text-3xl font-black">{selected.title}</h2><p className="mt-2 text-sm text-slate-300">{selected.client_name || "Client"} · {selected.address || "Adresse non renseignée"}</p></div>
+              <div><p className="text-xs font-black uppercase tracking-[0.22em] text-orange-300">Cahier des charges client</p><h2 className="mt-2 text-3xl font-black">{selected.title}</h2><p className="mt-2 text-sm text-slate-300">{selected.client_name || "Client"} · {selected.address || "Adresse non renseignée"}</p><span className="mt-3 inline-flex rounded-full bg-white/10 px-3 py-1 text-xs font-black uppercase text-orange-200">{selected.status || "brouillon"}</span></div>
               <img src="/logo-asb.png" className="h-20 w-fit rounded-2xl bg-white p-2" />
             </div>
             <div className="mt-6 grid grid-cols-3 gap-3 text-slate-900">
