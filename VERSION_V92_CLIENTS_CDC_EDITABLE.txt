@@ -1,0 +1,1 @@
+V92 - Module Clients / CDC : modification et suppression clients + ajout/modification/suppression lignes produit. Build testé OK.

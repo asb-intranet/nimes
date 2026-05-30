@@ -383,11 +383,14 @@ export default function Page() {
 
 
 function ClientSpecs({ specs, items, projects, refreshAll }: any) {
-  const emptySpec = { title: "", client_name: "", project_id: "", address: "", notes: "" };
+  const emptySpec = { title: "", client_name: "", project_id: "", address: "", notes: "", status: "brouillon" };
   const emptyItem = { title: "", supplier: "", reference: "", quantity: 1, unit_price_ht: 0, tva_rate: 20, visual_url: "", notes: "" };
   const [selectedId, setSelectedId] = useState<string>(specs?.[0]?.id || "");
   const [specForm, setSpecForm] = useState<any>(emptySpec);
+  const [editSpecForm, setEditSpecForm] = useState<any>(emptySpec);
   const [itemForm, setItemForm] = useState<any>(emptyItem);
+  const [editingItemId, setEditingItemId] = useState<string>("");
+  const [editingItemForm, setEditingItemForm] = useState<any>(emptyItem);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -400,9 +403,18 @@ function ClientSpecs({ specs, items, projects, refreshAll }: any) {
   const totalTVA = specItems.reduce((sum: number, i: any) => sum + (Number(i.quantity || 0) * Number(i.unit_price_ht || 0) * Number(i.tva_rate || 0) / 100), 0);
   const totalTTC = totalHT + totalTVA;
 
+  useEffect(() => {
+    if (selected) setEditSpecForm({
+      title: selected.title || "",
+      client_name: selected.client_name || "",
+      project_id: selected.project_id || "",
+      address: selected.address || "",
+      notes: selected.notes || "",
+      status: selected.status || "brouillon"
+    });
+  }, [selectedId, selected?.updated_at]);
+
   function setupWarning(error: any) {
-    // 42P01 = table inexistante. Les erreurs RLS contiennent aussi le nom de la table,
-    // donc il ne faut pas afficher "tables manquantes" pour toutes les erreurs client_specs.
     if (error?.code === "42P01") {
       alert("Tables manquantes. Lance le fichier supabase/schema-client-specs-v91.sql dans Supabase SQL Editor, puis reviens ici.");
       return true;
@@ -413,12 +425,23 @@ function ClientSpecs({ specs, items, projects, refreshAll }: any) {
   async function createSpec(e: any) {
     e.preventDefault();
     setSaving(true);
-    const payload = { ...specForm, project_id: specForm.project_id || null, status: specForm.status || "brouillon" };
+    const payload = { ...specForm, project_id: specForm.project_id || null, status: specForm.status || "brouillon", updated_at: new Date().toISOString() };
     const { data, error } = await supabase.from("client_specs").insert(payload).select("*").single();
     setSaving(false);
     if (error) { if (!setupWarning(error)) alert(error.message); return; }
     setSpecForm(emptySpec);
     setSelectedId(data.id);
+    await refreshAll();
+  }
+
+  async function updateSpec(e: any) {
+    e.preventDefault();
+    if (!selected) return;
+    setSaving(true);
+    const payload = { ...editSpecForm, project_id: editSpecForm.project_id || null, updated_at: new Date().toISOString() };
+    const { error } = await supabase.from("client_specs").update(payload).eq("id", selected.id);
+    setSaving(false);
+    if (error) { if (!setupWarning(error)) alert(error.message); return; }
     await refreshAll();
   }
 
@@ -441,6 +464,39 @@ function ClientSpecs({ specs, items, projects, refreshAll }: any) {
     await refreshAll();
   }
 
+  function startEditItem(i: any) {
+    setEditingItemId(i.id);
+    setEditingItemForm({
+      title: i.title || "",
+      supplier: i.supplier || "",
+      reference: i.reference || "",
+      quantity: i.quantity ?? 1,
+      unit_price_ht: i.unit_price_ht ?? 0,
+      tva_rate: i.tva_rate ?? 20,
+      visual_url: i.visual_url || "",
+      notes: i.notes || ""
+    });
+  }
+
+  async function updateItem(e: any) {
+    e.preventDefault();
+    if (!editingItemId) return;
+    setSaving(true);
+    let visualUrl = editingItemForm.visual_url;
+    const file = e.currentTarget.visual_file?.files?.[0];
+    if (file) {
+      try { visualUrl = await uploadFile("client-specs", file); }
+      catch (err: any) { alert("Upload visuel impossible : " + err.message); setSaving(false); return; }
+    }
+    const payload = { ...editingItemForm, visual_url: visualUrl, quantity: Number(editingItemForm.quantity || 0), unit_price_ht: Number(editingItemForm.unit_price_ht || 0), tva_rate: Number(editingItemForm.tva_rate || 0) };
+    const { error } = await supabase.from("client_spec_items").update(payload).eq("id", editingItemId);
+    setSaving(false);
+    if (error) { if (!setupWarning(error)) alert(error.message); return; }
+    setEditingItemId("");
+    setEditingItemForm(emptyItem);
+    await refreshAll();
+  }
+
   async function deleteItem(id: string) {
     if (!confirm("Supprimer cette ligne du cahier des charges ?")) return;
     const { error } = await supabase.from("client_spec_items").delete().eq("id", id);
@@ -449,7 +505,7 @@ function ClientSpecs({ specs, items, projects, refreshAll }: any) {
   }
 
   async function deleteSpec(id: string) {
-    if (!confirm("Supprimer ce cahier des charges client ?")) return;
+    if (!confirm("Supprimer définitivement ce cahier des charges client et toutes ses lignes produit ?")) return;
     await supabase.from("client_spec_items").delete().eq("spec_id", id);
     const { error } = await supabase.from("client_specs").delete().eq("id", id);
     if (error) return alert(error.message);
@@ -482,7 +538,7 @@ function ClientSpecs({ specs, items, projects, refreshAll }: any) {
   }
 
   return <div>
-    <Section title="Clients / CDC — Cahier des charges premium" subtitle="Prépare des sélections clients propres pour tes chiffrages : visuels, fournisseurs, références, quantités, prix, PDF et Excel avec logo ASB." />
+    <Section title="Clients / CDC — Cahier des charges premium" subtitle="Création, modification et suppression des cahiers clients + lignes produit avec visuels, PDF et Excel ASB." />
     <div className="grid gap-5 xl:grid-cols-[420px_1fr]">
       <div className="space-y-5">
         <Card className="border-l-8 border-slate-900">
@@ -517,8 +573,22 @@ function ClientSpecs({ specs, items, projects, refreshAll }: any) {
               <div className="rounded-2xl bg-white p-4"><p className="text-xs font-black uppercase text-slate-500">TVA</p><p className="text-2xl font-black">{money(totalTVA)}</p></div>
               <div className="rounded-2xl bg-orange-400 p-4"><p className="text-xs font-black uppercase text-orange-950">Total TTC</p><p className="text-2xl font-black">{money(totalTTC)}</p></div>
             </div>
-            <div className="mt-5 flex flex-wrap gap-2"><Button type="button" variant="secondary" onClick={exportPdf}><Download size={16} className="mr-2"/> Export PDF</Button><Button type="button" variant="amber" onClick={exportExcel}><Download size={16} className="mr-2"/> Export Excel</Button><Button type="button" variant="danger" onClick={() => deleteSpec(selected.id)}>Supprimer</Button></div>
+            <div className="mt-5 flex flex-wrap gap-2"><Button type="button" variant="secondary" onClick={exportPdf}><Download size={16} className="mr-2"/> Export PDF</Button><Button type="button" variant="amber" onClick={exportExcel}><Download size={16} className="mr-2"/> Export Excel</Button><Button type="button" variant="danger" onClick={() => deleteSpec(selected.id)}>Supprimer client / CDC</Button></div>
           </Card>
+
+          <Card className="border-l-8 border-orange-400">
+            <h3 className="text-xl font-black">Modifier le cahier client</h3>
+            <form onSubmit={updateSpec} className="mt-4 grid gap-3 md:grid-cols-2">
+              <Field label="Titre"><Input required value={editSpecForm.title} onChange={(e: any) => setEditSpecForm({ ...editSpecForm, title: e.target.value })} /></Field>
+              <Field label="Client"><Input value={editSpecForm.client_name} onChange={(e: any) => setEditSpecForm({ ...editSpecForm, client_name: e.target.value })} /></Field>
+              <Field label="Chantier lié"><Select value={editSpecForm.project_id} onChange={(e: any) => setEditSpecForm({ ...editSpecForm, project_id: e.target.value })}><option value="">Aucun</option>{projects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field>
+              <Field label="Statut"><Select value={editSpecForm.status || "brouillon"} onChange={(e: any) => setEditSpecForm({ ...editSpecForm, status: e.target.value })}><option value="brouillon">Brouillon</option><option value="valide">Validé</option><option value="commande">Commandé</option></Select></Field>
+              <Field label="Adresse"><Input value={editSpecForm.address} onChange={(e: any) => setEditSpecForm({ ...editSpecForm, address: e.target.value })} /></Field>
+              <Field label="Notes"><Textarea value={editSpecForm.notes} onChange={(e: any) => setEditSpecForm({ ...editSpecForm, notes: e.target.value })} /></Field>
+              <div className="md:col-span-2"><Button disabled={saving} variant="amber">Enregistrer les modifications client</Button></div>
+            </form>
+          </Card>
+
           <Card>
             <h3 className="text-xl font-black">Ajouter une ligne produit</h3>
             <form onSubmit={addItem} className="mt-4 grid gap-3 md:grid-cols-3">
@@ -534,10 +604,24 @@ function ClientSpecs({ specs, items, projects, refreshAll }: any) {
               <div className="md:col-span-3"><Button disabled={saving}>+ Ajouter la ligne</Button></div>
             </form>
           </Card>
+
           <div className="grid gap-4 lg:grid-cols-2">
-            {specItems.map((i: any) => { const ht = Number(i.quantity || 0) * Number(i.unit_price_ht || 0); return <Card key={i.id} className="flex gap-4">
-              <div className="h-28 w-32 shrink-0 overflow-hidden rounded-2xl bg-slate-100">{i.visual_url ? <img src={i.visual_url} className="h-full w-full object-cover"/> : <div className="flex h-full items-center justify-center text-xs font-black text-slate-400">VISUEL</div>}</div>
-              <div className="min-w-0 flex-1"><div className="flex items-start justify-between gap-2"><div><h4 className="font-black">{i.title}</h4><p className="text-xs text-slate-500">{i.supplier || "Fournisseur"} · réf. {i.reference || "—"}</p></div><button onClick={() => deleteItem(i.id)} className="rounded-xl bg-red-50 px-2 py-1 text-xs font-black text-red-700">Suppr.</button></div><div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs"><div className="rounded-xl bg-slate-50 p-2"><b>Qté</b><br/>{i.quantity}</div><div className="rounded-xl bg-slate-50 p-2"><b>PU HT</b><br/>{money(i.unit_price_ht)}</div><div className="rounded-xl bg-orange-50 p-2 text-orange-900"><b>Total</b><br/>{money(ht)}</div></div>{i.notes && <p className="mt-2 text-xs text-slate-500">{i.notes}</p>}</div>
+            {specItems.map((i: any) => { const ht = Number(i.quantity || 0) * Number(i.unit_price_ht || 0); const editing = editingItemId === i.id; return <Card key={i.id} className="space-y-4">
+              {!editing ? <div className="flex gap-4">
+                <div className="h-28 w-32 shrink-0 overflow-hidden rounded-2xl bg-slate-100">{i.visual_url ? <img src={i.visual_url} className="h-full w-full object-cover"/> : <div className="flex h-full items-center justify-center text-xs font-black text-slate-400">VISUEL</div>}</div>
+                <div className="min-w-0 flex-1"><div className="flex items-start justify-between gap-2"><div><h4 className="font-black">{i.title}</h4><p className="text-xs text-slate-500">{i.supplier || "Fournisseur"} · réf. {i.reference || "—"}</p></div><div className="flex gap-2"><button type="button" onClick={() => startEditItem(i)} className="rounded-xl bg-orange-50 px-2 py-1 text-xs font-black text-orange-700">Modifier</button><button type="button" onClick={() => deleteItem(i.id)} className="rounded-xl bg-red-50 px-2 py-1 text-xs font-black text-red-700">Suppr.</button></div></div><div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs"><div className="rounded-xl bg-slate-50 p-2"><b>Qté</b><br/>{i.quantity}</div><div className="rounded-xl bg-slate-50 p-2"><b>PU HT</b><br/>{money(i.unit_price_ht)}</div><div className="rounded-xl bg-orange-50 p-2 text-orange-900"><b>Total</b><br/>{money(ht)}</div></div>{i.notes && <p className="mt-2 text-xs text-slate-500">{i.notes}</p>}</div>
+              </div> : <form onSubmit={updateItem} className="grid gap-3 md:grid-cols-2">
+                <Field label="Désignation"><Input required value={editingItemForm.title} onChange={(e: any) => setEditingItemForm({ ...editingItemForm, title: e.target.value })} /></Field>
+                <Field label="Fournisseur"><Input value={editingItemForm.supplier} onChange={(e: any) => setEditingItemForm({ ...editingItemForm, supplier: e.target.value })} /></Field>
+                <Field label="Référence"><Input value={editingItemForm.reference} onChange={(e: any) => setEditingItemForm({ ...editingItemForm, reference: e.target.value })} /></Field>
+                <Field label="Quantité"><Input type="number" step="0.01" value={editingItemForm.quantity} onChange={(e: any) => setEditingItemForm({ ...editingItemForm, quantity: e.target.value })} /></Field>
+                <Field label="Prix unitaire HT"><Input type="number" step="0.01" value={editingItemForm.unit_price_ht} onChange={(e: any) => setEditingItemForm({ ...editingItemForm, unit_price_ht: e.target.value })} /></Field>
+                <Field label="TVA %"><Input type="number" step="0.01" value={editingItemForm.tva_rate} onChange={(e: any) => setEditingItemForm({ ...editingItemForm, tva_rate: e.target.value })} /></Field>
+                <Field label="Nouveau visuel"><Input name="visual_file" type="file" accept="image/*" /></Field>
+                <Field label="Lien visuel"><Input value={editingItemForm.visual_url} onChange={(e: any) => setEditingItemForm({ ...editingItemForm, visual_url: e.target.value })} /></Field>
+                <Field label="Notes"><Input value={editingItemForm.notes} onChange={(e: any) => setEditingItemForm({ ...editingItemForm, notes: e.target.value })} /></Field>
+                <div className="flex gap-2 md:col-span-2"><Button disabled={saving} variant="amber">Enregistrer la ligne</Button><Button type="button" variant="secondary" onClick={() => setEditingItemId("")}>Annuler</Button></div>
+              </form>}
             </Card>; })}
           </div>
         </> : <Card><p className="text-sm text-slate-500">Crée ou sélectionne un cahier des charges pour commencer.</p></Card>}
