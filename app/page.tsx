@@ -170,6 +170,8 @@ export default function Page() {
   const [clientSpecs, setClientSpecs] = useState<any[]>([]);
   const [clientSpecItems, setClientSpecItems] = useState<any[]>([]);
   const [clientSpecPaymentTerms, setClientSpecPaymentTerms] = useState<any[]>([]);
+  const [clientPaymentSchedules, setClientPaymentSchedules] = useState<any[]>([]);
+  const [clientPaymentScheduleItems, setClientPaymentScheduleItems] = useState<any[]>([]);
   const [dataWarning, setDataWarning] = useState<string>("");
   
   useEffect(() => {
@@ -190,7 +192,7 @@ export default function Page() {
   }, []);
 
   async function refreshAll() {
-    const [p, ph, d, e, l, n, v, r, pl, mat, vig, inv, rev, ret, ew, ewph, ewd, ewn, ewm, ewv, ewp, ewr, ewi, ewrev, ewret, ce, cp, qc, cs, csi, csp] = await Promise.all([
+    const [p, ph, d, e, l, n, v, r, pl, mat, vig, inv, rev, ret, ew, ewph, ewd, ewn, ewm, ewv, ewp, ewr, ewi, ewrev, ewret, ce, cp, qc, cs, csi, csp, cps, cpsi] = await Promise.all([
       supabase.from("projects").select("*").order("created_at", { ascending: false }),
       supabase.from("chantier_photos").select("*").order("created_at", { ascending: false }),
       supabase.from("chantier_documents").select("*").order("created_at", { ascending: false }),
@@ -221,7 +223,9 @@ export default function Page() {
       supabase.from("quote_calculations").select("*").order("updated_at", { ascending: false }),
       supabase.from("client_specs").select("*").order("created_at", { ascending: false }),
       supabase.from("client_spec_items").select("*").order("position", { ascending: true }),
-      supabase.from("client_spec_payment_terms").select("*").order("position", { ascending: true })
+      supabase.from("client_spec_payment_terms").select("*").order("position", { ascending: true }),
+      supabase.from("client_payment_schedules").select("*").order("created_at", { ascending: false }),
+      supabase.from("client_payment_schedule_items").select("*").order("position", { ascending: true })
     ]);
 
     const errors = [p, ph, d, e, l, n, v, r, pl, mat, vig, inv, rev, ret, ew, ewph, ewd, ewn, ewm, ewv, ewp, ewr, ewi, ewrev, ewret, ce, cp].filter((x: any) => x?.error).map((x: any) => x.error.message);
@@ -258,6 +262,8 @@ export default function Page() {
     setClientSpecs(cs.data || []);
     setClientSpecItems(csi.data || []);
     setClientSpecPaymentTerms(csp.data || []);
+    setClientPaymentSchedules(cps.data || []);
+    setClientPaymentScheduleItems(cpsi.data || []);
   }
 
   async function signIn(e: any) {
@@ -368,7 +374,7 @@ export default function Page() {
 
         <section className="p-5 pb-28 lg:p-8">
           {active === "dashboard" && userRole === "admin" && <Dashboard projects={projects} photos={photos} docs={docs} requests={requests} materials={materials} setActive={setActive} />}
-          {active === "clients" && userRole === "admin" && <ClientSpecs specs={clientSpecs} items={clientSpecItems} paymentTerms={clientSpecPaymentTerms} projects={projects} refreshAll={refreshAll} />}
+          {active === "clients" && userRole === "admin" && <ClientSpecs specs={clientSpecs} items={clientSpecItems} paymentTerms={clientSpecPaymentTerms} paymentSchedules={clientPaymentSchedules} paymentScheduleItems={clientPaymentScheduleItems} projects={projects} refreshAll={refreshAll} />}
           {active === "storekeeper" && userRole === "admin" && <Storekeeper projects={projects} materials={materials} invoices={invoices} returns={returns} refreshAll={refreshAll} />}
           {active === "projects" && <Projects projects={projects} photos={photos} docs={docs} notes={notes} materials={materials} vigilance={vigilance} invoices={invoices} revenues={revenues} returns={returns} employees={employees} links={links} planning={planning} refreshAll={refreshAll} />}
           {active === "earthworks" && <Earthworks earthworks={earthworks} photos={earthworkPhotos} docs={earthworkDocs} notes={earthworkNotes} materials={earthworkMaterials} vigilance={earthworkVigilance} planning={earthworkPlanning} rentals={earthworkRentals} earthworkInvoices={earthworkInvoices} earthworkRevenues={earthworkRevenues} earthworkReturns={earthworkReturns} refreshAll={refreshAll} />}
@@ -385,7 +391,7 @@ export default function Page() {
 }
 
 
-function ClientSpecs({ specs, items, paymentTerms = [], projects, refreshAll }: any) {
+function ClientSpecs({ specs, items, paymentTerms = [], paymentSchedules = [], paymentScheduleItems = [], projects, refreshAll }: any) {
   const emptySpec = { title: "", client_name: "", project_id: "", address: "", notes: "", status: "brouillon" };
   const emptyItem = { title: "", supplier: "", reference: "", quantity: 1, unit_price_ht: 0, tva_rate: 20, visual_url: "", notes: "" };
   const emptyTerm = { label: "", percentage: "", amount_ttc: "", due_text: "", notes: "" };
@@ -399,10 +405,21 @@ function ClientSpecs({ specs, items, paymentTerms = [], projects, refreshAll }: 
   const [editingTermId, setEditingTermId] = useState<string>("");
   const [editingTermForm, setEditingTermForm] = useState<any>(emptyTerm);
   const [saving, setSaving] = useState(false);
+  const [clientSubTab, setClientSubTab] = useState<"cdc" | "payments">("cdc");
+  const emptySchedule = { title: "", client_name: "", project_id: "", address: "", amount_ttc: "", notes: "", status: "brouillon" };
+  const emptyScheduleItem = { label: "", percentage: "", amount_ttc: "", due_date: "", due_text: "", status: "a_encaisser", notes: "" };
+  const [selectedScheduleId, setSelectedScheduleId] = useState<string>(paymentSchedules?.[0]?.id || "");
+  const [scheduleForm, setScheduleForm] = useState<any>(emptySchedule);
+  const [editScheduleForm, setEditScheduleForm] = useState<any>(emptySchedule);
+  const [scheduleItemForm, setScheduleItemForm] = useState<any>(emptyScheduleItem);
 
   useEffect(() => {
     if (!selectedId && specs?.length) setSelectedId(specs[0].id);
   }, [specs, selectedId]);
+
+  useEffect(() => {
+    if (!selectedScheduleId && paymentSchedules?.length) setSelectedScheduleId(paymentSchedules[0].id);
+  }, [paymentSchedules, selectedScheduleId]);
 
   const selected = specs.find((s: any) => s.id === selectedId);
   const specItems = items.filter((i: any) => i.spec_id === selectedId).sort((a: any, b: any) => (a.position || 0) - (b.position || 0));
@@ -411,6 +428,9 @@ function ClientSpecs({ specs, items, paymentTerms = [], projects, refreshAll }: 
   const totalTVA = specItems.reduce((sum: number, i: any) => sum + (Number(i.quantity || 0) * Number(i.unit_price_ht || 0) * Number(i.tva_rate || 0) / 100), 0);
   const totalTTC = totalHT + totalTVA;
   const paymentTermsTotal = selectedPaymentTerms.reduce((sum: number, t: any) => sum + Number(t.amount_ttc || 0), 0);
+  const selectedSchedule = paymentSchedules.find((s: any) => s.id === selectedScheduleId);
+  const scheduleItems = paymentScheduleItems.filter((i: any) => i.schedule_id === selectedScheduleId).sort((a: any, b: any) => (a.position || 0) - (b.position || 0));
+  const scheduleItemsTotal = scheduleItems.reduce((sum: number, i: any) => sum + Number(i.amount_ttc || 0), 0);
 
   useEffect(() => {
     if (selected) setEditSpecForm({
@@ -423,9 +443,21 @@ function ClientSpecs({ specs, items, paymentTerms = [], projects, refreshAll }: 
     });
   }, [selectedId, selected?.updated_at]);
 
+  useEffect(() => {
+    if (selectedSchedule) setEditScheduleForm({
+      title: selectedSchedule.title || "",
+      client_name: selectedSchedule.client_name || "",
+      project_id: selectedSchedule.project_id || "",
+      address: selectedSchedule.address || "",
+      amount_ttc: selectedSchedule.amount_ttc ?? "",
+      notes: selectedSchedule.notes || "",
+      status: selectedSchedule.status || "brouillon"
+    });
+  }, [selectedScheduleId, selectedSchedule?.updated_at]);
+
   function setupWarning(error: any) {
     if (error?.code === "42P01") {
-      alert("Tables manquantes. Lance le fichier supabase/schema-client-specs-v93.sql dans Supabase SQL Editor, puis reviens ici.");
+      alert("Tables manquantes. Lance le fichier supabase/schema-client-specs-v94.sql dans Supabase SQL Editor, puis reviens ici.");
       return true;
     }
     return false;
@@ -584,6 +616,81 @@ function ClientSpecs({ specs, items, paymentTerms = [], projects, refreshAll }: 
     await refreshAll();
   }
 
+
+  async function createSchedule(e: any) {
+    e.preventDefault();
+    setSaving(true);
+    const payload = { ...scheduleForm, project_id: scheduleForm.project_id || null, amount_ttc: Number(scheduleForm.amount_ttc || 0), status: scheduleForm.status || "brouillon", updated_at: new Date().toISOString() };
+    const { data, error } = await supabase.from("client_payment_schedules").insert(payload).select("*").single();
+    setSaving(false);
+    if (error) { if (!setupWarning(error)) alert(error.message); return; }
+    setScheduleForm(emptySchedule);
+    setSelectedScheduleId(data.id);
+    await refreshAll();
+  }
+
+  async function updateSchedule(e: any) {
+    e.preventDefault();
+    if (!selectedSchedule) return;
+    setSaving(true);
+    const payload = { ...editScheduleForm, project_id: editScheduleForm.project_id || null, amount_ttc: Number(editScheduleForm.amount_ttc || 0), updated_at: new Date().toISOString() };
+    const { error } = await supabase.from("client_payment_schedules").update(payload).eq("id", selectedSchedule.id);
+    setSaving(false);
+    if (error) { if (!setupWarning(error)) alert(error.message); return; }
+    await refreshAll();
+  }
+
+  async function deleteSchedule(id: string) {
+    if (!confirm("Supprimer définitivement ce planning de règlement ?")) return;
+    await supabase.from("client_payment_schedule_items").delete().eq("schedule_id", id);
+    const { error } = await supabase.from("client_payment_schedules").delete().eq("id", id);
+    if (error) return alert(error.message);
+    setSelectedScheduleId("");
+    await refreshAll();
+  }
+
+  async function addScheduleItem(e: any) {
+    e.preventDefault();
+    if (!selectedScheduleId) return alert("Crée ou sélectionne un planning de règlement d'abord.");
+    const base = Number(selectedSchedule?.amount_ttc || 0);
+    const percent = Number(scheduleItemForm.percentage || 0);
+    const amount = scheduleItemForm.amount_ttc !== "" && scheduleItemForm.amount_ttc !== null ? Number(scheduleItemForm.amount_ttc || 0) : (base * percent / 100);
+    setSaving(true);
+    const payload = { schedule_id: selectedScheduleId, position: scheduleItems.length + 1, label: scheduleItemForm.label || "Échéance", percentage: percent, amount_ttc: amount, due_date: scheduleItemForm.due_date || null, due_text: scheduleItemForm.due_text || "", status: scheduleItemForm.status || "a_encaisser", notes: scheduleItemForm.notes || "" };
+    const { error } = await supabase.from("client_payment_schedule_items").insert(payload);
+    setSaving(false);
+    if (error) { if (!setupWarning(error)) alert(error.message); return; }
+    setScheduleItemForm(emptyScheduleItem);
+    await refreshAll();
+  }
+
+  async function deleteScheduleItem(id: string) {
+    if (!confirm("Supprimer cette échéance ?")) return;
+    const { error } = await supabase.from("client_payment_schedule_items").delete().eq("id", id);
+    if (error) return alert(error.message);
+    await refreshAll();
+  }
+
+  function exportSchedulePdf() {
+    if (!selectedSchedule) return alert("Sélectionne un planning de règlement.");
+    const rows = scheduleItems.map((i: any) => `<tr><td><b>${i.label || "Échéance"}</b><br/><span>${i.notes || ""}</span></td><td>${i.due_date ? formatDisplayDate(i.due_date) : (i.due_text || "À définir")}</td><td class="num">${Number(i.percentage || 0)}%</td><td class="num"><b>${money(i.amount_ttc || 0)}</b></td><td>${i.status || "À encaisser"}</td></tr>`).join("");
+    const html = `<html><head><title>Planning de règlement - ${selectedSchedule.title}</title><style>@page{size:A4;margin:12mm}body{font-family:Arial,sans-serif;color:#0f172a}.hero{display:flex;justify-content:space-between;gap:20px;border-radius:28px;background:linear-gradient(135deg,#0f172a,#1e293b);color:white;padding:24px}.logo{height:75px;background:white;border-radius:18px;padding:10px}.title{font-size:32px;font-weight:900;margin:6px 0}.meta{color:#cbd5e1}.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:18px 0}.card{border:1px solid #e2e8f0;border-radius:22px;padding:15px;background:#f8fafc}.card b{font-size:11px;text-transform:uppercase;color:#64748b}.value{font-size:25px;font-weight:900;margin-top:6px}table{width:100%;border-collapse:separate;border-spacing:0 10px;margin-top:18px;font-size:12px}th{text-align:left;background:#0f172a;color:white;padding:10px}td{background:#f8fafc;border:1px solid #e2e8f0;border-left:0;border-right:0;padding:12px}td:first-child{border-left:1px solid #e2e8f0;border-radius:16px 0 0 16px}td:last-child{border-right:1px solid #e2e8f0;border-radius:0 16px 16px 0}.num{text-align:right}.sign{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:35px}.box{height:95px;border:1px dashed #cbd5e1;border-radius:18px;padding:12px;color:#64748b}</style></head><body><div class="hero"><div><div style="font-size:12px;text-transform:uppercase;letter-spacing:.18em;color:#fdba74;font-weight:900">Planning de règlement</div><div class="title">${selectedSchedule.title || "Échéancier client"}</div><div class="meta"><b>${selectedSchedule.client_name || "Client"}</b> · ${selectedSchedule.address || ""}<br/>Document indépendant · ${formatDisplayDate(new Date())}</div></div><img src="/logo-asb.png" class="logo"/></div><div class="cards"><div class="card"><b>Montant devis TTC</b><div class="value">${money(selectedSchedule.amount_ttc || 0)}</div></div><div class="card"><b>Total échéancier</b><div class="value">${money(scheduleItemsTotal)}</div></div><div class="card"><b>Reste à planifier</b><div class="value">${money(Number(selectedSchedule.amount_ttc || 0) - scheduleItemsTotal)}</div></div></div>${selectedSchedule.notes ? `<p><b>Conditions :</b><br/>${selectedSchedule.notes}</p>` : ""}<table><thead><tr><th>Désignation</th><th>Échéance</th><th class="num">%</th><th class="num">Montant TTC</th><th>Statut</th></tr></thead><tbody>${rows || `<tr><td colspan="5">Aucune échéance.</td></tr>`}</tbody></table><div class="sign"><div class="box">Signature client</div><div class="box">Signature ASB</div></div></body></html>`;
+    const w = window.open("", "_blank");
+    if (!w) return alert("Popup bloquée. Autorise les popups pour générer le PDF.");
+    w.document.write(html); w.document.close(); setTimeout(() => w.print(), 500);
+  }
+
+  function exportScheduleExcel() {
+    if (!selectedSchedule) return alert("Sélectionne un planning de règlement.");
+    const rows = scheduleItems.map((i: any) => `<tr><td>${i.label || ""}</td><td>${i.due_date || i.due_text || ""}</td><td>${Number(i.percentage || 0)}</td><td>${Number(i.amount_ttc || 0)}</td><td>${i.status || ""}</td><td>${i.notes || ""}</td></tr>`).join("");
+    const html = `<table><tr><th colspan="6">Planning de règlement ASB - ${selectedSchedule.title || ""}</th></tr><tr><td>Client</td><td colspan="5">${selectedSchedule.client_name || ""}</td></tr><tr><td>Adresse</td><td colspan="5">${selectedSchedule.address || ""}</td></tr><tr><td>Montant devis TTC</td><td colspan="5">${Number(selectedSchedule.amount_ttc || 0)}</td></tr><tr><th>Désignation</th><th>Échéance</th><th>%</th><th>Montant TTC</th><th>Statut</th><th>Notes</th></tr>${rows}</table>`;
+    const blob = new Blob(["\ufeff" + html], { type: "application/vnd.ms-excel;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `planning-reglement-asb-${(selectedSchedule.title || "client").replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.xls`;
+    a.click();
+  }
+
   function exportPdf() {
     if (!selected) return alert("Sélectionne un cahier des charges.");
     const rows = specItems.map((i: any) => {
@@ -612,7 +719,49 @@ function ClientSpecs({ specs, items, paymentTerms = [], projects, refreshAll }: 
   }
 
   return <div>
-    <Section title="Clients / CDC — Cahier des charges premium" subtitle="Création, modification et suppression des cahiers clients + lignes produit avec visuels, PDF et Excel ASB." />
+    <Section title="Clients / CDC" subtitle="Deux documents séparés : cahier des charges produit et planning de règlement indépendant." />
+    <div className="mb-5 flex flex-wrap gap-2">
+      <Button type="button" variant={clientSubTab === "cdc" ? "primary" : "secondary"} onClick={() => setClientSubTab("cdc")}>Cahiers des charges</Button>
+      <Button type="button" variant={clientSubTab === "payments" ? "primary" : "secondary"} onClick={() => setClientSubTab("payments")}>Planning de règlement</Button>
+    </div>
+    {clientSubTab === "payments" ? (
+      <div className="grid gap-5 xl:grid-cols-[420px_1fr]">
+        <div className="space-y-5">
+          <Card className="border-l-8 border-blue-600">
+            <h3 className="text-xl font-black">Créer un planning de règlement</h3>
+            <form onSubmit={createSchedule} className="mt-4 space-y-3">
+              <Field label="Titre"><Input required value={scheduleForm.title} onChange={(e: any) => setScheduleForm({ ...scheduleForm, title: e.target.value })} placeholder="Échéancier devis Mme Dupont" /></Field>
+              <Field label="Client"><Input value={scheduleForm.client_name} onChange={(e: any) => setScheduleForm({ ...scheduleForm, client_name: e.target.value })} /></Field>
+              <Field label="Chantier lié"><Select value={scheduleForm.project_id} onChange={(e: any) => setScheduleForm({ ...scheduleForm, project_id: e.target.value })}><option value="">Aucun</option>{projects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field>
+              <Field label="Adresse"><Input value={scheduleForm.address} onChange={(e: any) => setScheduleForm({ ...scheduleForm, address: e.target.value })} /></Field>
+              <Field label="Montant devis TTC"><Input type="number" step="0.01" value={scheduleForm.amount_ttc} onChange={(e: any) => setScheduleForm({ ...scheduleForm, amount_ttc: e.target.value })} /></Field>
+              <Field label="Statut"><Select value={scheduleForm.status || "brouillon"} onChange={(e: any) => setScheduleForm({ ...scheduleForm, status: e.target.value })}><option value="brouillon">Brouillon</option><option value="valide">Validé</option><option value="signe">Signé</option></Select></Field>
+              <Field label="Conditions générales"><Textarea value={scheduleForm.notes} onChange={(e: any) => setScheduleForm({ ...scheduleForm, notes: e.target.value })} placeholder="Ex : règlement par virement, échéances selon avancement chantier..." /></Field>
+              <Button disabled={saving} className="w-full">Créer le planning</Button>
+            </form>
+          </Card>
+          <Card>
+            <h3 className="mb-3 text-xl font-black">Plannings de règlement</h3>
+            <div className="space-y-2">
+              {paymentSchedules.map((s: any) => <button key={s.id} onClick={() => setSelectedScheduleId(s.id)} className={`w-full rounded-2xl border p-3 text-left ${selectedScheduleId === s.id ? "border-slate-900 bg-slate-900 text-white" : "border-slate-100 bg-slate-50 text-slate-900"}`}><b>{s.title}</b><br/><span className="text-xs opacity-75">{s.client_name || "Client non renseigné"} · {money(s.amount_ttc || 0)}</span></button>)}
+              {paymentSchedules.length === 0 && <p className="text-sm text-slate-500">Aucun planning de règlement pour le moment.</p>}
+            </div>
+          </Card>
+        </div>
+        <div className="space-y-5">
+          {selectedSchedule ? <>
+            <Card className="overflow-hidden border-0 bg-gradient-to-br from-slate-950 to-blue-900 text-white shadow-xl">
+              <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between"><div><p className="text-xs font-black uppercase tracking-[0.22em] text-orange-300">Planning de règlement indépendant</p><h2 className="mt-2 text-3xl font-black">{selectedSchedule.title}</h2><p className="mt-2 text-sm text-slate-300">{selectedSchedule.client_name || "Client"} · {selectedSchedule.address || "Adresse non renseignée"}</p><span className="mt-3 inline-flex rounded-full bg-white/10 px-3 py-1 text-xs font-black uppercase text-orange-200">{selectedSchedule.status || "brouillon"}</span></div><img src="/logo-asb.png" className="h-20 w-fit rounded-2xl bg-white p-2" /></div>
+              <div className="mt-6 grid grid-cols-3 gap-3 text-slate-900"><div className="rounded-2xl bg-white p-4"><p className="text-xs font-black uppercase text-slate-500">Devis TTC</p><p className="text-2xl font-black">{money(selectedSchedule.amount_ttc || 0)}</p></div><div className="rounded-2xl bg-white p-4"><p className="text-xs font-black uppercase text-slate-500">Échéancier</p><p className="text-2xl font-black">{money(scheduleItemsTotal)}</p></div><div className="rounded-2xl bg-orange-400 p-4"><p className="text-xs font-black uppercase text-orange-950">Reste</p><p className="text-2xl font-black">{money(Number(selectedSchedule.amount_ttc || 0) - scheduleItemsTotal)}</p></div></div>
+              <div className="mt-5 flex flex-wrap gap-2"><Button type="button" variant="secondary" onClick={exportSchedulePdf}><Download size={16} className="mr-2"/> Export PDF</Button><Button type="button" variant="amber" onClick={exportScheduleExcel}><Download size={16} className="mr-2"/> Export Excel</Button><Button type="button" variant="danger" onClick={() => deleteSchedule(selectedSchedule.id)}>Supprimer planning</Button></div>
+            </Card>
+            <Card className="border-l-8 border-orange-400"><h3 className="text-xl font-black">Modifier le planning</h3><form onSubmit={updateSchedule} className="mt-4 grid gap-3 md:grid-cols-2"><Field label="Titre"><Input required value={editScheduleForm.title} onChange={(e: any) => setEditScheduleForm({ ...editScheduleForm, title: e.target.value })} /></Field><Field label="Client"><Input value={editScheduleForm.client_name} onChange={(e: any) => setEditScheduleForm({ ...editScheduleForm, client_name: e.target.value })} /></Field><Field label="Chantier lié"><Select value={editScheduleForm.project_id} onChange={(e: any) => setEditScheduleForm({ ...editScheduleForm, project_id: e.target.value })}><option value="">Aucun</option>{projects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field><Field label="Montant devis TTC"><Input type="number" step="0.01" value={editScheduleForm.amount_ttc} onChange={(e: any) => setEditScheduleForm({ ...editScheduleForm, amount_ttc: e.target.value })} /></Field><Field label="Adresse"><Input value={editScheduleForm.address} onChange={(e: any) => setEditScheduleForm({ ...editScheduleForm, address: e.target.value })} /></Field><Field label="Statut"><Select value={editScheduleForm.status || "brouillon"} onChange={(e: any) => setEditScheduleForm({ ...editScheduleForm, status: e.target.value })}><option value="brouillon">Brouillon</option><option value="valide">Validé</option><option value="signe">Signé</option></Select></Field><Field label="Conditions générales"><Textarea value={editScheduleForm.notes} onChange={(e: any) => setEditScheduleForm({ ...editScheduleForm, notes: e.target.value })} /></Field><div className="md:col-span-2"><Button disabled={saving} variant="amber">Enregistrer</Button></div></form></Card>
+            <Card><h3 className="text-xl font-black">Ajouter une échéance</h3><form onSubmit={addScheduleItem} className="mt-4 grid gap-3 md:grid-cols-6"><Field label="Désignation"><Input required value={scheduleItemForm.label} onChange={(e: any) => setScheduleItemForm({ ...scheduleItemForm, label: e.target.value })} placeholder="Acompte commande" /></Field><Field label="%"><Input type="number" step="0.01" value={scheduleItemForm.percentage} onChange={(e: any) => setScheduleItemForm({ ...scheduleItemForm, percentage: e.target.value })} /></Field><Field label="Montant TTC"><Input type="number" step="0.01" value={scheduleItemForm.amount_ttc} onChange={(e: any) => setScheduleItemForm({ ...scheduleItemForm, amount_ttc: e.target.value })} placeholder="Auto si %" /></Field><Field label="Date prévue"><Input type="date" value={scheduleItemForm.due_date} onChange={(e: any) => setScheduleItemForm({ ...scheduleItemForm, due_date: e.target.value })} /></Field><Field label="Échéance texte"><Input value={scheduleItemForm.due_text} onChange={(e: any) => setScheduleItemForm({ ...scheduleItemForm, due_text: e.target.value })} placeholder="À signature" /></Field><Field label="Statut"><Select value={scheduleItemForm.status} onChange={(e: any) => setScheduleItemForm({ ...scheduleItemForm, status: e.target.value })}><option value="a_encaisser">À encaisser</option><option value="encaisse">Encaissé</option><option value="a_relancer">À relancer</option></Select></Field><Field label="Notes"><Input value={scheduleItemForm.notes} onChange={(e: any) => setScheduleItemForm({ ...scheduleItemForm, notes: e.target.value })} /></Field><div className="md:col-span-6"><Button disabled={saving}>+ Ajouter l’échéance</Button></div></form></Card>
+            <Card><h3 className="mb-4 text-xl font-black">Échéancier client</h3><div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left text-xs uppercase text-slate-500"><th className="p-3">Désignation</th><th className="p-3">Échéance</th><th className="p-3 text-right">%</th><th className="p-3 text-right">Montant TTC</th><th className="p-3">Statut</th><th className="p-3 text-right">Action</th></tr></thead><tbody>{scheduleItems.map((i: any) => <tr key={i.id} className="border-b"><td className="p-3 font-bold">{i.label}</td><td className="p-3">{i.due_date ? formatDisplayDate(i.due_date) : (i.due_text || "—")}</td><td className="p-3 text-right">{Number(i.percentage || 0)}%</td><td className="p-3 text-right font-black">{money(i.amount_ttc || 0)}</td><td className="p-3"><Badge tone={i.status === "encaisse" ? "green" : i.status === "a_relancer" ? "amber" : "blue"}>{i.status === "encaisse" ? "Encaissé" : i.status === "a_relancer" ? "À relancer" : "À encaisser"}</Badge></td><td className="p-3 text-right"><Button type="button" variant="danger" onClick={() => deleteScheduleItem(i.id)}>Suppr.</Button></td></tr>)}{scheduleItems.length === 0 && <tr><td colSpan={6} className="p-8 text-center text-slate-500">Aucune échéance.</td></tr>}</tbody></table></div></Card>
+          </> : <Card><p className="text-sm text-slate-500">Crée ou sélectionne un planning de règlement pour commencer.</p></Card>}
+        </div>
+      </div>
+    ) : (
     <div className="grid gap-5 xl:grid-cols-[420px_1fr]">
       <div className="space-y-5">
         <Card className="border-l-8 border-slate-900">
@@ -740,6 +889,7 @@ function ClientSpecs({ specs, items, paymentTerms = [], projects, refreshAll }: 
         </> : <Card><p className="text-sm text-slate-500">Crée ou sélectionne un cahier des charges pour commencer.</p></Card>}
       </div>
     </div>
+    )}
   </div>;
 }
 
