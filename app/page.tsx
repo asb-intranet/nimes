@@ -169,6 +169,7 @@ export default function Page() {
   const [quoteCalculations, setQuoteCalculations] = useState<any[]>([]);
   const [clientSpecs, setClientSpecs] = useState<any[]>([]);
   const [clientSpecItems, setClientSpecItems] = useState<any[]>([]);
+  const [clientSpecPaymentTerms, setClientSpecPaymentTerms] = useState<any[]>([]);
   const [dataWarning, setDataWarning] = useState<string>("");
   
   useEffect(() => {
@@ -189,7 +190,7 @@ export default function Page() {
   }, []);
 
   async function refreshAll() {
-    const [p, ph, d, e, l, n, v, r, pl, mat, vig, inv, rev, ret, ew, ewph, ewd, ewn, ewm, ewv, ewp, ewr, ewi, ewrev, ewret, ce, cp, qc, cs, csi] = await Promise.all([
+    const [p, ph, d, e, l, n, v, r, pl, mat, vig, inv, rev, ret, ew, ewph, ewd, ewn, ewm, ewv, ewp, ewr, ewi, ewrev, ewret, ce, cp, qc, cs, csi, csp] = await Promise.all([
       supabase.from("projects").select("*").order("created_at", { ascending: false }),
       supabase.from("chantier_photos").select("*").order("created_at", { ascending: false }),
       supabase.from("chantier_documents").select("*").order("created_at", { ascending: false }),
@@ -219,7 +220,8 @@ export default function Page() {
       supabase.from("client_payments").select("*").order("payment_date", { ascending: false }),
       supabase.from("quote_calculations").select("*").order("updated_at", { ascending: false }),
       supabase.from("client_specs").select("*").order("created_at", { ascending: false }),
-      supabase.from("client_spec_items").select("*").order("position", { ascending: true })
+      supabase.from("client_spec_items").select("*").order("position", { ascending: true }),
+      supabase.from("client_spec_payment_terms").select("*").order("position", { ascending: true })
     ]);
 
     const errors = [p, ph, d, e, l, n, v, r, pl, mat, vig, inv, rev, ret, ew, ewph, ewd, ewn, ewm, ewv, ewp, ewr, ewi, ewrev, ewret, ce, cp].filter((x: any) => x?.error).map((x: any) => x.error.message);
@@ -255,6 +257,7 @@ export default function Page() {
     setQuoteCalculations(qc.data || []);
     setClientSpecs(cs.data || []);
     setClientSpecItems(csi.data || []);
+    setClientSpecPaymentTerms(csp.data || []);
   }
 
   async function signIn(e: any) {
@@ -365,7 +368,7 @@ export default function Page() {
 
         <section className="p-5 pb-28 lg:p-8">
           {active === "dashboard" && userRole === "admin" && <Dashboard projects={projects} photos={photos} docs={docs} requests={requests} materials={materials} setActive={setActive} />}
-          {active === "clients" && userRole === "admin" && <ClientSpecs specs={clientSpecs} items={clientSpecItems} projects={projects} refreshAll={refreshAll} />}
+          {active === "clients" && userRole === "admin" && <ClientSpecs specs={clientSpecs} items={clientSpecItems} paymentTerms={clientSpecPaymentTerms} projects={projects} refreshAll={refreshAll} />}
           {active === "storekeeper" && userRole === "admin" && <Storekeeper projects={projects} materials={materials} invoices={invoices} returns={returns} refreshAll={refreshAll} />}
           {active === "projects" && <Projects projects={projects} photos={photos} docs={docs} notes={notes} materials={materials} vigilance={vigilance} invoices={invoices} revenues={revenues} returns={returns} employees={employees} links={links} planning={planning} refreshAll={refreshAll} />}
           {active === "earthworks" && <Earthworks earthworks={earthworks} photos={earthworkPhotos} docs={earthworkDocs} notes={earthworkNotes} materials={earthworkMaterials} vigilance={earthworkVigilance} planning={earthworkPlanning} rentals={earthworkRentals} earthworkInvoices={earthworkInvoices} earthworkRevenues={earthworkRevenues} earthworkReturns={earthworkReturns} refreshAll={refreshAll} />}
@@ -382,15 +385,19 @@ export default function Page() {
 }
 
 
-function ClientSpecs({ specs, items, projects, refreshAll }: any) {
+function ClientSpecs({ specs, items, paymentTerms = [], projects, refreshAll }: any) {
   const emptySpec = { title: "", client_name: "", project_id: "", address: "", notes: "", status: "brouillon" };
   const emptyItem = { title: "", supplier: "", reference: "", quantity: 1, unit_price_ht: 0, tva_rate: 20, visual_url: "", notes: "" };
+  const emptyTerm = { label: "", percentage: "", amount_ttc: "", due_text: "", notes: "" };
   const [selectedId, setSelectedId] = useState<string>(specs?.[0]?.id || "");
   const [specForm, setSpecForm] = useState<any>(emptySpec);
   const [editSpecForm, setEditSpecForm] = useState<any>(emptySpec);
   const [itemForm, setItemForm] = useState<any>(emptyItem);
   const [editingItemId, setEditingItemId] = useState<string>("");
   const [editingItemForm, setEditingItemForm] = useState<any>(emptyItem);
+  const [termForm, setTermForm] = useState<any>(emptyTerm);
+  const [editingTermId, setEditingTermId] = useState<string>("");
+  const [editingTermForm, setEditingTermForm] = useState<any>(emptyTerm);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -399,9 +406,11 @@ function ClientSpecs({ specs, items, projects, refreshAll }: any) {
 
   const selected = specs.find((s: any) => s.id === selectedId);
   const specItems = items.filter((i: any) => i.spec_id === selectedId).sort((a: any, b: any) => (a.position || 0) - (b.position || 0));
+  const selectedPaymentTerms = paymentTerms.filter((t: any) => t.spec_id === selectedId).sort((a: any, b: any) => (a.position || 0) - (b.position || 0));
   const totalHT = specItems.reduce((sum: number, i: any) => sum + (Number(i.quantity || 0) * Number(i.unit_price_ht || 0)), 0);
   const totalTVA = specItems.reduce((sum: number, i: any) => sum + (Number(i.quantity || 0) * Number(i.unit_price_ht || 0) * Number(i.tva_rate || 0) / 100), 0);
   const totalTTC = totalHT + totalTVA;
+  const paymentTermsTotal = selectedPaymentTerms.reduce((sum: number, t: any) => sum + Number(t.amount_ttc || 0), 0);
 
   useEffect(() => {
     if (selected) setEditSpecForm({
@@ -416,7 +425,7 @@ function ClientSpecs({ specs, items, projects, refreshAll }: any) {
 
   function setupWarning(error: any) {
     if (error?.code === "42P01") {
-      alert("Tables manquantes. Lance le fichier supabase/schema-client-specs-v91.sql dans Supabase SQL Editor, puis reviens ici.");
+      alert("Tables manquantes. Lance le fichier supabase/schema-client-specs-v93.sql dans Supabase SQL Editor, puis reviens ici.");
       return true;
     }
     return false;
@@ -507,9 +516,71 @@ function ClientSpecs({ specs, items, projects, refreshAll }: any) {
   async function deleteSpec(id: string) {
     if (!confirm("Supprimer définitivement ce cahier des charges client et toutes ses lignes produit ?")) return;
     await supabase.from("client_spec_items").delete().eq("spec_id", id);
+    await supabase.from("client_spec_payment_terms").delete().eq("spec_id", id);
     const { error } = await supabase.from("client_specs").delete().eq("id", id);
     if (error) return alert(error.message);
     setSelectedId("");
+    await refreshAll();
+  }
+
+  async function addPaymentTerm(e: any) {
+    e.preventDefault();
+    if (!selectedId) return alert("Crée ou sélectionne un cahier des charges client d'abord.");
+    const percent = Number(termForm.percentage || 0);
+    const amount = termForm.amount_ttc !== "" && termForm.amount_ttc !== null ? Number(termForm.amount_ttc || 0) : (totalTTC * percent / 100);
+    setSaving(true);
+    const payload = {
+      spec_id: selectedId,
+      position: selectedPaymentTerms.length + 1,
+      label: termForm.label || "Échéance",
+      percentage: percent,
+      amount_ttc: amount,
+      due_text: termForm.due_text || "",
+      notes: termForm.notes || ""
+    };
+    const { error } = await supabase.from("client_spec_payment_terms").insert(payload);
+    setSaving(false);
+    if (error) { if (!setupWarning(error)) alert(error.message); return; }
+    setTermForm(emptyTerm);
+    await refreshAll();
+  }
+
+  function startEditPaymentTerm(t: any) {
+    setEditingTermId(t.id);
+    setEditingTermForm({
+      label: t.label || "",
+      percentage: t.percentage ?? "",
+      amount_ttc: t.amount_ttc ?? "",
+      due_text: t.due_text || "",
+      notes: t.notes || ""
+    });
+  }
+
+  async function updatePaymentTerm(e: any) {
+    e.preventDefault();
+    if (!editingTermId) return;
+    const percent = Number(editingTermForm.percentage || 0);
+    const amount = editingTermForm.amount_ttc !== "" && editingTermForm.amount_ttc !== null ? Number(editingTermForm.amount_ttc || 0) : (totalTTC * percent / 100);
+    setSaving(true);
+    const payload = {
+      label: editingTermForm.label || "Échéance",
+      percentage: percent,
+      amount_ttc: amount,
+      due_text: editingTermForm.due_text || "",
+      notes: editingTermForm.notes || ""
+    };
+    const { error } = await supabase.from("client_spec_payment_terms").update(payload).eq("id", editingTermId);
+    setSaving(false);
+    if (error) { if (!setupWarning(error)) alert(error.message); return; }
+    setEditingTermId("");
+    setEditingTermForm(emptyTerm);
+    await refreshAll();
+  }
+
+  async function deletePaymentTerm(id: string) {
+    if (!confirm("Supprimer cette condition de règlement ?")) return;
+    const { error } = await supabase.from("client_spec_payment_terms").delete().eq("id", id);
+    if (error) return alert(error.message);
     await refreshAll();
   }
 
@@ -520,7 +591,9 @@ function ClientSpecs({ specs, items, projects, refreshAll }: any) {
       const visual = i.visual_url ? `<img src="${i.visual_url}" class="visual"/>` : `<div class="empty">Visuel</div>`;
       return `<tr><td>${visual}</td><td><b>${i.title || "Produit"}</b><br/><span>${i.notes || ""}</span></td><td>${i.supplier || ""}</td><td>${i.reference || ""}</td><td class="num">${i.quantity || 0}</td><td class="num">${money(Number(i.unit_price_ht || 0))}</td><td class="num">${i.tva_rate || 0}%</td><td class="num"><b>${money(lineHT)}</b></td></tr>`;
     }).join("");
-    const html = `<html><head><title>Cahier des charges - ${selected.title}</title><style>@page{size:A4;margin:10mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;background:#e5e7eb;color:#0f172a;margin:0}.page{max-width:1100px;margin:auto;background:white;padding:30px}.hero{display:flex;justify-content:space-between;gap:18px;border-radius:28px;background:linear-gradient(135deg,#0f172a,#1e293b);color:white;padding:24px}.logo{height:78px;background:white;border-radius:18px;padding:10px}.kicker{font-size:12px;text-transform:uppercase;letter-spacing:.12em;color:#cbd5e1;font-weight:900}.title{font-size:34px;font-weight:900;margin:6px 0 0;letter-spacing:-.04em}.meta{margin-top:14px;color:#cbd5e1}.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:18px}.card{border:1px solid #e2e8f0;border-radius:22px;padding:15px;background:#f8fafc}.card b{font-size:11px;text-transform:uppercase;color:#64748b}.value{font-size:25px;font-weight:900;margin-top:6px}table{width:100%;border-collapse:separate;border-spacing:0 10px;margin-top:18px;font-size:12px}th{text-align:left;background:#0f172a;color:white;padding:10px}td{background:#f8fafc;border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;padding:10px;vertical-align:middle}td:first-child{border-left:1px solid #e2e8f0;border-radius:16px 0 0 16px}td:last-child{border-right:1px solid #e2e8f0;border-radius:0 16px 16px 0}.visual{width:92px;height:70px;object-fit:cover;border-radius:14px}.empty{width:92px;height:70px;border-radius:14px;background:#e2e8f0;display:flex;align-items:center;justify-content:center;color:#64748b;font-weight:900}.num{text-align:right;white-space:nowrap}.footer{margin-top:20px;font-size:11px;color:#64748b}.notes{margin-top:18px;border-left:8px solid #f97316;background:#fff7ed;border-radius:20px;padding:14px}@media print{body{background:white}.page{padding:0}}</style></head><body><div class="page"><div class="hero"><div><div class="kicker">Cahier des charges client</div><div class="title">${selected.title || "Sélection matériaux"}</div><div class="meta"><b>${selected.client_name || "Client"}</b> · ${selected.address || ""}<br/>Document de chiffrage · ${formatDisplayDate(new Date())}</div></div><img src="/logo-asb.png" class="logo"/></div><div class="cards"><div class="card"><b>Total HT</b><div class="value">${money(totalHT)}</div></div><div class="card"><b>TVA estimée</b><div class="value">${money(totalTVA)}</div></div><div class="card"><b>Total TTC</b><div class="value">${money(totalTTC)}</div></div></div>${selected.notes ? `<div class="notes"><b>Notes client / choix techniques</b><br/>${selected.notes}</div>` : ""}<table><thead><tr><th>Visuel</th><th>Désignation</th><th>Fournisseur</th><th>Référence</th><th class="num">Qté</th><th class="num">PU HT</th><th class="num">TVA</th><th class="num">Total HT</th></tr></thead><tbody>${rows || `<tr><td colspan="8">Aucune ligne produit.</td></tr>`}</tbody></table><p class="footer">ASB — document de préparation chiffrage. Les prix et disponibilités fournisseurs sont à vérifier avant commande.</p></div></body></html>`;
+    const paymentRows = selectedPaymentTerms.map((t: any) => `<tr><td><b>${t.label || "Échéance"}</b><br/><span>${t.notes || ""}</span></td><td>${t.due_text || "À définir"}</td><td class="num">${Number(t.percentage || 0)}%</td><td class="num"><b>${money(t.amount_ttc || 0)}</b></td></tr>`).join("");
+    const paymentSection = paymentRows ? `<div class="payment"><h2>Conditions de règlement</h2><p>Échéancier proposé au client pour validation du chiffrage.</p><table><thead><tr><th>Étape</th><th>Échéance</th><th class="num">%</th><th class="num">Montant TTC</th></tr></thead><tbody>${paymentRows}</tbody></table></div>` : "";
+    const html = `<html><head><title>Cahier des charges - ${selected.title}</title><style>@page{size:A4;margin:10mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;background:#e5e7eb;color:#0f172a;margin:0}.page{max-width:1100px;margin:auto;background:white;padding:30px}.hero{display:flex;justify-content:space-between;gap:18px;border-radius:28px;background:linear-gradient(135deg,#0f172a,#1e293b);color:white;padding:24px}.logo{height:78px;background:white;border-radius:18px;padding:10px}.kicker{font-size:12px;text-transform:uppercase;letter-spacing:.12em;color:#cbd5e1;font-weight:900}.title{font-size:34px;font-weight:900;margin:6px 0 0;letter-spacing:-.04em}.meta{margin-top:14px;color:#cbd5e1}.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:18px}.card{border:1px solid #e2e8f0;border-radius:22px;padding:15px;background:#f8fafc}.card b{font-size:11px;text-transform:uppercase;color:#64748b}.value{font-size:25px;font-weight:900;margin-top:6px}table{width:100%;border-collapse:separate;border-spacing:0 10px;margin-top:18px;font-size:12px}th{text-align:left;background:#0f172a;color:white;padding:10px}td{background:#f8fafc;border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;padding:10px;vertical-align:middle}td:first-child{border-left:1px solid #e2e8f0;border-radius:16px 0 0 16px}td:last-child{border-right:1px solid #e2e8f0;border-radius:0 16px 16px 0}.visual{width:92px;height:70px;object-fit:cover;border-radius:14px}.empty{width:92px;height:70px;border-radius:14px;background:#e2e8f0;display:flex;align-items:center;justify-content:center;color:#64748b;font-weight:900}.num{text-align:right;white-space:nowrap}.footer{margin-top:20px;font-size:11px;color:#64748b}.notes{margin-top:18px;border-left:8px solid #f97316;background:#fff7ed;border-radius:20px;padding:14px}.payment{margin-top:18px;border:1px solid #fed7aa;background:#fff7ed;border-radius:24px;padding:16px}.payment h2{margin:0;font-size:20px}.payment p{margin:6px 0 0;color:#64748b;font-size:12px}@media print{body{background:white}.page{padding:0}}</style></head><body><div class="page"><div class="hero"><div><div class="kicker">Cahier des charges client</div><div class="title">${selected.title || "Sélection matériaux"}</div><div class="meta"><b>${selected.client_name || "Client"}</b> · ${selected.address || ""}<br/>Document de chiffrage · ${formatDisplayDate(new Date())}</div></div><img src="/logo-asb.png" class="logo"/></div><div class="cards"><div class="card"><b>Total HT</b><div class="value">${money(totalHT)}</div></div><div class="card"><b>TVA estimée</b><div class="value">${money(totalTVA)}</div></div><div class="card"><b>Total TTC</b><div class="value">${money(totalTTC)}</div></div></div>${selected.notes ? `<div class="notes"><b>Notes client / choix techniques</b><br/>${selected.notes}</div>` : ""}<table><thead><tr><th>Visuel</th><th>Désignation</th><th>Fournisseur</th><th>Référence</th><th class="num">Qté</th><th class="num">PU HT</th><th class="num">TVA</th><th class="num">Total HT</th></tr></thead><tbody>${rows || `<tr><td colspan="8">Aucune ligne produit.</td></tr>`}</tbody></table>${paymentSection}<p class="footer">ASB — document de préparation chiffrage. Les prix et disponibilités fournisseurs sont à vérifier avant commande.</p></div></body></html>`;
     const w = window.open("", "_blank");
     if (!w) return alert("Popup bloquée. Autorise les popups pour générer le PDF.");
     w.document.write(html); w.document.close(); setTimeout(() => w.print(), 500);
@@ -529,7 +602,8 @@ function ClientSpecs({ specs, items, projects, refreshAll }: any) {
   function exportExcel() {
     if (!selected) return alert("Sélectionne un cahier des charges.");
     const rows = specItems.map((i: any) => `<tr><td>${i.title || ""}</td><td>${i.supplier || ""}</td><td>${i.reference || ""}</td><td>${i.quantity || 0}</td><td>${Number(i.unit_price_ht || 0)}</td><td>${i.tva_rate || 0}</td><td>${Number(i.quantity || 0) * Number(i.unit_price_ht || 0)}</td><td>${i.visual_url || ""}</td><td>${i.notes || ""}</td></tr>`).join("");
-    const html = `<table><tr><th colspan="9">Cahier des charges client ASB - ${selected.title || ""}</th></tr><tr><td>Client</td><td colspan="8">${selected.client_name || ""}</td></tr><tr><td>Adresse</td><td colspan="8">${selected.address || ""}</td></tr><tr><th>Désignation</th><th>Fournisseur</th><th>Référence</th><th>Quantité</th><th>PU HT</th><th>TVA %</th><th>Total HT</th><th>Visuel</th><th>Notes</th></tr>${rows}<tr><td colspan="6"><b>Total HT</b></td><td><b>${totalHT}</b></td></tr><tr><td colspan="6"><b>Total TVA</b></td><td><b>${totalTVA}</b></td></tr><tr><td colspan="6"><b>Total TTC</b></td><td><b>${totalTTC}</b></td></tr></table>`;
+    const paymentRows = selectedPaymentTerms.map((t: any) => `<tr><td>${t.label || ""}</td><td>${t.due_text || ""}</td><td>${Number(t.percentage || 0)}</td><td>${Number(t.amount_ttc || 0)}</td><td>${t.notes || ""}</td></tr>`).join("");
+    const html = `<table><tr><th colspan="9">Cahier des charges client ASB - ${selected.title || ""}</th></tr><tr><td>Client</td><td colspan="8">${selected.client_name || ""}</td></tr><tr><td>Adresse</td><td colspan="8">${selected.address || ""}</td></tr><tr><th>Désignation</th><th>Fournisseur</th><th>Référence</th><th>Quantité</th><th>PU HT</th><th>TVA %</th><th>Total HT</th><th>Visuel</th><th>Notes</th></tr>${rows}<tr><td colspan="6"><b>Total HT</b></td><td><b>${totalHT}</b></td></tr><tr><td colspan="6"><b>Total TVA</b></td><td><b>${totalTVA}</b></td></tr><tr><td colspan="6"><b>Total TTC</b></td><td><b>${totalTTC}</b></td></tr></table><br/><table><tr><th colspan="5">Conditions de règlement</th></tr><tr><th>Étape</th><th>Échéance</th><th>%</th><th>Montant TTC</th><th>Notes</th></tr>${paymentRows}</table>`;
     const blob = new Blob(["\ufeff" + html], { type: "application/vnd.ms-excel;charset=utf-8" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
@@ -587,6 +661,45 @@ function ClientSpecs({ specs, items, projects, refreshAll }: any) {
               <Field label="Notes"><Textarea value={editSpecForm.notes} onChange={(e: any) => setEditSpecForm({ ...editSpecForm, notes: e.target.value })} /></Field>
               <div className="md:col-span-2"><Button disabled={saving} variant="amber">Enregistrer les modifications client</Button></div>
             </form>
+          </Card>
+
+          <Card className="border-l-8 border-blue-500">
+            <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+              <div>
+                <h3 className="text-xl font-black">Conditions de règlement</h3>
+                <p className="text-sm text-slate-500">Crée un échéancier clair pour le client : acompte, démarrage, avancement, solde.</p>
+              </div>
+              <div className="rounded-2xl bg-blue-50 px-4 py-3 text-right text-blue-900">
+                <p className="text-xs font-black uppercase">Total échéancier</p>
+                <p className="text-xl font-black">{money(paymentTermsTotal)}</p>
+              </div>
+            </div>
+            <form onSubmit={addPaymentTerm} className="mt-4 grid gap-3 md:grid-cols-5">
+              <Field label="Étape"><Input required value={termForm.label} onChange={(e: any) => setTermForm({ ...termForm, label: e.target.value })} placeholder="Acompte commande" /></Field>
+              <Field label="Échéance"><Input value={termForm.due_text} onChange={(e: any) => setTermForm({ ...termForm, due_text: e.target.value })} placeholder="À signature / fin de chantier" /></Field>
+              <Field label="%"><Input type="number" step="0.01" value={termForm.percentage} onChange={(e: any) => setTermForm({ ...termForm, percentage: e.target.value })} placeholder="30" /></Field>
+              <Field label="Montant TTC"><Input type="number" step="0.01" value={termForm.amount_ttc} onChange={(e: any) => setTermForm({ ...termForm, amount_ttc: e.target.value })} placeholder="Auto si %" /></Field>
+              <Field label="Notes"><Input value={termForm.notes} onChange={(e: any) => setTermForm({ ...termForm, notes: e.target.value })} placeholder="Optionnel" /></Field>
+              <div className="md:col-span-5"><Button disabled={saving} variant="secondary">+ Ajouter une condition</Button></div>
+            </form>
+            <div className="mt-4 space-y-2">
+              {selectedPaymentTerms.map((t: any) => editingTermId === t.id ? (
+                <form key={t.id} onSubmit={updatePaymentTerm} className="grid gap-3 rounded-2xl border border-blue-100 bg-blue-50 p-3 md:grid-cols-5">
+                  <Field label="Étape"><Input required value={editingTermForm.label} onChange={(e: any) => setEditingTermForm({ ...editingTermForm, label: e.target.value })} /></Field>
+                  <Field label="Échéance"><Input value={editingTermForm.due_text} onChange={(e: any) => setEditingTermForm({ ...editingTermForm, due_text: e.target.value })} /></Field>
+                  <Field label="%"><Input type="number" step="0.01" value={editingTermForm.percentage} onChange={(e: any) => setEditingTermForm({ ...editingTermForm, percentage: e.target.value })} /></Field>
+                  <Field label="Montant TTC"><Input type="number" step="0.01" value={editingTermForm.amount_ttc} onChange={(e: any) => setEditingTermForm({ ...editingTermForm, amount_ttc: e.target.value })} /></Field>
+                  <Field label="Notes"><Input value={editingTermForm.notes} onChange={(e: any) => setEditingTermForm({ ...editingTermForm, notes: e.target.value })} /></Field>
+                  <div className="flex gap-2 md:col-span-5"><Button disabled={saving} variant="amber">Enregistrer</Button><Button type="button" variant="secondary" onClick={() => setEditingTermId("")}>Annuler</Button></div>
+                </form>
+              ) : (
+                <div key={t.id} className="flex flex-col gap-3 rounded-2xl border border-slate-100 bg-slate-50 p-4 md:flex-row md:items-center md:justify-between">
+                  <div><p className="font-black">{t.label || "Échéance"}</p><p className="text-xs text-slate-500">{t.due_text || "Échéance à définir"}{t.notes ? ` · ${t.notes}` : ""}</p></div>
+                  <div className="flex flex-wrap items-center gap-2"><Badge tone="blue">{Number(t.percentage || 0)}%</Badge><b>{money(t.amount_ttc || 0)}</b><button type="button" onClick={() => startEditPaymentTerm(t)} className="rounded-xl bg-orange-50 px-2 py-1 text-xs font-black text-orange-700">Modifier</button><button type="button" onClick={() => deletePaymentTerm(t.id)} className="rounded-xl bg-red-50 px-2 py-1 text-xs font-black text-red-700">Suppr.</button></div>
+                </div>
+              ))}
+              {selectedPaymentTerms.length === 0 && <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">Aucune condition de règlement. Exemple : 30% à la commande, 40% au démarrage, 30% à réception.</p>}
+            </div>
           </Card>
 
           <Card>
