@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { Card, Button, Field, Input, Select, Textarea, Section, Badge } from "@/components/Ui";
 import {
   Building2, Camera, FileText, Users, Truck, MessageSquare, Smartphone,
-  LayoutDashboard, LogOut, Pencil, Trash2, CalendarDays, Package, HardHat, Euro, ClipboardList, Wrench, Shovel, MapPinned, Image as ImageIcon, Download
+  LayoutDashboard, LogOut, Pencil, Trash2, Copy, CalendarDays, Package, HardHat, Euro, ClipboardList, Wrench, Shovel, MapPinned, Image as ImageIcon, Download
 } from "lucide-react";
 
 const menu = [
@@ -412,6 +412,8 @@ function ClientSpecs({ specs, items, paymentTerms = [], paymentSchedules = [], p
   const [scheduleForm, setScheduleForm] = useState<any>(emptySchedule);
   const [editScheduleForm, setEditScheduleForm] = useState<any>(emptySchedule);
   const [scheduleItemForm, setScheduleItemForm] = useState<any>(emptyScheduleItem);
+  const [editingScheduleItemId, setEditingScheduleItemId] = useState<string>("");
+  const [editingScheduleItemForm, setEditingScheduleItemForm] = useState<any>(emptyScheduleItem);
 
   useEffect(() => {
     if (!selectedId && specs?.length) setSelectedId(specs[0].id);
@@ -664,10 +666,71 @@ function ClientSpecs({ specs, items, paymentTerms = [], paymentSchedules = [], p
     await refreshAll();
   }
 
+  function startEditScheduleItem(item: any) {
+    setEditingScheduleItemId(item.id);
+    setEditingScheduleItemForm({
+      label: item.label || "",
+      percentage: item.percentage ?? "",
+      amount_ttc: item.amount_ttc ?? "",
+      due_date: item.due_date || "",
+      due_text: item.due_text || "",
+      status: item.status || "a_encaisser",
+      notes: item.notes || ""
+    });
+  }
+
+  async function updateScheduleItem(e: any) {
+    e.preventDefault();
+    if (!editingScheduleItemId) return;
+    const base = Number(selectedSchedule?.amount_ttc || 0);
+    const percent = Number(editingScheduleItemForm.percentage || 0);
+    const amount = editingScheduleItemForm.amount_ttc !== "" && editingScheduleItemForm.amount_ttc !== null ? Number(editingScheduleItemForm.amount_ttc || 0) : (base * percent / 100);
+    setSaving(true);
+    const payload = {
+      label: editingScheduleItemForm.label || "Échéance",
+      percentage: percent,
+      amount_ttc: amount,
+      due_date: editingScheduleItemForm.due_date || null,
+      due_text: editingScheduleItemForm.due_text || "",
+      status: editingScheduleItemForm.status || "a_encaisser",
+      notes: editingScheduleItemForm.notes || ""
+    };
+    const { error } = await supabase.from("client_payment_schedule_items").update(payload).eq("id", editingScheduleItemId);
+    setSaving(false);
+    if (error) { if (!setupWarning(error)) alert(error.message); return; }
+    setEditingScheduleItemId("");
+    setEditingScheduleItemForm(emptyScheduleItem);
+    await refreshAll();
+  }
+
+  async function duplicateScheduleItem(item: any) {
+    if (!selectedScheduleId) return;
+    const payload = {
+      schedule_id: selectedScheduleId,
+      position: scheduleItems.length + 1,
+      label: `${item.label || "Échéance"} - copie`,
+      percentage: Number(item.percentage || 0),
+      amount_ttc: Number(item.amount_ttc || 0),
+      due_date: item.due_date || null,
+      due_text: item.due_text || "",
+      status: item.status || "a_encaisser",
+      notes: item.notes || ""
+    };
+    setSaving(true);
+    const { error } = await supabase.from("client_payment_schedule_items").insert(payload);
+    setSaving(false);
+    if (error) { if (!setupWarning(error)) alert(error.message); return; }
+    await refreshAll();
+  }
+
   async function deleteScheduleItem(id: string) {
     if (!confirm("Supprimer cette échéance ?")) return;
     const { error } = await supabase.from("client_payment_schedule_items").delete().eq("id", id);
     if (error) return alert(error.message);
+    if (editingScheduleItemId === id) {
+      setEditingScheduleItemId("");
+      setEditingScheduleItemForm(emptyScheduleItem);
+    }
     await refreshAll();
   }
 
@@ -794,7 +857,8 @@ function ClientSpecs({ specs, items, paymentTerms = [], paymentSchedules = [], p
             </Card>
             <Card className="border-l-8 border-orange-400"><h3 className="text-xl font-black">Modifier le planning</h3><form onSubmit={updateSchedule} className="mt-4 grid gap-3 md:grid-cols-2"><Field label="Titre"><Input required value={editScheduleForm.title} onChange={(e: any) => setEditScheduleForm({ ...editScheduleForm, title: e.target.value })} /></Field><Field label="Client"><Input value={editScheduleForm.client_name} onChange={(e: any) => setEditScheduleForm({ ...editScheduleForm, client_name: e.target.value })} /></Field><Field label="Chantier lié"><Select value={editScheduleForm.project_id} onChange={(e: any) => setEditScheduleForm({ ...editScheduleForm, project_id: e.target.value })}><option value="">Aucun</option>{projects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field><Field label="Montant devis TTC"><Input type="number" step="0.01" value={editScheduleForm.amount_ttc} onChange={(e: any) => setEditScheduleForm({ ...editScheduleForm, amount_ttc: e.target.value })} /></Field><Field label="Adresse"><Input value={editScheduleForm.address} onChange={(e: any) => setEditScheduleForm({ ...editScheduleForm, address: e.target.value })} /></Field><Field label="Statut"><Select value={editScheduleForm.status || "brouillon"} onChange={(e: any) => setEditScheduleForm({ ...editScheduleForm, status: e.target.value })}><option value="brouillon">Brouillon</option><option value="valide">Validé</option><option value="signe">Signé</option></Select></Field><Field label="Conditions générales"><Textarea value={editScheduleForm.notes} onChange={(e: any) => setEditScheduleForm({ ...editScheduleForm, notes: e.target.value })} /></Field><div className="md:col-span-2"><Button disabled={saving} variant="amber">Enregistrer</Button></div></form></Card>
             <Card><h3 className="text-xl font-black">Ajouter une échéance</h3><form onSubmit={addScheduleItem} className="mt-4 grid gap-3 md:grid-cols-6"><Field label="Désignation"><Input required value={scheduleItemForm.label} onChange={(e: any) => setScheduleItemForm({ ...scheduleItemForm, label: e.target.value })} placeholder="Acompte commande" /></Field><Field label="%"><Input type="number" step="0.01" value={scheduleItemForm.percentage} onChange={(e: any) => setScheduleItemForm({ ...scheduleItemForm, percentage: e.target.value })} /></Field><Field label="Montant TTC"><Input type="number" step="0.01" value={scheduleItemForm.amount_ttc} onChange={(e: any) => setScheduleItemForm({ ...scheduleItemForm, amount_ttc: e.target.value })} placeholder="Auto si %" /></Field><Field label="Date prévue"><Input type="date" value={scheduleItemForm.due_date} onChange={(e: any) => setScheduleItemForm({ ...scheduleItemForm, due_date: e.target.value })} /></Field><Field label="Échéance texte"><Input value={scheduleItemForm.due_text} onChange={(e: any) => setScheduleItemForm({ ...scheduleItemForm, due_text: e.target.value })} placeholder="À signature" /></Field><Field label="Statut"><Select value={scheduleItemForm.status} onChange={(e: any) => setScheduleItemForm({ ...scheduleItemForm, status: e.target.value })}><option value="a_encaisser">À encaisser</option><option value="encaisse">Encaissé</option><option value="a_relancer">À relancer</option></Select></Field><Field label="Notes"><Input value={scheduleItemForm.notes} onChange={(e: any) => setScheduleItemForm({ ...scheduleItemForm, notes: e.target.value })} /></Field><div className="md:col-span-6"><Button disabled={saving}>+ Ajouter l’échéance</Button></div></form></Card>
-            <Card><h3 className="mb-4 text-xl font-black">Échéancier client</h3><div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left text-xs uppercase text-slate-500"><th className="p-3">Désignation</th><th className="p-3">Échéance</th><th className="p-3 text-right">%</th><th className="p-3 text-right">Montant TTC</th><th className="p-3">Statut</th><th className="p-3 text-right">Action</th></tr></thead><tbody>{scheduleItems.map((i: any) => <tr key={i.id} className="border-b"><td className="p-3 font-bold">{i.label}</td><td className="p-3">{i.due_date ? formatDisplayDate(i.due_date) : (i.due_text || "—")}</td><td className="p-3 text-right">{Number(i.percentage || 0)}%</td><td className="p-3 text-right font-black">{money(i.amount_ttc || 0)}</td><td className="p-3"><Badge tone={i.status === "encaisse" ? "green" : i.status === "a_relancer" ? "amber" : "blue"}>{i.status === "encaisse" ? "Encaissé" : i.status === "a_relancer" ? "À relancer" : "À encaisser"}</Badge></td><td className="p-3 text-right"><Button type="button" variant="danger" onClick={() => deleteScheduleItem(i.id)}>Suppr.</Button></td></tr>)}{scheduleItems.length === 0 && <tr><td colSpan={6} className="p-8 text-center text-slate-500">Aucune échéance.</td></tr>}</tbody></table></div></Card>
+            {editingScheduleItemId && <Card className="border-l-8 border-orange-400"><h3 className="text-xl font-black">Modifier l’échéance</h3><form onSubmit={updateScheduleItem} className="mt-4 grid gap-3 md:grid-cols-6"><Field label="Désignation"><Input required value={editingScheduleItemForm.label} onChange={(e: any) => setEditingScheduleItemForm({ ...editingScheduleItemForm, label: e.target.value })} /></Field><Field label="%"><Input type="number" step="0.01" value={editingScheduleItemForm.percentage} onChange={(e: any) => setEditingScheduleItemForm({ ...editingScheduleItemForm, percentage: e.target.value })} /></Field><Field label="Montant TTC"><Input type="number" step="0.01" value={editingScheduleItemForm.amount_ttc} onChange={(e: any) => setEditingScheduleItemForm({ ...editingScheduleItemForm, amount_ttc: e.target.value })} placeholder="Auto si %" /></Field><Field label="Date prévue"><Input type="date" value={editingScheduleItemForm.due_date} onChange={(e: any) => setEditingScheduleItemForm({ ...editingScheduleItemForm, due_date: e.target.value })} /></Field><Field label="Échéance texte"><Input value={editingScheduleItemForm.due_text} onChange={(e: any) => setEditingScheduleItemForm({ ...editingScheduleItemForm, due_text: e.target.value })} placeholder="À signature" /></Field><Field label="Statut"><Select value={editingScheduleItemForm.status} onChange={(e: any) => setEditingScheduleItemForm({ ...editingScheduleItemForm, status: e.target.value })}><option value="a_encaisser">À encaisser</option><option value="encaisse">Encaissé</option><option value="a_relancer">À relancer</option></Select></Field><Field label="Notes"><Input value={editingScheduleItemForm.notes} onChange={(e: any) => setEditingScheduleItemForm({ ...editingScheduleItemForm, notes: e.target.value })} /></Field><div className="md:col-span-6 flex flex-wrap gap-2"><Button disabled={saving} variant="amber"><Pencil size={16} className="mr-2 inline"/> Enregistrer la modification</Button><Button type="button" variant="secondary" onClick={() => { setEditingScheduleItemId(""); setEditingScheduleItemForm(emptyScheduleItem); }}>Annuler</Button></div></form></Card>}
+            <Card><h3 className="mb-4 text-xl font-black">Échéancier client</h3><div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left text-xs uppercase text-slate-500"><th className="p-3">Désignation</th><th className="p-3">Échéance</th><th className="p-3 text-right">%</th><th className="p-3 text-right">Montant TTC</th><th className="p-3">Statut</th><th className="p-3 text-right">Action</th></tr></thead><tbody>{scheduleItems.map((i: any) => <tr key={i.id} className="border-b"><td className="p-3 font-bold">{i.label}</td><td className="p-3">{i.due_date ? formatDisplayDate(i.due_date) : (i.due_text || "—")}</td><td className="p-3 text-right">{Number(i.percentage || 0)}%</td><td className="p-3 text-right font-black">{money(i.amount_ttc || 0)}</td><td className="p-3"><Badge tone={i.status === "encaisse" ? "green" : i.status === "a_relancer" ? "amber" : "blue"}>{i.status === "encaisse" ? "Encaissé" : i.status === "a_relancer" ? "À relancer" : "À encaisser"}</Badge></td><td className="p-3 text-right"><div className="flex flex-wrap justify-end gap-2"><button type="button" onClick={() => duplicateScheduleItem(i)} className="inline-flex items-center gap-1 rounded-xl px-3 py-2 text-sm font-black text-blue-600 hover:bg-blue-50"><Copy size={17}/> Dupliquer</button><button type="button" onClick={() => startEditScheduleItem(i)} className="inline-flex items-center gap-1 rounded-xl px-3 py-2 text-sm font-black text-orange-500 hover:bg-orange-50"><Pencil size={17}/> Modifier</button><button type="button" onClick={() => deleteScheduleItem(i.id)} className="inline-flex items-center gap-1 rounded-xl px-3 py-2 text-sm font-black text-red-600 hover:bg-red-50"><Trash2 size={17}/> Supprimer</button></div></td></tr>)}{scheduleItems.length === 0 && <tr><td colSpan={6} className="p-8 text-center text-slate-500">Aucune échéance.</td></tr>}</tbody><tfoot>{scheduleItems.length > 0 && <tr className="font-black"><td className="p-3 text-slate-500" colSpan={2}>Total</td><td className="p-3 text-right">{scheduleItems.reduce((sum: number, i: any) => sum + Number(i.percentage || 0), 0)}%</td><td className="p-3 text-right">{money(scheduleItemsTotal)} TTC</td><td className="p-3" colSpan={2}></td></tr>}</tfoot></table></div>{scheduleItems.length > 0 && <div className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-700">Le total des échéances est de {scheduleItems.reduce((sum: number, i: any) => sum + Number(i.percentage || 0), 0)}%. Le solde restant sera facturé à la fin des prestations.</div>}</Card>
           </> : <Card><p className="text-sm text-slate-500">Crée ou sélectionne un planning de règlement pour commencer.</p></Card>}
         </div>
       </div>
