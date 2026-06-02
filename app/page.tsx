@@ -19,7 +19,8 @@ const menu = [
   { id: "vehicles", title: "Véhicules", icon: Truck },
   { id: "requests", title: "Demandes internes", icon: ClipboardList },
   { id: "mobile", title: "Photos Express", icon: ImageIcon },
-  { id: "management", title: "Gestion", icon: Euro }
+  { id: "management", title: "Gestion", icon: Euro },
+  { id: "settings", title: "Paramètres", icon: Wrench }
 ];
 
 const statusLabels: any = { preparation: "À préparer", en_cours: "En cours", termine: "Terminé", archive: "Archivé" };
@@ -384,6 +385,7 @@ export default function Page() {
           {active === "requests" && userRole === "admin" && <Requests requests={requests} projects={projects} employees={employees} refreshAll={refreshAll} projectName={projectName} />}
           {active === "mobile" && userRole === "admin" && <Mobile projects={projects} refreshAll={refreshAll} />}
           {active === "management" && userRole === "admin" && <Management projects={projects} photos={photos} docs={docs} notes={notes} materials={materials} vigilance={vigilance} employees={employees} planning={planning} invoices={invoices} revenues={revenues} returns={returns} companyExpenses={companyExpenses} clientPayments={clientPayments} quoteCalculations={quoteCalculations} refreshAll={refreshAll} />}
+          {active === "settings" && userRole === "admin" && <AccessSettings session={session} />}
         </section>
       </main>
     </div>
@@ -4304,6 +4306,95 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
     <Card className="bg-slate-50"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-lg font-black">Chantiers archivés</h3><p className="text-sm text-slate-500">Les chantiers archivés ne sont plus visibles dans Chantiers actifs ni dans Gestion. Leurs factures, retours et documents restent consultables ici.</p></div><Button variant="secondary" onClick={() => setTab("archives")}>Accéder aux archives chantiers</Button></div>{tab === "archives" && <div className="mt-4 grid gap-4">{archivedProjects.map((p: any) => { const s = projectStats(p.id, false); return <div key={p.id} className="rounded-2xl border bg-white p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><Badge tone="slate">Archivé</Badge><h4 className="mt-2 text-xl font-black">{p.name}</h4><p className="text-sm text-slate-500">{p.client || "Client non renseigné"}</p></div><Button variant="green" onClick={() => archiveProject(p, false)}>Réactiver</Button></div><div className="mt-3 grid gap-3 md:grid-cols-4"><div><b>CA HT</b><br />{money(s.revenueTotal)}</div><div><b>Achats HT</b><br />{money(s.supplierTotal)}</div><div><b>Marge</b><br />{money(s.margin)}</div><div><b>TVA</b><br />{money(Math.abs(s.tvaBalance))}</div></div></div>; })}{archivedProjects.length === 0 && <p className="text-sm text-slate-500">Aucun chantier archivé.</p>}</div>}</Card>
   </div>;
 
+}
+
+
+function AccessSettings({ session }: any) {
+  const [managementCurrent, setManagementCurrent] = useState("");
+  const [managementNew, setManagementNew] = useState("");
+  const [managementConfirm, setManagementConfirm] = useState("");
+  const [employeesCurrent, setEmployeesCurrent] = useState("");
+  const [employeesNew, setEmployeesNew] = useState("");
+  const [employeesConfirm, setEmployeesConfirm] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  function resetPins() {
+    setManagementCurrent(""); setManagementNew(""); setManagementConfirm("");
+    setEmployeesCurrent(""); setEmployeesNew(""); setEmployeesConfirm("");
+  }
+
+  function savePin(key: string, label: string, currentCode: string, newCode: string, confirmCode: string) {
+    const stored = localStorage.getItem(key) || "1234";
+    if (currentCode !== stored) return alert(`Code actuel ${label} incorrect.`);
+    if (!newCode || newCode.length < 4) return alert("Le nouveau code doit contenir au moins 4 caractères.");
+    if (newCode !== confirmCode) return alert("La confirmation ne correspond pas au nouveau code.");
+    localStorage.setItem(key, newCode);
+    resetPins();
+    alert(`Code d'accès ${label} modifié.`);
+  }
+
+  async function changePassword(e: any) {
+    e.preventDefault();
+    if (!newPassword || newPassword.length < 6) return alert("Le nouveau mot de passe doit contenir au moins 6 caractères.");
+    if (newPassword !== confirmPassword) return alert("La confirmation ne correspond pas au nouveau mot de passe.");
+    setSaving(true);
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    setSaving(false);
+    if (error) return alert(error.message);
+    setNewPassword("");
+    setConfirmPassword("");
+    alert("Mot de passe de connexion modifié.");
+  }
+
+  return <div className="space-y-5">
+    <Section title="Paramètres d'accès" subtitle="Modifier les codes d'accès internes et le mot de passe de connexion." />
+
+    <Card className="border-l-4 border-slate-900">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-xl font-black">Mot de passe de connexion</h3>
+          <p className="text-sm text-slate-500">Compte connecté : {session?.user?.email || "Utilisateur"}</p>
+        </div>
+        <Badge tone="blue">Sécurité</Badge>
+      </div>
+      <form onSubmit={changePassword} className="mt-4 grid gap-3 md:grid-cols-3">
+        <Field label="Nouveau mot de passe"><Input type="password" value={newPassword} onChange={(e: any) => setNewPassword(e.target.value)} placeholder="Minimum 6 caractères" /></Field>
+        <Field label="Confirmer"><Input type="password" value={confirmPassword} onChange={(e: any) => setConfirmPassword(e.target.value)} /></Field>
+        <div className="flex items-end"><Button disabled={saving} className="w-full">{saving ? "Modification..." : "Modifier le mot de passe"}</Button></div>
+      </form>
+    </Card>
+
+    <div className="grid gap-5 xl:grid-cols-2">
+      <Card>
+        <h3 className="text-xl font-black">Code d'accès Gestion</h3>
+        <p className="mt-1 text-sm text-slate-500">Ce code protège l'accès au module Gestion.</p>
+        <div className="mt-4 grid gap-3">
+          <Field label="Code actuel"><Input type="password" value={managementCurrent} onChange={(e: any) => setManagementCurrent(e.target.value)} placeholder="Code actuel" /></Field>
+          <Field label="Nouveau code"><Input type="password" value={managementNew} onChange={(e: any) => setManagementNew(e.target.value)} placeholder="Nouveau code" /></Field>
+          <Field label="Confirmer le nouveau code"><Input type="password" value={managementConfirm} onChange={(e: any) => setManagementConfirm(e.target.value)} /></Field>
+          <Button onClick={() => savePin("asb_pin_management", "Gestion", managementCurrent, managementNew, managementConfirm)}>Enregistrer le code Gestion</Button>
+        </div>
+      </Card>
+
+      <Card>
+        <h3 className="text-xl font-black">Code d'accès Salariés</h3>
+        <p className="mt-1 text-sm text-slate-500">Ce code protège l'accès au module Salariés.</p>
+        <div className="mt-4 grid gap-3">
+          <Field label="Code actuel"><Input type="password" value={employeesCurrent} onChange={(e: any) => setEmployeesCurrent(e.target.value)} placeholder="Code actuel" /></Field>
+          <Field label="Nouveau code"><Input type="password" value={employeesNew} onChange={(e: any) => setEmployeesNew(e.target.value)} placeholder="Nouveau code" /></Field>
+          <Field label="Confirmer le nouveau code"><Input type="password" value={employeesConfirm} onChange={(e: any) => setEmployeesConfirm(e.target.value)} /></Field>
+          <Button onClick={() => savePin("asb_pin_employees", "Salariés", employeesCurrent, employeesNew, employeesConfirm)}>Enregistrer le code Salariés</Button>
+        </div>
+      </Card>
+    </div>
+
+    <Card className="bg-amber-50">
+      <h3 className="font-black text-amber-900">Information importante</h3>
+      <p className="mt-1 text-sm text-amber-900">Les codes internes Gestion/Salariés sont enregistrés sur le navigateur utilisé. Le mot de passe de connexion, lui, est modifié dans Supabase Auth.</p>
+    </Card>
+  </div>;
 }
 
 function Mobile({ projects, refreshAll }: any) {
