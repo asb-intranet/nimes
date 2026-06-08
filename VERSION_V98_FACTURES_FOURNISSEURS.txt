@@ -1,0 +1,5 @@
+ASB Intranet V98
+- Planning hebdomadaire : les salariés archivés sont masqués visuellement, sans supprimer les anciennes données.
+- Calcul rentabilité : ajout génération PDF.
+- Gestion : nouveau module indépendant Factures fournisseurs / encours fournisseurs avec ajout, modification, suppression, duplication et export PDF.
+- SQL à lancer : supabase/schema-v98-factures-fournisseurs.sql

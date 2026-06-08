@@ -167,6 +167,7 @@ export default function Page() {
   const [earthworkReturns, setEarthworkReturns] = useState<any[]>([]);
   const [companyExpenses, setCompanyExpenses] = useState<any[]>([]);
   const [clientPayments, setClientPayments] = useState<any[]>([]);
+  const [supplierInvoices, setSupplierInvoices] = useState<any[]>([]);
   const [quoteCalculations, setQuoteCalculations] = useState<any[]>([]);
   const [clientSpecs, setClientSpecs] = useState<any[]>([]);
   const [clientSpecItems, setClientSpecItems] = useState<any[]>([]);
@@ -193,7 +194,7 @@ export default function Page() {
   }, []);
 
   async function refreshAll() {
-    const [p, ph, d, e, l, n, v, r, pl, mat, vig, inv, rev, ret, ew, ewph, ewd, ewn, ewm, ewv, ewp, ewr, ewi, ewrev, ewret, ce, cp, qc, cs, csi, csp, cps, cpsi] = await Promise.all([
+    const [p, ph, d, e, l, n, v, r, pl, mat, vig, inv, rev, ret, ew, ewph, ewd, ewn, ewm, ewv, ewp, ewr, ewi, ewrev, ewret, ce, cp, si, qc, cs, csi, csp, cps, cpsi] = await Promise.all([
       supabase.from("projects").select("*").order("created_at", { ascending: false }),
       supabase.from("chantier_photos").select("*").order("created_at", { ascending: false }),
       supabase.from("chantier_documents").select("*").order("created_at", { ascending: false }),
@@ -221,6 +222,7 @@ export default function Page() {
       supabase.from("earthwork_returns").select("*").order("return_date", { ascending: false }),
       supabase.from("company_expenses").select("*").order("expense_date", { ascending: false }),
       supabase.from("client_payments").select("*").order("payment_date", { ascending: false }),
+      supabase.from("supplier_invoices").select("*").order("invoice_date", { ascending: false }),
       supabase.from("quote_calculations").select("*").order("updated_at", { ascending: false }),
       supabase.from("client_specs").select("*").order("created_at", { ascending: false }),
       supabase.from("client_spec_items").select("*").order("position", { ascending: true }),
@@ -229,7 +231,7 @@ export default function Page() {
       supabase.from("client_payment_schedule_items").select("*").order("position", { ascending: true })
     ]);
 
-    const errors = [p, ph, d, e, l, n, v, r, pl, mat, vig, inv, rev, ret, ew, ewph, ewd, ewn, ewm, ewv, ewp, ewr, ewi, ewrev, ewret, ce, cp].filter((x: any) => x?.error).map((x: any) => x.error.message);
+    const errors = [p, ph, d, e, l, n, v, r, pl, mat, vig, inv, rev, ret, ew, ewph, ewd, ewn, ewm, ewv, ewp, ewr, ewi, ewrev, ewret, ce, cp, si].filter((x: any) => x?.error).map((x: any) => x.error.message);
     setDataWarning(errors.length ? errors.join(" | ") : "");
 
     setProjects(p.data || []);
@@ -259,6 +261,7 @@ export default function Page() {
     setEarthworkReturns(ewret.data || []);
     setCompanyExpenses(ce.data || []);
     setClientPayments(cp.data || []);
+    setSupplierInvoices(si.data || []);
     setQuoteCalculations(qc.data || []);
     setClientSpecs(cs.data || []);
     setClientSpecItems(csi.data || []);
@@ -384,7 +387,7 @@ export default function Page() {
           {active === "vehicles" && userRole === "admin" && <Vehicles vehicles={vehicles} refreshAll={refreshAll} />}
           {active === "requests" && userRole === "admin" && <Requests requests={requests} projects={projects} employees={employees} refreshAll={refreshAll} projectName={projectName} />}
           {active === "mobile" && userRole === "admin" && <Mobile projects={projects} refreshAll={refreshAll} />}
-          {active === "management" && userRole === "admin" && <Management projects={projects} photos={photos} docs={docs} notes={notes} materials={materials} vigilance={vigilance} employees={employees} planning={planning} invoices={invoices} revenues={revenues} returns={returns} companyExpenses={companyExpenses} clientPayments={clientPayments} quoteCalculations={quoteCalculations} refreshAll={refreshAll} />}
+          {active === "management" && userRole === "admin" && <Management projects={projects} photos={photos} docs={docs} notes={notes} materials={materials} vigilance={vigilance} employees={employees} planning={planning} invoices={invoices} revenues={revenues} returns={returns} companyExpenses={companyExpenses} clientPayments={clientPayments} supplierInvoices={supplierInvoices} quoteCalculations={quoteCalculations} refreshAll={refreshAll} />}
           {active === "settings" && userRole === "admin" && <AccessSettings session={session} />}
         </section>
       </main>
@@ -1914,6 +1917,7 @@ function Planning({ projects, employees, links, planning, requests = [], refresh
     : [];
 
   const orderedEmployees = [...employees]
+    .filter((e: any) => e.active !== false && e.archived !== true)
     .filter((e: any) => employeeFilter === "all" || e.id === employeeFilter)
     .sort((a: any, b: any) => `${a.firstname} ${a.lastname}`.localeCompare(`${b.firstname} ${b.lastname}`));
 
@@ -2222,7 +2226,7 @@ function Planning({ projects, employees, links, planning, requests = [], refresh
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="grid flex-1 gap-3 md:grid-cols-2">
             <Field label="Recherche chantier"><Input value={search} onChange={(e: any) => setSearch(e.target.value)} placeholder="Nom chantier, client, adresse..." /></Field>
-            <Field label="Salarié"><Select value={employeeFilter} onChange={(e: any) => setEmployeeFilter(e.target.value)}><option value="all">Tous les salariés</option>{employees.map((e: any) => <option key={e.id} value={e.id}>{e.firstname} {e.lastname}</option>)}</Select></Field>
+            <Field label="Salarié"><Select value={employeeFilter} onChange={(e: any) => setEmployeeFilter(e.target.value)}><option value="all">Tous les salariés actifs</option>{activeEmployees.map((e: any) => <option key={e.id} value={e.id}>{e.firstname} {e.lastname}</option>)}</Select></Field>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="secondary" onClick={() => setCursor(addDays(cursor, -7))}>← Semaine</Button>
@@ -3588,7 +3592,7 @@ function Storekeeper({ projects, materials, invoices = [], returns = [], refresh
 }
 
 
-function Management({ projects, photos = [], docs = [], notes = [], materials = [], vigilance = [], employees, planning, invoices, revenues, returns = [], companyExpenses = [], clientPayments = [], quoteCalculations = [], refreshAll }: any) {
+function Management({ projects, photos = [], docs = [], notes = [], materials = [], vigilance = [], employees, planning, invoices, revenues, returns = [], companyExpenses = [], clientPayments = [], supplierInvoices = [], quoteCalculations = [], refreshAll }: any) {
   const [tab, setTab] = useState("pilotage");
   const [projectSearch, setProjectSearch] = useState("");
   const [selectedProjectFilter, setSelectedProjectFilter] = useState("");
@@ -3730,6 +3734,94 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
   const activeInvoices = invoices.filter((i: any) => activeProjectIds.has(i.project_id));
   const periodActiveInvoices = activeInvoices.filter((i: any) => inPeriod(i.invoice_date || i.created_at));
   const purchaseSummary = { count: periodActiveInvoices.length, ht: periodActiveInvoices.reduce((s: number, i: any) => s + amountHT(i), 0), tva: periodActiveInvoices.reduce((s: number, i: any) => s + amountTVA(i), 0), ttc: periodActiveInvoices.reduce((s: number, i: any) => s + amountTTC(i), 0) };
+
+  const periodSupplierInvoices = supplierInvoices.filter((i: any) => inPeriod(i.invoice_date || i.created_at));
+  const supplierTotalHT = periodSupplierInvoices.reduce((s: number, i: any) => s + amountHT(i), 0);
+  const supplierTotalTVA = periodSupplierInvoices.reduce((s: number, i: any) => s + amountTVA(i), 0);
+  const supplierTotalTTC = periodSupplierInvoices.reduce((s: number, i: any) => s + amountTTC(i), 0);
+  const supplierPaidTTC = periodSupplierInvoices.reduce((s: number, i: any) => s + Number(i.paid_ttc || 0), 0);
+  const supplierOutstandingTTC = Math.max(0, supplierTotalTTC - supplierPaidTTC);
+  const [editingSupplierInvoiceId, setEditingSupplierInvoiceId] = useState<string | null>(null);
+  const [supplierInvoiceForm, setSupplierInvoiceForm] = useState({ supplier: "", invoice_number: "", project_id: "", category: "matériaux", invoice_date: formatDate(new Date()), due_date: "", amount: "", tva_rate: "20", paid_ttc: "0", status: "En attente", notes: "" });
+
+  function resetSupplierInvoiceForm() {
+    setEditingSupplierInvoiceId(null);
+    setSupplierInvoiceForm({ supplier: "", invoice_number: "", project_id: "", category: "matériaux", invoice_date: formatDate(new Date()), due_date: "", amount: "", tva_rate: "20", paid_ttc: "0", status: "En attente", notes: "" });
+  }
+
+  function editSupplierInvoice(inv: any) {
+    setEditingSupplierInvoiceId(inv.id);
+    setSupplierInvoiceForm({
+      supplier: inv.supplier || "",
+      invoice_number: inv.invoice_number || "",
+      project_id: inv.project_id || "",
+      category: inv.category || "matériaux",
+      invoice_date: inv.invoice_date || formatDate(new Date()),
+      due_date: inv.due_date || "",
+      amount: String(amountHT(inv) || ""),
+      tva_rate: String(inv.tva_rate ?? 20),
+      paid_ttc: String(inv.paid_ttc ?? 0),
+      status: inv.status || "En attente",
+      notes: inv.notes || ""
+    });
+    setTab("supplier-invoices");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function saveSupplierInvoice(e: any) {
+    e.preventDefault();
+    if (!supplierInvoiceForm.supplier || !supplierInvoiceForm.amount || !supplierInvoiceForm.invoice_date) return alert("Fournisseur, montant HT et date de facture obligatoires.");
+    const tax = taxPayload(supplierInvoiceForm.amount, supplierInvoiceForm.tva_rate);
+    const payload = {
+      supplier: supplierInvoiceForm.supplier,
+      invoice_number: supplierInvoiceForm.invoice_number || null,
+      project_id: supplierInvoiceForm.project_id || null,
+      category: supplierInvoiceForm.category || "matériaux",
+      invoice_date: supplierInvoiceForm.invoice_date || null,
+      due_date: supplierInvoiceForm.due_date || null,
+      ...tax,
+      paid_ttc: Number(supplierInvoiceForm.paid_ttc || 0),
+      status: supplierInvoiceForm.status || "En attente",
+      notes: supplierInvoiceForm.notes || ""
+    };
+    const q = editingSupplierInvoiceId ? supabase.from("supplier_invoices").update(payload).eq("id", editingSupplierInvoiceId) : supabase.from("supplier_invoices").insert(payload);
+    const { error } = await q;
+    if (error) return alert("Facture fournisseur impossible : " + error.message + "\n\nLance le script Supabase V98 si besoin.");
+    resetSupplierInvoiceForm();
+    await refreshAll();
+  }
+
+  async function deleteSupplierInvoice(inv: any) {
+    if (!confirm(`Supprimer la facture fournisseur ${inv.invoice_number || inv.supplier || ""} ?`)) return;
+    const { error } = await supabase.from("supplier_invoices").delete().eq("id", inv.id);
+    if (error) return alert(error.message);
+    await refreshAll();
+  }
+
+  function duplicateSupplierInvoice(inv: any) {
+    setEditingSupplierInvoiceId(null);
+    setSupplierInvoiceForm({
+      supplier: inv.supplier || "",
+      invoice_number: inv.invoice_number ? `${inv.invoice_number}-copie` : "",
+      project_id: inv.project_id || "",
+      category: inv.category || "matériaux",
+      invoice_date: formatDate(new Date()),
+      due_date: inv.due_date || "",
+      amount: String(amountHT(inv) || ""),
+      tva_rate: String(inv.tva_rate ?? 20),
+      paid_ttc: "0",
+      status: "En attente",
+      notes: inv.notes || ""
+    });
+    setTab("supplier-invoices");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function generateSupplierInvoicesPdf() {
+    const rows = periodSupplierInvoices.map((i: any) => `<tr><td>${i.invoice_number || "—"}</td><td><b>${i.supplier || ""}</b></td><td>${projectLabel(i.project_id)}</td><td>${formatDisplayDate(i.invoice_date)}</td><td>${formatDisplayDate(i.due_date)}</td><td class="num">${money(amountTTC(i))}</td><td class="num">${money(Number(i.paid_ttc || 0))}</td><td class="num">${money(Math.max(0, amountTTC(i) - Number(i.paid_ttc || 0)))}</td><td>${i.status || ""}</td></tr>`).join("");
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Factures fournisseurs ASB</title><style>body{font-family:Arial,sans-serif;color:#0f172a;padding:32px}.head{display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid #0f172a;padding-bottom:16px}.logo{height:58px}.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:24px 0}.kpi{border:1px solid #e2e8f0;border-radius:16px;padding:14px;background:#f8fafc}.kpi b{font-size:18px}table{width:100%;border-collapse:collapse;font-size:12px}th{background:#0f172a;color:white;text-align:left;padding:10px}td{border-bottom:1px solid #e2e8f0;padding:9px}.num{text-align:right;font-weight:bold}.note{margin-top:24px;color:#64748b;font-size:11px}</style></head><body><div class="head"><div><h1>Factures fournisseurs</h1><p>Période : ${periodLabel}</p></div><img class="logo" src="/logo-asb.png" /></div><div class="kpis"><div class="kpi">Total HT<br><b>${money(supplierTotalHT)}</b></div><div class="kpi">TVA<br><b>${money(supplierTotalTVA)}</b></div><div class="kpi">Total TTC<br><b>${money(supplierTotalTTC)}</b></div><div class="kpi">Encours<br><b>${money(supplierOutstandingTTC)}</b></div></div><table><thead><tr><th>N°</th><th>Fournisseur</th><th>Chantier</th><th>Date</th><th>Échéance</th><th>TTC</th><th>Réglé</th><th>Encours</th><th>Statut</th></tr></thead><tbody>${rows || `<tr><td colspan="9">Aucune facture fournisseur.</td></tr>`}</tbody></table><p class="note">Document interne ASB — suivi des encours fournisseurs indépendant des règlements clients.</p><script>window.print()</script></body></html>`;
+    const w = window.open("", "_blank"); if (w) { w.document.write(html); w.document.close(); }
+  }
 
   function resetPurchaseInvoiceForm() {
     setEditingPurchaseInvoiceId(null);
@@ -4069,6 +4161,19 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
     </div>;
   }
 
+  if (tab === "supplier-invoices") {
+    const statusTone = (st: string) => st === "Réglée" ? "green" : st === "Partiellement réglée" ? "amber" : "blue";
+    return <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div><h1 className="text-3xl font-black text-slate-900">Factures fournisseurs</h1><p className="text-sm text-slate-500">Module indépendant : ajout, modification, suppression et suivi des encours fournisseurs.</p></div>
+        <div className="flex gap-2"><Button variant="secondary" onClick={generateSupplierInvoicesPdf}>Exporter PDF</Button><Button variant="secondary" onClick={() => setTab("pilotage")}>← Retour Gestion</Button></div>
+      </div>
+      <div className="grid gap-4 md:grid-cols-5"><Card><p className="text-xs font-black uppercase text-slate-500">Factures</p><p className="mt-2 text-3xl font-black">{periodSupplierInvoices.length}</p></Card><Card><p className="text-xs font-black uppercase text-slate-500">Total HT</p><p className="mt-2 text-2xl font-black">{money(supplierTotalHT)}</p></Card><Card><p className="text-xs font-black uppercase text-slate-500">Total TTC</p><p className="mt-2 text-2xl font-black">{money(supplierTotalTTC)}</p></Card><Card className="border-l-4 border-red-500"><p className="text-xs font-black uppercase text-slate-500">Encours fournisseurs</p><p className="mt-2 text-2xl font-black text-red-600">{money(supplierOutstandingTTC)}</p></Card><Card className="border-l-4 border-emerald-500"><p className="text-xs font-black uppercase text-slate-500">Réglé</p><p className="mt-2 text-2xl font-black text-emerald-700">{money(supplierPaidTTC)}</p></Card></div>
+      <Card><h2 className="mb-4 text-xl font-black">{editingSupplierInvoiceId ? "Modifier la facture fournisseur" : "Ajouter une facture fournisseur"}</h2><form onSubmit={saveSupplierInvoice} className="grid gap-3 md:grid-cols-4"><Field label="Fournisseur *"><Input required value={supplierInvoiceForm.supplier} onChange={(e: any) => setSupplierInvoiceForm({ ...supplierInvoiceForm, supplier: e.target.value })} /></Field><Field label="N° facture"><Input value={supplierInvoiceForm.invoice_number} onChange={(e: any) => setSupplierInvoiceForm({ ...supplierInvoiceForm, invoice_number: e.target.value })} /></Field><Field label="Chantier lié"><Select value={supplierInvoiceForm.project_id} onChange={(e: any) => setSupplierInvoiceForm({ ...supplierInvoiceForm, project_id: e.target.value })}><option value="">Aucun</option>{projects.map((p: any) => <option key={p.id} value={p.id}>{projectLabel(p.id)}</option>)}</Select></Field><Field label="Catégorie"><Input value={supplierInvoiceForm.category} onChange={(e: any) => setSupplierInvoiceForm({ ...supplierInvoiceForm, category: e.target.value })} /></Field><Field label="Date facture *"><Input required type="date" value={supplierInvoiceForm.invoice_date} onChange={(e: any) => setSupplierInvoiceForm({ ...supplierInvoiceForm, invoice_date: e.target.value })} /></Field><Field label="Échéance"><Input type="date" value={supplierInvoiceForm.due_date} onChange={(e: any) => setSupplierInvoiceForm({ ...supplierInvoiceForm, due_date: e.target.value })} /></Field><Field label="Montant HT *"><Input required type="number" step="0.01" value={supplierInvoiceForm.amount} onChange={(e: any) => setSupplierInvoiceForm({ ...supplierInvoiceForm, amount: e.target.value })} /></Field><Field label="TVA"><Select value={supplierInvoiceForm.tva_rate} onChange={(e: any) => setSupplierInvoiceForm({ ...supplierInvoiceForm, tva_rate: e.target.value })}><option value="0">0%</option><option value="5.5">5,5%</option><option value="10">10%</option><option value="20">20%</option></Select></Field><Field label="Déjà réglé TTC"><Input type="number" step="0.01" value={supplierInvoiceForm.paid_ttc} onChange={(e: any) => setSupplierInvoiceForm({ ...supplierInvoiceForm, paid_ttc: e.target.value })} /></Field><Field label="Statut"><Select value={supplierInvoiceForm.status} onChange={(e: any) => setSupplierInvoiceForm({ ...supplierInvoiceForm, status: e.target.value })}><option>En attente</option><option>Partiellement réglée</option><option>Réglée</option></Select></Field><Field label="Notes"><Input value={supplierInvoiceForm.notes} onChange={(e: any) => setSupplierInvoiceForm({ ...supplierInvoiceForm, notes: e.target.value })} /></Field><div className="flex items-end gap-2"><Button>{editingSupplierInvoiceId ? "Modifier" : "+ Ajouter"}</Button><Button type="button" variant="secondary" onClick={resetSupplierInvoiceForm}>Nouveau</Button></div></form></Card>
+      <Card className="overflow-hidden p-0"><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-4">N° facture</th><th className="p-4">Fournisseur</th><th className="p-4">Chantier</th><th className="p-4">Date</th><th className="p-4">Échéance</th><th className="p-4">TTC</th><th className="p-4">Réglé</th><th className="p-4">Encours</th><th className="p-4">Statut</th><th className="p-4 text-right">Actions</th></tr></thead><tbody>{periodSupplierInvoices.map((inv: any) => { const encours = Math.max(0, amountTTC(inv) - Number(inv.paid_ttc || 0)); return <tr key={inv.id} className="border-t"><td className="p-4 font-black">{inv.invoice_number || "—"}</td><td className="p-4">{inv.supplier}</td><td className="p-4">{inv.project_id ? projectLabel(inv.project_id) : "—"}</td><td className="p-4">{formatDisplayDate(inv.invoice_date)}</td><td className="p-4">{formatDisplayDate(inv.due_date)}</td><td className="p-4 font-black">{money(amountTTC(inv))}</td><td className="p-4">{money(Number(inv.paid_ttc || 0))}</td><td className="p-4 font-black text-red-600">{money(encours)}</td><td className="p-4"><Badge tone={statusTone(inv.status)}>{inv.status || "En attente"}</Badge></td><td className="p-4"><div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => duplicateSupplierInvoice(inv)}>Dupliquer</Button><Button variant="amber" onClick={() => editSupplierInvoice(inv)}>Modifier</Button><Button variant="danger" onClick={() => deleteSupplierInvoice(inv)}>Suppr.</Button></div></td></tr>; })}{periodSupplierInvoices.length === 0 && <tr><td colSpan={10} className="p-8 text-center text-slate-500">Aucune facture fournisseur sur la période.</td></tr>}</tbody></table></div></Card>
+    </div>;
+  }
+
   if (tab === "paiements") {
     const visiblePayments = clientPayments;
     const totalPayments = visiblePayments.reduce((s: number, p: any) => s + Number(p.amount_ttc || 0), 0);
@@ -4171,6 +4276,13 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
       alert("Chantier créé depuis le calcul de rentabilité.");
     }
 
+    function generateQuotePdf() {
+      const expenseRows = quoteExpenses.map((x: any) => `<tr><td>${x.label || x.category || "Dépense"}</td><td class="num">${money(Number(x.amount || 0))}</td><td>${x.amount_mode || "HT"}</td><td>${x.tva_rate || 0}%</td></tr>`).join("");
+      const laborRows = quoteLabor.map((x: any) => `<tr><td>${x.label || employeeNameById(x.employee_id)}</td><td class="num">${x.days || 0}</td><td class="num">${money(Number(x.daily_cost || x.employee_daily_cost_snapshot || 0))}</td><td class="num">${money(Number(x.days || 0) * Number(x.daily_cost || x.employee_daily_cost_snapshot || 0))}</td></tr>`).join("");
+      const html = `<!doctype html><html><head><meta charset="utf-8"><title>Calcul rentabilité ASB</title><style>body{font-family:Arial,sans-serif;color:#0f172a;padding:32px}.head{display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid #0f172a;padding-bottom:16px}.logo{height:58px}.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:24px 0}.kpi{border:1px solid #e2e8f0;border-radius:16px;padding:14px;background:#f8fafc}.kpi b{font-size:18px}h2{margin-top:26px}table{width:100%;border-collapse:collapse;font-size:12px;margin-top:10px}th{background:#0f172a;color:white;text-align:left;padding:10px}td{border-bottom:1px solid #e2e8f0;padding:9px}.num{text-align:right;font-weight:bold}.result{border-radius:18px;padding:18px;background:${quoteMargin >= 0 ? '#ecfdf5' : '#fef2f2'};margin-top:22px}.note{margin-top:24px;color:#64748b;font-size:11px}</style></head><body><div class="head"><div><h1>Calcul de rentabilité chantier</h1><p>${quoteForm.project_name || "Devis"} — ${quoteForm.client || "Client non renseigné"}</p><p>Édition : ${formatDisplayDate(formatDate(new Date()))}</p></div><img class="logo" src="/logo-asb.png" /></div><div class="kpis"><div class="kpi">CA HT<br><b>${money(quoteRevenueHT)}</b></div><div class="kpi">Coûts HT<br><b>${money(quoteTotalCosts)}</b></div><div class="kpi">Marge<br><b>${money(quoteMargin)}</b></div><div class="kpi">Rentabilité<br><b>${quoteMarginRate}%</b></div></div><h2>Dépenses prévues</h2><table><thead><tr><th>Désignation</th><th>Montant</th><th>Mode</th><th>TVA</th></tr></thead><tbody>${expenseRows || '<tr><td colspan="4">Aucune dépense.</td></tr>'}</tbody></table><h2>Main d’œuvre prévue</h2><table><thead><tr><th>Désignation</th><th>Jours</th><th>Coût jour</th><th>Total</th></tr></thead><tbody>${laborRows || '<tr><td colspan="4">Aucune main d’œuvre.</td></tr>'}</tbody></table><div class="result"><h2>Résultat</h2><p><b>CA TTC :</b> ${money(quoteTTC)} — <b>TVA nette :</b> ${quoteTvaBalance >= 0 ? 'à reverser ' : 'crédit '}${money(Math.abs(quoteTvaBalance))}</p><p><b>Marge estimée :</b> ${money(quoteMargin)} soit <b>${quoteMarginRate}%</b></p><p><b>Notes :</b> ${quoteForm.notes || "—"}</p></div><p class="note">Document interne ASB — simulation de marge avant devis.</p><script>window.print()</script></body></html>`;
+      const w = window.open("", "_blank"); if (w) { w.document.write(html); w.document.close(); }
+    }
+
     return <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
@@ -4201,7 +4313,7 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
             <Field label="Charges fixes imputées HT"><Input type="number" step="0.01" value={quoteForm.fixed_costs} onChange={(e: any) => setQuoteForm({ ...quoteForm, fixed_costs: e.target.value })} placeholder="0.00" /></Field>
             <Field label="Notes"><Input value={quoteForm.notes} onChange={(e: any) => setQuoteForm({ ...quoteForm, notes: e.target.value })} placeholder="Hypothèses du devis" /></Field>
           </div>
-          <div className="mt-4 flex flex-wrap gap-2"><Button type="button" variant="green" onClick={saveQuoteCalculation}>{editingQuoteCalcId ? "Modifier le calcul" : "Sauvegarder le calcul"}</Button><Button type="button" variant="secondary" onClick={resetQuoteCalculation}>Nouveau calcul</Button><Button type="button" variant="amber" onClick={createProjectFromQuote}>Créer en chantier</Button></div>
+          <div className="mt-4 flex flex-wrap gap-2"><Button type="button" variant="green" onClick={saveQuoteCalculation}>{editingQuoteCalcId ? "Modifier le calcul" : "Sauvegarder le calcul"}</Button><Button type="button" variant="secondary" onClick={resetQuoteCalculation}>Nouveau calcul</Button><Button type="button" variant="amber" onClick={createProjectFromQuote}>Créer en chantier</Button><Button type="button" variant="secondary" onClick={generateQuotePdf}>Générer PDF</Button></div>
         </Card>
 
         <Card className={quoteMargin >= 0 ? "bg-emerald-50" : "bg-red-50"}>
@@ -4300,7 +4412,7 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
       </div>
     </Card>
     <div className="grid gap-4 md:grid-cols-5"><Card className="border-l-4 border-emerald-500"><p className="text-xs font-black uppercase text-slate-500">CA HT</p><p className="mt-2 text-2xl font-black text-emerald-700">{money(allStats.revenue)}</p><p className="text-xs text-slate-500">Factures clients</p></Card><Card className="border-l-4 border-blue-500"><p className="text-xs font-black uppercase text-slate-500">TVA collectée</p><p className="mt-2 text-2xl font-black text-blue-700">{money(allStats.revenueTVA)}</p><p className="text-xs text-slate-500">Sur factures clients</p></Card><Card className="border-l-4 border-red-500"><p className="text-xs font-black uppercase text-slate-500">Dépenses HT</p><p className="mt-2 text-2xl font-black text-red-600">{money(allStats.purchases + expensesHT)}</p><p className="text-xs text-slate-500">Achats + charges</p></Card><Card className="border-l-4 border-blue-500"><p className="text-xs font-black uppercase text-slate-500">Factures clientes en attente de règlement</p><p className="mt-2 text-2xl font-black text-blue-700">{money(clientOutstandingTotal)}</p><p className="text-xs text-slate-500">Total à encaisser</p></Card><Card className={tvaBalanceGlobal >= 0 ? "border-l-4 border-red-500" : "border-l-4 border-emerald-500"}><p className="text-xs font-black uppercase text-slate-500">{tvaBalanceGlobal >= 0 ? "Solde TVA due" : "TVA récupérable"}</p><p className={tvaBalanceGlobal >= 0 ? "mt-2 text-2xl font-black text-red-600" : "mt-2 text-2xl font-black text-emerald-700"}>{money(Math.abs(tvaBalanceGlobal))}</p><p className="text-xs text-slate-500">Collectée - déductible</p></Card></div>
-    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">{actionCard("factures", "📄", "Créer facturation client", "Sur chantiers actifs", "bg-emerald-600")}{actionCard("calcul-rentabilite", "📊", "Calcul rentabilité", "Simulation marge devis", "bg-amber-600")}{actionCard("paiements", "💶", "Règlements clients", "Factures clientes en attente de règlement", "bg-blue-600")}{actionCard("charges", "🏢", "Charges entreprises", "Gérer les charges fixes", "bg-purple-600")}{actionCard("achats", "🧾", "Récapitulatif des factures d’achats", "Voir le détail des achats", "bg-cyan-600")}</div>
+    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">{actionCard("factures", "📄", "Créer facturation client", "Sur chantiers actifs", "bg-emerald-600")}{actionCard("calcul-rentabilite", "📊", "Calcul rentabilité", "Simulation marge devis", "bg-amber-600")}{actionCard("paiements", "💶", "Règlements clients", "Factures clientes en attente de règlement", "bg-blue-600")}{actionCard("charges", "🏢", "Charges entreprises", "Gérer les charges fixes", "bg-purple-600")}{actionCard("supplier-invoices", "🧾", "Factures fournisseurs", "Encours fournisseurs indépendant", "bg-red-600")}{actionCard("achats", "🧾", "Récapitulatif des factures d’achats", "Voir le détail des achats", "bg-cyan-600")}</div>
     <div className="grid gap-5 xl:grid-cols-3"><Card><div className="mb-4 flex flex-wrap items-center justify-between gap-3"><h3 className="text-lg font-black uppercase text-slate-800">Répartition du CA HT</h3><Button variant="secondary" onClick={generateAccountingPdfFromGestion}>Rapport comptable PDF</Button></div><SimplePie values={searchedAccountingProjects.slice(0, 6).map((p: any) => ({ label: `${p.name}${p.status === "archive" ? " · archivé" : ""}`, value: projectStats(p.id, true).revenueTotal }))} /></Card><Card><h3 className="mb-4 text-lg font-black uppercase text-slate-800">Répartition des dépenses HT</h3><SimplePie values={[{ label: "Achats", value: allStats.purchases }, { label: "Main d’œuvre", value: allStats.labor }, { label: "Charges fixes", value: expensesHT }]} /></Card><Card className={globalResultHT >= 0 ? "border-l-4 border-emerald-500" : "border-l-4 border-red-500"}><div className="mb-4 flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-lg font-black uppercase text-slate-800">Résultat global HT</h3><p className="text-xs text-slate-500">CA, achats, MO et charges fixes</p></div><div className={globalResultHT >= 0 ? "rounded-2xl bg-emerald-50 px-4 py-2 text-right" : "rounded-2xl bg-red-50 px-4 py-2 text-right"}><p className="text-xs font-black uppercase text-slate-500">Résultat</p><p className={globalResultHT >= 0 ? "text-2xl font-black text-emerald-700" : "text-2xl font-black text-red-600"}>{money(globalResultHT)}</p><p className={globalResultHT >= 0 ? "text-lg font-black text-emerald-700" : "text-lg font-black text-red-600"}>{globalMarginRate}% de marge</p></div></div><SimplePie values={[{ label: "CA HT", value: allStats.revenue }, { label: "Achats HT", value: allStats.purchases }, { label: "MO", value: allStats.labor }, { label: "Charges fixes", value: expensesHT }]} /></Card></div>
     <div><div className="mb-4 flex flex-wrap items-center justify-between gap-3"><h3 className="text-xl font-black uppercase text-slate-900">Chantiers actifs — rentabilité</h3><Badge tone="blue">{searchedActiveProjects.length} chantier(s)</Badge></div><div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">{searchedActiveProjects.map((p: any) => { const s = projectStats(p.id, false); return <Card key={p.id} className="overflow-hidden p-0"><div className="p-5"><div className="flex items-start justify-between gap-3"><div><h4 className="text-xl font-black text-slate-900">{p.name}</h4><p className="text-sm text-slate-500">{p.client || "Client non renseigné"}</p></div><Badge tone="green">En cours</Badge></div><div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs"><div className="rounded-2xl bg-emerald-50 p-2"><b>CA HT</b><br /><span className="font-black text-emerald-700">{money(s.revenueTotal)}</span></div><div className="rounded-2xl bg-red-50 p-2"><b>Achats HT</b><br /><span className="font-black text-red-700">{money(s.supplierTotal)}</span></div><div className="rounded-2xl bg-blue-50 p-2"><b>MO</b><br /><span className="font-black text-blue-700">{money(s.laborTotal)}</span></div><div className="rounded-2xl bg-slate-50 p-2"><b>Marge</b><br /><span className={s.margin >= 0 ? "font-black text-emerald-700" : "font-black text-red-600"}>{money(s.margin)}</span></div><div className="rounded-2xl bg-purple-50 p-2"><b>TVA</b><br /><span className="font-black text-purple-700">{money(Math.abs(s.tvaBalance))}</span></div><div className={s.marginRate >= 0 ? "rounded-2xl bg-emerald-50 p-2" : "rounded-2xl bg-red-50 p-2"}><b>Rentabilité</b><br /><span className={s.marginRate >= 0 ? "font-black text-emerald-700" : "font-black text-red-600"}>{s.marginRate}%</span></div></div><div className="mt-4 grid grid-cols-3 gap-2"><Button variant="secondary" onClick={() => openProjectFullDetail(p)}>Voir</Button><Button variant="secondary" onClick={() => generateProjectPdfFromGestion(p)}>Rapport PDF</Button><Button variant="amber" onClick={() => archiveProject(p, true)}>Archiver</Button></div></div></Card>; })}{searchedActiveProjects.length === 0 && <Card><p className="text-center text-slate-500">Aucun chantier actif trouvé.</p></Card>}</div></div>
     <Card className="bg-slate-50"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-lg font-black">Chantiers archivés</h3><p className="text-sm text-slate-500">Les chantiers archivés ne sont plus visibles dans Chantiers actifs ni dans Gestion. Leurs factures, retours et documents restent consultables ici.</p></div><Button variant="secondary" onClick={() => setTab("archives")}>Accéder aux archives chantiers</Button></div>{tab === "archives" && <div className="mt-4 grid gap-4">{archivedProjects.map((p: any) => { const s = projectStats(p.id, false); return <div key={p.id} className="rounded-2xl border bg-white p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><Badge tone="slate">Archivé</Badge><h4 className="mt-2 text-xl font-black">{p.name}</h4><p className="text-sm text-slate-500">{p.client || "Client non renseigné"}</p></div><Button variant="green" onClick={() => archiveProject(p, false)}>Réactiver</Button></div><div className="mt-3 grid gap-3 md:grid-cols-4"><div><b>CA HT</b><br />{money(s.revenueTotal)}</div><div><b>Achats HT</b><br />{money(s.supplierTotal)}</div><div><b>Marge</b><br />{money(s.margin)}</div><div><b>TVA</b><br />{money(Math.abs(s.tvaBalance))}</div></div></div>; })}{archivedProjects.length === 0 && <p className="text-sm text-slate-500">Aucun chantier archivé.</p>}</div>}</Card>
