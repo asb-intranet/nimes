@@ -3720,9 +3720,43 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
     a.margin += s.margin;
     return a;
   }, { revenue: 0, revenueTVA: 0, purchases: 0, deductibleTVA: 0, labor: 0, margin: 0 });
-  const activeExpenses = companyExpenses.filter((e: any) => e.active !== false && inPeriod(e.expense_date || e.created_at));
-  const expensesHT = activeExpenses.reduce((s: number, e: any) => s + amountHT(e), 0);
-  const expensesTVA = activeExpenses.reduce((s: number, e: any) => s + amountTVA(e), 0);
+  // V99 : les charges entreprise récurrentes doivent se cumuler sur toute la période filtrée.
+  // Avant, une charge mensuelle n'était comptée qu'une seule fois si sa date tombait dans le filtre.
+  // Exemple : loyer 1 000 €/mois sur une période de 2 mois = 2 000 €.
+  function parseLocalDate(value: string) {
+    const d = dateOnly(value);
+    if (!d) return null;
+    const [y, m, day] = d.split("-").map(Number);
+    return new Date(y, (m || 1) - 1, day || 1);
+  }
+  function monthCountInclusive(startValue: string, endValue: string) {
+    const s = parseLocalDate(startValue);
+    const e = parseLocalDate(endValue);
+    if (!s || !e || s > e) return 0;
+    return (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth()) + 1;
+  }
+  function expenseMultiplier(expense: any) {
+    if (expense.active === false) return 0;
+    const freq = String(expense.frequency || "ponctuelle").toLowerCase();
+    const expenseStart = dateOnly(expense.expense_date || expense.created_at || periodStart);
+    if (!expenseStart) return 0;
+
+    // Une charge ponctuelle reste liée à sa date.
+    if (freq.includes("ponct")) return inPeriod(expenseStart) ? 1 : 0;
+
+    // Les charges récurrentes sont prises à partir de leur date de départ jusqu'à la fin du filtre.
+    if (expenseStart > periodEnd) return 0;
+    const effectiveStart = expenseStart > periodStart ? expenseStart : periodStart;
+
+    if (freq.includes("mens")) return monthCountInclusive(effectiveStart, periodEnd);
+    if (freq.includes("hebdo")) return Math.ceil(daysBetween(effectiveStart, periodEnd) / 7);
+    if (freq.includes("ann")) return monthCountInclusive(effectiveStart, periodEnd) / 12;
+
+    return inPeriod(expenseStart) ? 1 : 0;
+  }
+  const activeExpenses = companyExpenses.filter((e: any) => e.active !== false && expenseMultiplier(e) > 0);
+  const expensesHT = activeExpenses.reduce((s: number, e: any) => s + amountHT(e) * expenseMultiplier(e), 0);
+  const expensesTVA = activeExpenses.reduce((s: number, e: any) => s + amountTVA(e) * expenseMultiplier(e), 0);
   const tvaDeductibleGlobal = allStats.deductibleTVA + expensesTVA;
   const tvaBalanceGlobal = allStats.revenueTVA - tvaDeductibleGlobal;
   const globalResultHT = allStats.revenue - allStats.purchases - allStats.labor - expensesHT;
