@@ -1,0 +1,1 @@
+V108 - Pilotage ouvrages : saisie par journée d abord, salariés ajoutés un par un, ouvrages cochés puis imputés à la journée. Typecheck OK. Build compilation OK.

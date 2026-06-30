@@ -3786,6 +3786,8 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
   const [supplierInvoiceForm, setSupplierInvoiceForm] = useState({ supplier: "", invoice_number: "", project_id: "", category: "matériaux", invoice_date: formatDate(new Date()), due_date: "", amount: "", tva_rate: "20", paid_ttc: "0", status: "En attente", notes: "" });
   const emptyWorkItemForm = { project_id: "", numero: "", designation: "", category: "", quantity: "", unit: "", sold_ht: "", realization_date: formatDate(new Date()), employee_ids: [] as string[], employee_names: "", merchandise_ht: "", subcontract_ht: "", other_costs_ht: "", progress: "100", notes: "" };
   const [workItemForm, setWorkItemForm] = useState<any>(emptyWorkItemForm);
+  const emptyWorkDayForm = { date: formatDate(new Date()), employee_ids: [] as string[], selected_item_ids: [] as string[] };
+  const [workDayForm, setWorkDayForm] = useState<any>(emptyWorkDayForm);
   const [editingWorkItemId, setEditingWorkItemId] = useState<string | null>(null);
   const [workProjectFilter, setWorkProjectFilter] = useState<string>("");
   const [workSearch, setWorkSearch] = useState<string>("");
@@ -4036,6 +4038,48 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
   function removeEmployeeFromWorkItem(employeeId: string) {
     const current = Array.isArray(workItemForm.employee_ids) ? workItemForm.employee_ids : [];
     setWorkItemForm({ ...workItemForm, employee_ids: current.filter((id: string) => id !== employeeId) });
+  }
+  function resetWorkDayForm(keepDate = false) {
+    setWorkDayForm({ ...emptyWorkDayForm, date: keepDate ? workDayForm.date : formatDate(new Date()), employee_ids: [], selected_item_ids: [] });
+  }
+  function addEmployeeToWorkDay(employeeId: string) {
+    if (!employeeId) return;
+    const current = Array.isArray(workDayForm.employee_ids) ? workDayForm.employee_ids : [];
+    if (current.includes(employeeId)) return;
+    setWorkDayForm({ ...workDayForm, employee_ids: [...current, employeeId] });
+  }
+  function removeEmployeeFromWorkDay(employeeId: string) {
+    const current = Array.isArray(workDayForm.employee_ids) ? workDayForm.employee_ids : [];
+    setWorkDayForm({ ...workDayForm, employee_ids: current.filter((id: string) => id !== employeeId) });
+  }
+  function toggleWorkDayItem(itemId: string) {
+    const current = Array.isArray(workDayForm.selected_item_ids) ? workDayForm.selected_item_ids : [];
+    setWorkDayForm({ ...workDayForm, selected_item_ids: current.includes(itemId) ? current.filter((id: string) => id !== itemId) : [...current, itemId] });
+  }
+  function selectAllVisibleWorkDayItems() {
+    const ids = selectedProjectWorkItems.map((x: any) => x.id).filter(Boolean);
+    setWorkDayForm({ ...workDayForm, selected_item_ids: ids });
+  }
+  function clearWorkDayItems() {
+    setWorkDayForm({ ...workDayForm, selected_item_ids: [] });
+  }
+  async function saveWorkDayAssignment(e: any) {
+    e.preventDefault();
+    if (!workProjectFilter) return alert("Ouvre d'abord un chantier.");
+    if (!workDayForm.date) return alert("Date obligatoire.");
+    const selectedIds = Array.isArray(workDayForm.selected_item_ids) ? workDayForm.selected_item_ids : [];
+    if (selectedIds.length === 0) return alert("Sélectionne au moins un ouvrage réalisé sur cette journée.");
+    const employeeIds = Array.isArray(workDayForm.employee_ids) ? workDayForm.employee_ids : [];
+    const payload = {
+      realization_date: workDayForm.date,
+      employee_ids: employeeIds.join(","),
+      employee_names: employeeLabelFromIds(employeeIds) || null,
+      progress: 100
+    };
+    const { error } = await supabase.from("chantier_work_items").update(payload).in("id", selectedIds).eq("project_id", workProjectFilter);
+    if (error) return alert("Imputation de la journée impossible : " + error.message);
+    resetWorkDayForm(true);
+    await refreshAll();
   }
   async function duplicateWorkItem(item: any) {
     const payload = { ...item, id: undefined, created_at: undefined, updated_at: undefined, designation: `${item.designation || "Ouvrage"} - copie`, position: Number(item.position || 0) + 1 };
@@ -4712,29 +4756,64 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
 
     <Card className="border-l-4 border-sky-500">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div><h3 className="text-xl font-black text-slate-900">{editingWorkItemId ? "Modifier un ouvrage" : "Ajouter / renseigner un ouvrage"}</h3><p className="text-sm text-slate-500">Sélectionne une date, les salariés présents, puis renseigne les ouvrages réalisés ce jour-là.</p></div>
-        {editingWorkItemId && <Button type="button" variant="secondary" onClick={resetWorkItemForm}>Annuler modification</Button>}
+        <div>
+          <h3 className="text-xl font-black text-slate-900">Nouvelle journée de réalisation</h3>
+          <p className="text-sm text-slate-500">Saisie rapide : choisis la date, ajoute les salariés présents un par un, puis coche les ouvrages réalisés ce jour-là.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="secondary" onClick={selectAllVisibleWorkDayItems}>Tout sélectionner</Button>
+          <Button type="button" variant="secondary" onClick={clearWorkDayItems}>Vider</Button>
+        </div>
       </div>
+      <form onSubmit={saveWorkDayAssignment} className="space-y-4">
+        <div className="grid gap-4 md:grid-cols-3">
+          <Field label="Date de réalisation"><Input type="date" value={workDayForm.date} onChange={(e: any) => setWorkDayForm({ ...workDayForm, date: e.target.value })} /></Field>
+          <Field label="Ajouter un salarié"><Select value="" onChange={(e: any) => addEmployeeToWorkDay(e.target.value)}><option value="">Choisir un salarié à ajouter</option>{activeEmployees.filter((emp: any) => !(Array.isArray(workDayForm.employee_ids) ? workDayForm.employee_ids : []).includes(emp.id)).map((emp: any) => <option key={emp.id} value={emp.id}>{employeeName(emp)}{emp.daily_cost ? ` — ${money(Number(emp.daily_cost))}/j` : ""}</option>)}</Select></Field>
+          <div className="rounded-2xl bg-slate-50 p-4 text-sm"><b>Résumé journée</b><br />{(Array.isArray(workDayForm.selected_item_ids) ? workDayForm.selected_item_ids : []).length} ouvrage(s) sélectionné(s)<br />{(Array.isArray(workDayForm.employee_ids) ? workDayForm.employee_ids : []).length} salarié(s) présent(s)</div>
+        </div>
+        <div>
+          <p className="mb-2 text-xs font-black uppercase text-slate-500">Salariés présents</p>
+          <div className="flex min-h-[44px] flex-wrap gap-2 rounded-2xl border bg-slate-50 p-3">
+            {(Array.isArray(workDayForm.employee_ids) ? workDayForm.employee_ids : []).map((id: string) => <button key={id} type="button" onClick={() => removeEmployeeFromWorkDay(id)} className="rounded-full bg-blue-100 px-3 py-1 text-xs font-black text-blue-700 hover:bg-red-100 hover:text-red-700">{employeeLabelFromIds([id])} ×</button>)}
+            {(!Array.isArray(workDayForm.employee_ids) || workDayForm.employee_ids.length === 0) && <span className="text-xs font-semibold text-slate-400">Ajoute les salariés présents avec la liste déroulante.</span>}
+          </div>
+        </div>
+        <div className="rounded-2xl border bg-white">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b p-4">
+            <div><h4 className="font-black text-slate-900">Ouvrages réalisés ce jour-là</h4><p className="text-xs text-slate-500">Les lignes importées depuis OBAT restent dans le chantier. Ici tu coches seulement ce qui a été réalisé sur la journée.</p></div>
+            <Field label="Recherche"><Input value={workSearch} onChange={(e: any) => setWorkSearch(e.target.value)} placeholder="Rechercher un ouvrage..." /></Field>
+          </div>
+          <div className="max-h-[460px] overflow-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="sticky top-0 bg-slate-50"><tr className="text-xs uppercase text-slate-500"><th className="p-3">OK</th><th className="p-3">N°</th><th className="p-3">Désignation</th><th className="p-3">Qté</th><th className="p-3">Prix HT</th><th className="p-3">Déjà imputé</th></tr></thead>
+              <tbody>{selectedProjectWorkItems.map((x: any) => { const checked = (Array.isArray(workDayForm.selected_item_ids) ? workDayForm.selected_item_ids : []).includes(x.id); const n = workItemNumbers(x); return <tr key={x.id} onClick={() => toggleWorkDayItem(x.id)} className={checked ? "cursor-pointer border-t bg-sky-50" : "cursor-pointer border-t hover:bg-slate-50"}><td className="p-3"><input type="checkbox" checked={checked} onChange={() => toggleWorkDayItem(x.id)} onClick={(e: any) => e.stopPropagation()} /></td><td className="p-3 font-bold">{x.numero || "-"}</td><td className="p-3"><b>{x.designation}</b><br /><span className="text-xs text-slate-500">{x.category || "Sans catégorie"}</span></td><td className="p-3">{Number(x.quantity || 0)} {x.unit || ""}</td><td className="p-3 font-bold">{money(n.sold)}</td><td className="p-3">{x.realization_date ? formatDisplayDate(x.realization_date) : <span className="text-slate-400">Non</span>}</td></tr>; })}{selectedProjectWorkItems.length === 0 && <tr><td colSpan={6} className="p-6 text-center text-slate-500">Aucun ouvrage dans ce chantier. Importe d'abord un Excel OBAT ou ajoute une ligne dans “Voir / modifier les ouvrages”.</td></tr>}</tbody>
+            </table>
+          </div>
+        </div>
+        <div className="rounded-2xl bg-slate-50 p-4 text-sm">
+          {(() => { const ids = Array.isArray(workDayForm.selected_item_ids) ? workDayForm.selected_item_ids : []; const selected = selectedProjectWorkItems.filter((x: any) => ids.includes(x.id)); const sold = selected.reduce((s: number, x: any) => s + Number(x.sold_ht || 0), 0); const merch = selected.reduce((s: number, x: any) => s + Number(x.merchandise_ht || 0), 0); const sub = selected.reduce((s: number, x: any) => s + Number(x.subcontract_ht || 0), 0); const other = selected.reduce((s: number, x: any) => s + Number(x.other_costs_ht || 0), 0); const labor = (Array.isArray(workDayForm.employee_ids) ? workDayForm.employee_ids : []).reduce((s: number, id: string) => s + employeeDayCost(id), 0); const total = merch + sub + other + labor; const margin = sold - total; const rate = sold > 0 ? Math.round((margin / sold) * 1000) / 10 : 0; return <div className="grid gap-3 md:grid-cols-6"><div><b>Vendu HT</b><br />{money(sold)}</div><div><b>Salariés</b><br />{money(labor)}</div><div><b>Marchandises</b><br />{money(merch)}</div><div><b>Coût total</b><br />{money(total)}</div><div><b>Marge</b><br /><span className={margin >= 0 ? "font-black text-emerald-700" : "font-black text-red-600"}>{money(margin)}</span></div><div><b>Rentabilité</b><br /><span className={rate >= 0 ? "font-black text-emerald-700" : "font-black text-red-600"}>{rate} %</span></div></div>; })()}
+        </div>
+        <div className="flex flex-wrap gap-3"><Button variant="green">Enregistrer la journée</Button><Button type="button" variant="secondary" onClick={() => resetWorkDayForm()}>Réinitialiser</Button></div>
+      </form>
+    </Card>
+
+    {editingWorkItemId && <Card className="border-l-4 border-amber-500">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-xl font-black text-slate-900">Modifier un ouvrage</h3><p className="text-sm text-slate-500">Modification détaillée d'une ligne importée.</p></div><Button type="button" variant="secondary" onClick={resetWorkItemForm}>Annuler modification</Button></div>
       <form onSubmit={saveWorkItem} className="grid gap-4 md:grid-cols-6">
-        <Field label="Date de réalisation"><Input type="date" value={workItemForm.realization_date} onChange={(e: any) => setWorkItemForm({ ...workItemForm, realization_date: e.target.value })} /></Field>
-        <Field label="Ajouter un salarié"><div className="space-y-2"><Select value="" onChange={(e: any) => addEmployeeToWorkItem(e.target.value)}><option value="">Choisir un salarié à ajouter</option>{activeEmployees.filter((emp: any) => !(Array.isArray(workItemForm.employee_ids) ? workItemForm.employee_ids : []).includes(emp.id)).map((emp: any) => <option key={emp.id} value={emp.id}>{employeeName(emp)}{emp.daily_cost ? ` — ${money(Number(emp.daily_cost))}/j` : ""}</option>)}</Select><div className="flex min-h-[38px] flex-wrap gap-2 rounded-xl border bg-slate-50 p-2">{(Array.isArray(workItemForm.employee_ids) ? workItemForm.employee_ids : []).map((id: string) => <button key={id} type="button" onClick={() => removeEmployeeFromWorkItem(id)} className="rounded-full bg-blue-100 px-3 py-1 text-xs font-black text-blue-700 hover:bg-red-100 hover:text-red-700">{employeeLabelFromIds([id])} ×</button>)}{(!Array.isArray(workItemForm.employee_ids) || workItemForm.employee_ids.length === 0) && <span className="text-xs font-semibold text-slate-400">Aucun salarié ajouté</span>}</div></div></Field>
-        <Field label="N°"><Input value={workItemForm.numero} onChange={(e: any) => setWorkItemForm({ ...workItemForm, numero: e.target.value })} placeholder="1.1.1" /></Field>
-        <Field label="Désignation"><Input required value={workItemForm.designation} onChange={(e: any) => setWorkItemForm({ ...workItemForm, designation: e.target.value })} placeholder="Terrassement" /></Field>
-        <Field label="Catégorie"><Input value={workItemForm.category} onChange={(e: any) => setWorkItemForm({ ...workItemForm, category: e.target.value })} placeholder="Maçonnerie" /></Field>
+        <Field label="Date"><Input type="date" value={workItemForm.realization_date} onChange={(e: any) => setWorkItemForm({ ...workItemForm, realization_date: e.target.value })} /></Field>
+        <Field label="N°"><Input value={workItemForm.numero} onChange={(e: any) => setWorkItemForm({ ...workItemForm, numero: e.target.value })} /></Field>
+        <Field label="Désignation"><Input required value={workItemForm.designation} onChange={(e: any) => setWorkItemForm({ ...workItemForm, designation: e.target.value })} /></Field>
         <Field label="Qté"><Input type="number" step="0.01" value={workItemForm.quantity} onChange={(e: any) => setWorkItemForm({ ...workItemForm, quantity: e.target.value })} /></Field>
-        <Field label="Unité"><Input value={workItemForm.unit} onChange={(e: any) => setWorkItemForm({ ...workItemForm, unit: e.target.value })} placeholder="m², ml, ens" /></Field>
-        <Field label="Montant ouvrage HT"><Input type="number" step="0.01" value={workItemForm.sold_ht} onChange={(e: any) => setWorkItemForm({ ...workItemForm, sold_ht: e.target.value })} /></Field>
+        <Field label="Unité"><Input value={workItemForm.unit} onChange={(e: any) => setWorkItemForm({ ...workItemForm, unit: e.target.value })} /></Field>
+        <Field label="Montant HT"><Input type="number" step="0.01" value={workItemForm.sold_ht} onChange={(e: any) => setWorkItemForm({ ...workItemForm, sold_ht: e.target.value })} /></Field>
         <Field label="Marchandises HT"><Input type="number" step="0.01" value={workItemForm.merchandise_ht} onChange={(e: any) => setWorkItemForm({ ...workItemForm, merchandise_ht: e.target.value })} /></Field>
         <Field label="Sous-traitance HT"><Input type="number" step="0.01" value={workItemForm.subcontract_ht} onChange={(e: any) => setWorkItemForm({ ...workItemForm, subcontract_ht: e.target.value })} /></Field>
         <Field label="Autres frais HT"><Input type="number" step="0.01" value={workItemForm.other_costs_ht} onChange={(e: any) => setWorkItemForm({ ...workItemForm, other_costs_ht: e.target.value })} /></Field>
         <Field label="Avancement %"><Input type="number" min="0" max="100" step="1" value={workItemForm.progress} onChange={(e: any) => setWorkItemForm({ ...workItemForm, progress: e.target.value })} /></Field>
         <Field label="Notes"><Input value={workItemForm.notes} onChange={(e: any) => setWorkItemForm({ ...workItemForm, notes: e.target.value })} /></Field>
-        <div className="rounded-2xl bg-slate-50 p-4 text-sm md:col-span-6">
-          {(() => { const preview = workItemNumbers(workItemForm); const dayEmployees = Array.isArray(workItemForm.employee_ids) ? workItemForm.employee_ids : []; const dayLabor = dayEmployees.reduce((s: number, id: string) => s + employeeDayCost(id), 0); return <div className="grid gap-3 md:grid-cols-5"><div><b>Date</b><br />{formatDisplayDate(workItemForm.realization_date)}</div><div><b>Salariés</b><br />{employeeLabelFromIds(dayEmployees)}</div><div><b>Marchandise</b><br />{money(preview.merchandise)}</div><div><b>Coût salariés/jour</b><br />{money(dayLabor)}</div><div><b>Marge hors salariés</b><br /><span className={preview.margin >= 0 ? "font-black text-emerald-700" : "font-black text-red-600"}>{money(preview.margin)}</span></div></div>; })()}
-        </div>
-        <div className="flex gap-3 md:col-span-6"><Button variant="green">{editingWorkItemId ? "Enregistrer modification" : "+ Ajouter l'ouvrage"}</Button><Button type="button" variant="secondary" onClick={resetWorkItemForm}>Réinitialiser</Button></div>
+        <div className="flex gap-3 md:col-span-6"><Button variant="green">Enregistrer modification</Button><Button type="button" variant="secondary" onClick={resetWorkItemForm}>Annuler</Button></div>
       </form>
-    </Card>
+    </Card>}
 
     <Card className="border-l-4 border-emerald-500">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-xl font-black text-slate-900">Rentabilité par date</h3><p className="text-sm text-slate-500">Les salariés sélectionnés sont regroupés par date et comptés une seule fois par journée.</p></div><Badge tone="green">{workDateGroups.length}</Badge></div>
