@@ -1,0 +1,1 @@
+V106 - Pilotage des ouvrages : page principale par chantier, détail chantier, import OBAT dans chantier ouvert, salariés par date, rentabilité par journée.
