@@ -4503,6 +4503,67 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
     </div>;
   }
 
+  if (tab === "ouvrage-pilotage") return <div className="space-y-5">
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <Button variant="secondary" onClick={() => setTab("pilotage")}>← Retour Gestion</Button>
+        <h1 className="mt-3 text-3xl font-black text-slate-900">Pilotage des ouvrages</h1>
+        <p className="text-sm text-slate-500">Module manuel : temps passé, salariés attribués, achats et rentabilité par ouvrage.</p>
+      </div>
+      <Button variant="secondary" onClick={exportWorkItemsCsv}>Exporter Excel</Button>
+    </div>
+
+    <Card>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+        <Field label="Chantier"><Select value={workProjectFilter} onChange={(e: any) => { setWorkProjectFilter(e.target.value); setWorkItemForm({ ...workItemForm, project_id: e.target.value }); }}><option value="">Tous les chantiers</option>{activeProjects.map((p: any) => <option key={p.id} value={p.id}>{p.name} · {p.client || "Client"}</option>)}</Select></Field>
+        <Field label="Recherche"><Input placeholder="Ouvrage, salarié, catégorie..." value={workSearch} onChange={(e: any) => setWorkSearch(e.target.value)} /></Field>
+        <div className="rounded-2xl bg-slate-50 p-4"><p className="text-xs font-black uppercase text-slate-500">Total ouvrages</p><p className="mt-1 text-2xl font-black text-slate-900">{workTotals.count}</p></div>
+        <div className="rounded-2xl bg-blue-50 p-4"><p className="text-xs font-black uppercase text-slate-500">Heures prévues</p><p className="mt-1 text-2xl font-black text-blue-700">{workTotals.planned} h</p></div>
+        <div className="rounded-2xl bg-indigo-50 p-4"><p className="text-xs font-black uppercase text-slate-500">Heures réelles</p><p className="mt-1 text-2xl font-black text-indigo-700">{workTotals.real} h</p></div>
+        <div className={workTotals.margin >= 0 ? "rounded-2xl bg-emerald-50 p-4" : "rounded-2xl bg-red-50 p-4"}><p className="text-xs font-black uppercase text-slate-500">Marge globale</p><p className={workTotals.margin >= 0 ? "mt-1 text-2xl font-black text-emerald-700" : "mt-1 text-2xl font-black text-red-600"}>{money(workTotals.margin)}</p><p className="text-xs font-black">{workTotals.profitability} %</p></div>
+      </div>
+    </Card>
+
+    <Card className="border-l-4 border-sky-500">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div><h3 className="text-xl font-black text-slate-900">{editingWorkItemId ? "Modifier l'ouvrage" : "Ajouter un ouvrage"}</h3><p className="text-sm text-slate-500">Saisie manuelle simple, non reliée au pointage.</p></div>
+        {editingWorkItemId && <Button type="button" variant="secondary" onClick={resetWorkItemForm}>Annuler modification</Button>}
+      </div>
+      <form onSubmit={saveWorkItem} className="grid gap-4 md:grid-cols-6">
+        <Field label="Chantier"><Select required value={workItemForm.project_id} onChange={(e: any) => setWorkItemForm({ ...workItemForm, project_id: e.target.value })}><option value="">Choisir</option>{activeProjects.map((p: any) => <option key={p.id} value={p.id}>{p.name} · {p.client || "Client"}</option>)}</Select></Field>
+        <Field label="N°"><Input value={workItemForm.numero} onChange={(e: any) => setWorkItemForm({ ...workItemForm, numero: e.target.value })} placeholder="1.1.1" /></Field>
+        <Field label="Désignation"><Input required value={workItemForm.designation} onChange={(e: any) => setWorkItemForm({ ...workItemForm, designation: e.target.value })} placeholder="Terrassement" /></Field>
+        <Field label="Catégorie"><Input value={workItemForm.category} onChange={(e: any) => setWorkItemForm({ ...workItemForm, category: e.target.value })} placeholder="Maçonnerie" /></Field>
+        <Field label="Qté"><Input type="number" step="0.01" value={workItemForm.quantity} onChange={(e: any) => setWorkItemForm({ ...workItemForm, quantity: e.target.value })} /></Field>
+        <Field label="Unité"><Input value={workItemForm.unit} onChange={(e: any) => setWorkItemForm({ ...workItemForm, unit: e.target.value })} placeholder="m², ml, ens" /></Field>
+        <Field label="Montant ouvrage HT"><Input type="number" step="0.01" value={workItemForm.sold_ht} onChange={(e: any) => setWorkItemForm({ ...workItemForm, sold_ht: e.target.value })} /></Field>
+        <Field label="Heures prévues"><Input type="number" step="0.25" value={workItemForm.planned_hours} onChange={(e: any) => setWorkItemForm({ ...workItemForm, planned_hours: e.target.value })} /></Field>
+        <Field label="Heures réelles"><Input type="number" step="0.25" value={workItemForm.real_hours} onChange={(e: any) => setWorkItemForm({ ...workItemForm, real_hours: e.target.value })} /></Field>
+        <Field label="Coût horaire salarié"><Input type="number" step="0.01" value={workItemForm.labor_rate} onChange={(e: any) => setWorkItemForm({ ...workItemForm, labor_rate: e.target.value })} /></Field>
+        <Field label="Salariés attribués"><Input value={workItemForm.employee_names} onChange={(e: any) => setWorkItemForm({ ...workItemForm, employee_names: e.target.value })} placeholder="Théo, Kevin..." /></Field>
+        <Field label="Marchandises HT"><Input type="number" step="0.01" value={workItemForm.merchandise_ht} onChange={(e: any) => setWorkItemForm({ ...workItemForm, merchandise_ht: e.target.value })} /></Field>
+        <Field label="Sous-traitance HT"><Input type="number" step="0.01" value={workItemForm.subcontract_ht} onChange={(e: any) => setWorkItemForm({ ...workItemForm, subcontract_ht: e.target.value })} /></Field>
+        <Field label="Autres frais HT"><Input type="number" step="0.01" value={workItemForm.other_costs_ht} onChange={(e: any) => setWorkItemForm({ ...workItemForm, other_costs_ht: e.target.value })} /></Field>
+        <Field label="Avancement %"><Input type="number" min="0" max="100" step="1" value={workItemForm.progress} onChange={(e: any) => setWorkItemForm({ ...workItemForm, progress: e.target.value })} /></Field>
+        <Field label="Notes"><Input value={workItemForm.notes} onChange={(e: any) => setWorkItemForm({ ...workItemForm, notes: e.target.value })} /></Field>
+        <div className="rounded-2xl bg-slate-50 p-4 text-sm md:col-span-6">
+          {(() => { const preview = workItemNumbers(workItemForm); return <div className="grid gap-3 md:grid-cols-5"><div><b>Coût MO</b><br />{money(preview.laborCost)}</div><div><b>Marchandise</b><br />{money(preview.merchandise)}</div><div><b>Coût total</b><br />{money(preview.totalCost)}</div><div><b>Marge</b><br /><span className={preview.margin >= 0 ? "font-black text-emerald-700" : "font-black text-red-600"}>{money(preview.margin)}</span></div><div><b>Rentabilité</b><br /><span className={preview.profitability >= 0 ? "font-black text-emerald-700" : "font-black text-red-600"}>{preview.profitability} %</span></div></div>; })()}
+        </div>
+        <div className="flex gap-3 md:col-span-6"><Button variant="green">{editingWorkItemId ? "Enregistrer modification" : "+ Ajouter l'ouvrage"}</Button><Button type="button" variant="secondary" onClick={resetWorkItemForm}>Réinitialiser</Button></div>
+      </form>
+    </Card>
+
+    <Card>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-sm">
+          <thead><tr className="text-xs uppercase text-slate-500"><th className="p-3">N°</th><th className="p-3">Désignation</th><th className="p-3">Qté</th><th className="p-3">Salariés</th><th className="p-3">H prévues</th><th className="p-3">H réelles</th><th className="p-3">Prix HT</th><th className="p-3">Coût total</th><th className="p-3">Marge</th><th className="p-3">Rentabilité</th><th className="p-3">Avancement</th><th className="p-3">Actions</th></tr></thead>
+          <tbody>{filteredWorkItems.map((x: any) => { const n = workItemNumbers(x); return <tr key={x.id} className={editingWorkItemId === x.id ? "border-t bg-sky-50" : "border-t"}><td className="p-3 font-bold">{x.numero || "-"}</td><td className="p-3"><b>{x.designation}</b><br /><span className="text-xs text-slate-500">{workProjectName(x.project_id)}{x.category ? ` · ${x.category}` : ""}</span></td><td className="p-3">{Number(x.quantity || 0)} {x.unit || ""}</td><td className="p-3">{x.employee_names || "-"}</td><td className="p-3">{n.plannedHours} h</td><td className="p-3">{n.realHours} h</td><td className="p-3 font-bold">{money(n.sold)}</td><td className="p-3">{money(n.totalCost)}</td><td className={n.margin >= 0 ? "p-3 font-black text-emerald-700" : "p-3 font-black text-red-600"}>{money(n.margin)}</td><td className={n.profitability >= 0 ? "p-3 font-black text-emerald-700" : "p-3 font-black text-red-600"}>{n.profitability} %</td><td className="p-3"><div className="min-w-[110px]"><b>{Number(x.progress || 0)} %</b><div className="mt-1 h-2 rounded-full bg-slate-200"><div className={Number(x.progress || 0) >= 100 ? "h-2 rounded-full bg-emerald-500" : Number(x.progress || 0) > 0 ? "h-2 rounded-full bg-amber-500" : "h-2 rounded-full bg-slate-300"} style={{ width: `${Math.max(0, Math.min(100, Number(x.progress || 0)))}%` }} /></div></div></td><td className="p-3"><div className="flex flex-wrap gap-2"><Button variant="secondary" onClick={() => duplicateWorkItem(x)}>Dupliquer</Button><Button variant="amber" onClick={() => editWorkItem(x)}>Modifier</Button><Button variant="danger" onClick={() => deleteWorkItem(x)}>Supprimer</Button></div></td></tr>; })}{filteredWorkItems.length === 0 && <tr><td colSpan={12} className="p-6 text-center text-slate-500">Aucun ouvrage. Ajoute une première ligne manuellement.</td></tr>}</tbody>
+          <tfoot><tr className="border-t bg-slate-50 font-black"><td className="p-3" colSpan={4}>TOTAL</td><td className="p-3">{workTotals.planned} h</td><td className="p-3">{workTotals.real} h</td><td className="p-3">{money(workTotals.sold)}</td><td className="p-3">{money(workTotals.cost)}</td><td className={workTotals.margin >= 0 ? "p-3 text-emerald-700" : "p-3 text-red-600"}>{money(workTotals.margin)}</td><td className={workTotals.profitability >= 0 ? "p-3 text-emerald-700" : "p-3 text-red-600"}>{workTotals.profitability} %</td><td className="p-3" colSpan={2}></td></tr></tfoot>
+        </table>
+      </div>
+    </Card>
+  </div>;
+
   if (tab === "factures") return <div className="space-y-5">
     <div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-3xl font-black text-slate-900">Créer facturation client</h1><p className="text-sm text-slate-500">Facturation uniquement sur chantiers actifs. Date obligatoire.</p></div><Button variant="secondary" onClick={() => setTab("pilotage")}>← Retour Gestion</Button></div>
     <Card><form onSubmit={saveRevenue} className="grid gap-4 md:grid-cols-6"><Field label="Chantier"><Select required value={revenueForm.project_id} onChange={(e: any) => setRevenueForm({ ...revenueForm, project_id: e.target.value })}><option value="">Choisir</option>{activeProjects.map((p: any) => <option key={p.id} value={p.id}>{projectLabel(p.id)}</option>)}</Select></Field><Field label="Libellé"><Input value={revenueForm.label} onChange={(e: any) => setRevenueForm({ ...revenueForm, label: e.target.value })} /></Field><Field label="Montant HT"><Input required type="number" step="0.01" value={revenueForm.amount} onChange={(e: any) => setRevenueForm({ ...revenueForm, amount: e.target.value })} /></Field><Field label="TVA"><Select value={revenueForm.tva_rate} onChange={(e: any) => setRevenueForm({ ...revenueForm, tva_rate: e.target.value })}><option value="0">0%</option><option value="5.5">5,5%</option><option value="10">10%</option><option value="20">20%</option></Select></Field><Field label="Date obligatoire"><Input required type="date" value={revenueForm.billing_date} onChange={(e: any) => setRevenueForm({ ...revenueForm, billing_date: e.target.value })} /></Field><Field label="Notes"><Input value={revenueForm.notes} onChange={(e: any) => setRevenueForm({ ...revenueForm, notes: e.target.value })} /></Field><div className="md:col-span-6 flex gap-3"><Button variant="green">Enregistrer la facturation</Button><Button type="button" variant="secondary" onClick={() => { setEditingRevenueId(null); setRevenueForm({ project_id: "", label: "", amount: "", tva_rate: "10", billing_date: formatDate(new Date()), notes: "" }); }}>Réinitialiser</Button></div></form></Card>
