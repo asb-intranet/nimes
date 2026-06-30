@@ -171,6 +171,7 @@ export default function Page() {
   const [supplierInvoices, setSupplierInvoices] = useState<any[]>([]);
   const [quoteCalculations, setQuoteCalculations] = useState<any[]>([]);
   const [workItems, setWorkItems] = useState<any[]>([]);
+  const [pilotageWorkProjects, setPilotageWorkProjects] = useState<any[]>([]);
   const [clientSpecs, setClientSpecs] = useState<any[]>([]);
   const [clientSpecItems, setClientSpecItems] = useState<any[]>([]);
   const [clientSpecPaymentTerms, setClientSpecPaymentTerms] = useState<any[]>([]);
@@ -196,7 +197,7 @@ export default function Page() {
   }, []);
 
   async function refreshAll() {
-    const [p, ph, d, e, l, n, v, r, pl, mat, vig, inv, rev, ret, ew, ewph, ewd, ewn, ewm, ewv, ewp, ewr, ewi, ewrev, ewret, ce, cp, si, qc, wi, cs, csi, csp, cps, cpsi] = await Promise.all([
+    const [p, ph, d, e, l, n, v, r, pl, mat, vig, inv, rev, ret, ew, ewph, ewd, ewn, ewm, ewv, ewp, ewr, ewi, ewrev, ewret, ce, cp, si, qc, wpj, wi, cs, csi, csp, cps, cpsi] = await Promise.all([
       supabase.from("projects").select("*").order("created_at", { ascending: false }),
       supabase.from("chantier_photos").select("*").order("created_at", { ascending: false }),
       supabase.from("chantier_documents").select("*").order("created_at", { ascending: false }),
@@ -226,6 +227,7 @@ export default function Page() {
       supabase.from("client_payments").select("*").order("payment_date", { ascending: false }),
       supabase.from("supplier_invoices").select("*").order("invoice_date", { ascending: false }),
       supabase.from("quote_calculations").select("*").order("updated_at", { ascending: false }),
+      supabase.from("pilotage_work_projects").select("*").order("created_at", { ascending: false }),
       supabase.from("chantier_work_items").select("*").order("position", { ascending: true }),
       supabase.from("client_specs").select("*").order("created_at", { ascending: false }),
       supabase.from("client_spec_items").select("*").order("position", { ascending: true }),
@@ -234,7 +236,7 @@ export default function Page() {
       supabase.from("client_payment_schedule_items").select("*").order("position", { ascending: true })
     ]);
 
-    const errors = [p, ph, d, e, l, n, v, r, pl, mat, vig, inv, rev, ret, ew, ewph, ewd, ewn, ewm, ewv, ewp, ewr, ewi, ewrev, ewret, ce, cp, si, wi].filter((x: any) => x?.error).map((x: any) => x.error.message);
+    const errors = [p, ph, d, e, l, n, v, r, pl, mat, vig, inv, rev, ret, ew, ewph, ewd, ewn, ewm, ewv, ewp, ewr, ewi, ewrev, ewret, ce, cp, si, wpj, wi].filter((x: any) => x?.error).map((x: any) => x.error.message);
     setDataWarning(errors.length ? errors.join(" | ") : "");
 
     setProjects(p.data || []);
@@ -266,6 +268,7 @@ export default function Page() {
     setClientPayments(cp.data || []);
     setSupplierInvoices(si.data || []);
     setQuoteCalculations(qc.data || []);
+    setPilotageWorkProjects(wpj.data || []);
     setWorkItems(wi.data || []);
     setClientSpecs(cs.data || []);
     setClientSpecItems(csi.data || []);
@@ -391,7 +394,7 @@ export default function Page() {
           {active === "vehicles" && userRole === "admin" && <Vehicles vehicles={vehicles} refreshAll={refreshAll} />}
           {active === "requests" && userRole === "admin" && <Requests requests={requests} projects={projects} employees={employees} refreshAll={refreshAll} projectName={projectName} />}
           {active === "mobile" && userRole === "admin" && <Mobile projects={projects} refreshAll={refreshAll} />}
-          {active === "management" && userRole === "admin" && <Management projects={projects} photos={photos} docs={docs} notes={notes} materials={materials} vigilance={vigilance} employees={employees} planning={planning} invoices={invoices} revenues={revenues} returns={returns} companyExpenses={companyExpenses} clientPayments={clientPayments} supplierInvoices={supplierInvoices} quoteCalculations={quoteCalculations} workItems={workItems} refreshAll={refreshAll} />}
+          {active === "management" && userRole === "admin" && <Management projects={projects} photos={photos} docs={docs} notes={notes} materials={materials} vigilance={vigilance} employees={employees} planning={planning} invoices={invoices} revenues={revenues} returns={returns} companyExpenses={companyExpenses} clientPayments={clientPayments} supplierInvoices={supplierInvoices} quoteCalculations={quoteCalculations} workItems={workItems} pilotageWorkProjects={pilotageWorkProjects} refreshAll={refreshAll} />}
           {active === "settings" && userRole === "admin" && <AccessSettings session={session} />}
         </section>
       </main>
@@ -3596,7 +3599,7 @@ function Storekeeper({ projects, materials, invoices = [], returns = [], refresh
 }
 
 
-function Management({ projects, photos = [], docs = [], notes = [], materials = [], vigilance = [], employees, planning, invoices, revenues, returns = [], companyExpenses = [], clientPayments = [], supplierInvoices = [], quoteCalculations = [], workItems = [], refreshAll }: any) {
+function Management({ projects, photos = [], docs = [], notes = [], materials = [], vigilance = [], employees, planning, invoices, revenues, returns = [], companyExpenses = [], clientPayments = [], supplierInvoices = [], quoteCalculations = [], workItems = [], pilotageWorkProjects = [], refreshAll }: any) {
   const [tab, setTab] = useState("pilotage");
   const [projectSearch, setProjectSearch] = useState("");
   const [selectedProjectFilter, setSelectedProjectFilter] = useState("");
@@ -3781,11 +3784,15 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
   const supplierOutstandingTTC = Math.max(0, supplierTotalTTC - supplierPaidTTC);
   const [editingSupplierInvoiceId, setEditingSupplierInvoiceId] = useState<string | null>(null);
   const [supplierInvoiceForm, setSupplierInvoiceForm] = useState({ supplier: "", invoice_number: "", project_id: "", category: "matériaux", invoice_date: formatDate(new Date()), due_date: "", amount: "", tva_rate: "20", paid_ttc: "0", status: "En attente", notes: "" });
-  const emptyWorkItemForm = { project_id: "", numero: "", designation: "", category: "", quantity: "", unit: "", sold_ht: "", planned_hours: "", real_hours: "", labor_rate: "45", employee_names: "", merchandise_ht: "", subcontract_ht: "", other_costs_ht: "", progress: "0", notes: "" };
+  const emptyWorkItemForm = { project_id: "", numero: "", designation: "", category: "", quantity: "", unit: "", sold_ht: "", realization_date: formatDate(new Date()), employee_ids: [] as string[], employee_names: "", merchandise_ht: "", subcontract_ht: "", other_costs_ht: "", progress: "100", notes: "" };
   const [workItemForm, setWorkItemForm] = useState<any>(emptyWorkItemForm);
   const [editingWorkItemId, setEditingWorkItemId] = useState<string | null>(null);
   const [workProjectFilter, setWorkProjectFilter] = useState<string>("");
   const [workSearch, setWorkSearch] = useState<string>("");
+  const emptyPilotageProjectForm = { name: "", client: "", address: "", reference: "", notes: "", status: "en_cours" };
+  const [pilotageProjectForm, setPilotageProjectForm] = useState<any>(emptyPilotageProjectForm);
+  const [editingPilotageProjectId, setEditingPilotageProjectId] = useState<string | null>(null);
+  const pilotageProjectList = pilotageWorkProjects || [];
 
 
   function resetSupplierInvoiceForm() {
@@ -3862,42 +3869,107 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
   }
 
 
-  function workProjectName(id: string) { return projects.find((p: any) => p.id === id)?.name || "Chantier non défini"; }
+  function workProjectName(id: string) { return pilotageProjectList.find((p: any) => p.id === id)?.name || "Chantier de pilotage non défini"; }
+  function workProjectLabel(p: any) { return `${p.name || "Chantier"}${p.client ? ` · ${p.client}` : ""}`; }
+  function pilotageProjectTotals(projectId: string) {
+    const items = (workItems || []).filter((x: any) => x.project_id === projectId);
+    const groups = buildWorkDateGroups(items);
+    const totals = groups.reduce((a: any, g: any) => { a.count += g.count; a.sold += g.sold; a.cost += g.totalCost; a.margin += g.margin; a.laborCost += g.laborCost; return a; }, { count: 0, sold: 0, cost: 0, margin: 0, laborCost: 0 });
+    totals.profitability = totals.sold > 0 ? Math.round((totals.margin / totals.sold) * 1000) / 10 : 0;
+    return totals;
+  }
+  function editPilotageProject(p: any) {
+    setEditingPilotageProjectId(p.id);
+    setPilotageProjectForm({ name: p.name || "", client: p.client || "", address: p.address || "", reference: p.reference || "", notes: p.notes || "", status: p.status || "en_cours" });
+    setWorkProjectFilter(p.id);
+    setWorkItemForm({ ...workItemForm, project_id: p.id });
+  }
+  function resetPilotageProjectForm() { setEditingPilotageProjectId(null); setPilotageProjectForm(emptyPilotageProjectForm); }
+  async function savePilotageProject(e: any) {
+    e.preventDefault();
+    if (!pilotageProjectForm.name) return alert("Nom du chantier obligatoire.");
+    const payload = { name: pilotageProjectForm.name, client: pilotageProjectForm.client || null, address: pilotageProjectForm.address || null, reference: pilotageProjectForm.reference || null, notes: pilotageProjectForm.notes || null, status: pilotageProjectForm.status || "en_cours" };
+    const q = editingPilotageProjectId ? supabase.from("pilotage_work_projects").update(payload).eq("id", editingPilotageProjectId) : supabase.from("pilotage_work_projects").insert(payload).select("id").single();
+    const { data, error } = await q;
+    if (error) return alert("Chantier de pilotage impossible : " + error.message + "\n\nLance le script Supabase V104 si besoin.");
+    const newId = editingPilotageProjectId || data?.id;
+    if (newId) { setWorkProjectFilter(newId); setWorkItemForm({ ...workItemForm, project_id: newId }); }
+    resetPilotageProjectForm();
+    await refreshAll();
+  }
+  async function deletePilotageProject(p: any) {
+    const totals = pilotageProjectTotals(p.id);
+    if (totals.count > 0) {
+      if (!confirm(`Ce chantier contient ${totals.count} ligne(s) d'ouvrage. Supprimer le chantier ET ses lignes ?`)) return;
+      const { error: itemsError } = await supabase.from("chantier_work_items").delete().eq("project_id", p.id);
+      if (itemsError) return alert(itemsError.message);
+    } else if (!confirm(`Supprimer le chantier ${p.name || ""} ?`)) return;
+    const { error } = await supabase.from("pilotage_work_projects").delete().eq("id", p.id);
+    if (error) return alert(error.message);
+    if (workProjectFilter === p.id) setWorkProjectFilter("");
+    await refreshAll();
+  }
+  function employeeIdsFromWorkItem(x: any): string[] {
+    const raw = Array.isArray(x.employee_ids) ? x.employee_ids.join(",") : String(x.employee_ids || "");
+    return raw.split(",").map((v: string) => v.trim()).filter(Boolean);
+  }
+  function employeeLabelFromIds(ids: string[], fallback?: string) {
+    if (!ids.length) return fallback || "-";
+    return ids.map((id: string) => { const emp = employees.find((e: any) => e.id === id); return emp ? employeeName(emp) : id; }).join(", ");
+  }
+  function employeeDayCost(id: string) {
+    const emp = employees.find((e: any) => e.id === id);
+    return Number(emp?.daily_cost || 0);
+  }
   function workItemNumbers(x: any) {
     const sold = Number(x.sold_ht || 0);
-    const realHours = Number(x.real_hours || 0);
-    const laborRate = Number(x.labor_rate || 0);
-    const laborCost = realHours * laborRate;
     const merchandise = Number(x.merchandise_ht || 0);
     const subcontract = Number(x.subcontract_ht || 0);
     const other = Number(x.other_costs_ht || 0);
-    const totalCost = laborCost + merchandise + subcontract + other;
+    const totalCost = merchandise + subcontract + other;
     const margin = sold - totalCost;
     const profitability = sold > 0 ? Math.round((margin / sold) * 1000) / 10 : 0;
-    const plannedHours = Number(x.planned_hours || 0);
-    const gapHours = plannedHours - realHours;
-    return { sold, realHours, laborRate, laborCost, merchandise, subcontract, other, totalCost, margin, profitability, plannedHours, gapHours };
+    return { sold, laborCost: 0, merchandise, subcontract, other, totalCost, margin, profitability };
+  }
+  function buildWorkDateGroups(items: any[]) {
+    const map: Record<string, any> = {};
+    items.forEach((x: any) => {
+      const date = x.realization_date || "Non daté";
+      if (!map[date]) map[date] = { date, items: [], employeeIds: new Set<string>(), count: 0, sold: 0, merchandise: 0, subcontract: 0, other: 0, itemCosts: 0, laborCost: 0, totalCost: 0, margin: 0, profitability: 0 };
+      const n = workItemNumbers(x);
+      map[date].items.push(x); map[date].count += 1; map[date].sold += n.sold; map[date].merchandise += n.merchandise; map[date].subcontract += n.subcontract; map[date].other += n.other; map[date].itemCosts += n.totalCost;
+      employeeIdsFromWorkItem(x).forEach((id: string) => map[date].employeeIds.add(id));
+    });
+    return Object.values(map).map((g: any) => {
+      const ids = Array.from(g.employeeIds) as string[];
+      g.employeeIdsList = ids;
+      g.employeeNames = employeeLabelFromIds(ids);
+      g.laborCost = ids.reduce((s: number, id: string) => s + employeeDayCost(id), 0);
+      g.totalCost = g.itemCosts + g.laborCost;
+      g.margin = g.sold - g.totalCost;
+      g.profitability = g.sold > 0 ? Math.round((g.margin / g.sold) * 1000) / 10 : 0;
+      return g;
+    }).sort((a: any, b: any) => String(a.date).localeCompare(String(b.date)));
   }
   const filteredWorkItems = (workItems || []).filter((x: any) => {
     const okProject = !workProjectFilter || x.project_id === workProjectFilter;
-    const txt = `${x.numero || ""} ${x.designation || ""} ${x.category || ""} ${x.employee_names || ""} ${workProjectName(x.project_id)}`.toLowerCase();
+    const txt = `${x.numero || ""} ${x.designation || ""} ${x.category || ""} ${x.employee_names || ""} ${employeeLabelFromIds(employeeIdsFromWorkItem(x))} ${x.realization_date || ""} ${workProjectName(x.project_id)}`.toLowerCase();
     const okSearch = !workSearch || txt.includes(workSearch.toLowerCase());
     return okProject && okSearch;
   });
-  const workTotals = filteredWorkItems.reduce((a: any, x: any) => {
-    const n = workItemNumbers(x);
-    a.count += 1; a.sold += n.sold; a.planned += n.plannedHours; a.real += n.realHours; a.cost += n.totalCost; a.margin += n.margin;
+  const workDateGroups = buildWorkDateGroups(filteredWorkItems);
+  const workTotals = workDateGroups.reduce((a: any, g: any) => {
+    a.count += g.count; a.sold += g.sold; a.cost += g.totalCost; a.margin += g.margin; a.laborCost += g.laborCost; a.merchandise += g.merchandise;
     return a;
-  }, { count: 0, sold: 0, planned: 0, real: 0, cost: 0, margin: 0 });
+  }, { count: 0, sold: 0, cost: 0, margin: 0, laborCost: 0, merchandise: 0 });
   workTotals.profitability = workTotals.sold > 0 ? Math.round((workTotals.margin / workTotals.sold) * 1000) / 10 : 0;
 
-  function resetWorkItemForm() { setEditingWorkItemId(null); setWorkItemForm({ ...emptyWorkItemForm, project_id: workProjectFilter || "", labor_rate: "45" }); }
+  function resetWorkItemForm() { setEditingWorkItemId(null); setWorkItemForm({ ...emptyWorkItemForm, project_id: workProjectFilter || "", realization_date: formatDate(new Date()), employee_ids: [] }); }
   function editWorkItem(item: any) {
     setEditingWorkItemId(item.id);
     setWorkItemForm({
       project_id: item.project_id || "", numero: item.numero || "", designation: item.designation || "", category: item.category || "",
-      quantity: String(item.quantity ?? ""), unit: item.unit || "", sold_ht: String(item.sold_ht ?? ""), planned_hours: String(item.planned_hours ?? ""),
-      real_hours: String(item.real_hours ?? ""), labor_rate: String(item.labor_rate ?? 45), employee_names: item.employee_names || "",
+      quantity: String(item.quantity ?? ""), unit: item.unit || "", sold_ht: String(item.sold_ht ?? ""), realization_date: item.realization_date || formatDate(new Date()), employee_ids: employeeIdsFromWorkItem(item), employee_names: item.employee_names || "",
       merchandise_ht: String(item.merchandise_ht ?? ""), subcontract_ht: String(item.subcontract_ht ?? ""), other_costs_ht: String(item.other_costs_ht ?? ""),
       progress: String(item.progress ?? 0), notes: item.notes || ""
     });
@@ -3915,10 +3987,12 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
       quantity: Number(workItemForm.quantity || 0),
       unit: workItemForm.unit || null,
       sold_ht: Number(workItemForm.sold_ht || 0),
-      planned_hours: Number(workItemForm.planned_hours || 0),
-      real_hours: Number(workItemForm.real_hours || 0),
-      labor_rate: Number(workItemForm.labor_rate || 0),
-      employee_names: workItemForm.employee_names || null,
+      realization_date: workItemForm.realization_date || null,
+      employee_ids: Array.isArray(workItemForm.employee_ids) ? workItemForm.employee_ids.join(",") : String(workItemForm.employee_ids || ""),
+      employee_names: employeeLabelFromIds(Array.isArray(workItemForm.employee_ids) ? workItemForm.employee_ids : [], workItemForm.employee_names || "") || null,
+      planned_hours: 0,
+      real_hours: 0,
+      labor_rate: 0,
       merchandise_ht: Number(workItemForm.merchandise_ht || 0),
       subcontract_ht: Number(workItemForm.subcontract_ht || 0),
       other_costs_ht: Number(workItemForm.other_costs_ht || 0),
@@ -3946,8 +4020,8 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
     await refreshAll();
   }
   function exportWorkItemsCsv() {
-    const header = ["Chantier", "N°", "Désignation", "Qté", "Unité", "Prix ouvrage HT", "H prévues", "H réelles", "Taux MO", "Coût MO", "Marchandises HT", "Sous-traitance HT", "Autres HT", "Coût total", "Marge", "Rentabilité %", "Avancement %", "Salariés"];
-    const rows = filteredWorkItems.map((x: any) => { const n = workItemNumbers(x); return [workProjectName(x.project_id), x.numero || "", x.designation || "", x.quantity || 0, x.unit || "", n.sold, n.plannedHours, n.realHours, n.laborRate, n.laborCost, n.merchandise, n.subcontract, n.other, n.totalCost, n.margin, n.profitability, x.progress || 0, x.employee_names || ""]; });
+    const header = ["Chantier", "Date réalisation", "N°", "Désignation", "Qté", "Unité", "Prix ouvrage HT", "Marchandises HT", "Sous-traitance HT", "Autres HT", "Coût hors salariés", "Marge hors salariés", "Rentabilité %", "Avancement %", "Salariés"];
+    const rows = filteredWorkItems.map((x: any) => { const n = workItemNumbers(x); return [workProjectName(x.project_id), x.realization_date || "", x.numero || "", x.designation || "", x.quantity || 0, x.unit || "", n.sold, n.merchandise, n.subcontract, n.other, n.totalCost, n.margin, n.profitability, x.progress || 0, employeeLabelFromIds(employeeIdsFromWorkItem(x), x.employee_names || "")]; });
     const csv = [header, ...rows].map(r => r.map((v: any) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(";")).join("\n");
     const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = "pilotage-ouvrages-asb.csv"; a.click(); URL.revokeObjectURL(url);
@@ -4008,10 +4082,12 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
           quantity,
           unit: unit || null,
           sold_ht: total,
+          realization_date: null,
+          employee_ids: null,
+          employee_names: null,
           planned_hours: 0,
           real_hours: 0,
-          labor_rate: 45,
-          employee_names: null,
+          labor_rate: 0,
           merchandise_ht: 0,
           subcontract_ht: 0,
           other_costs_ht: 0,
@@ -4586,7 +4662,7 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
       <div>
         <Button variant="secondary" onClick={() => setTab("pilotage")}>← Retour Gestion</Button>
         <h1 className="mt-3 text-3xl font-black text-slate-900">Pilotage des ouvrages</h1>
-        <p className="text-sm text-slate-500">Module manuel : temps passé, salariés attribués, achats et rentabilité par ouvrage.</p>
+        <p className="text-sm text-slate-500">Module manuel : date de réalisation, salariés présents, achats et rentabilité par journée.</p>
       </div>
       <div className="flex flex-wrap gap-2">
         <input id="obat-work-import" type="file" accept=".xlsx,.xls" className="hidden" onChange={importObatExcel} />
@@ -4595,13 +4671,40 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
       </div>
     </div>
 
+    <div className="grid gap-5 xl:grid-cols-[1fr_1.4fr]">
+      <Card className="border-l-4 border-slate-900">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div><h3 className="text-xl font-black text-slate-900">Chantiers de pilotage</h3><p className="text-sm text-slate-500">Classe tes ouvrages par chantier, indépendamment des chantiers généraux.</p></div>
+          {editingPilotageProjectId && <Button type="button" variant="secondary" onClick={resetPilotageProjectForm}>Annuler</Button>}
+        </div>
+        <form onSubmit={savePilotageProject} className="grid gap-3 md:grid-cols-2">
+          <Field label="Nom chantier"><Input required value={pilotageProjectForm.name} onChange={(e: any) => setPilotageProjectForm({ ...pilotageProjectForm, name: e.target.value })} placeholder="Ex : Villa Karouby" /></Field>
+          <Field label="Client"><Input value={pilotageProjectForm.client} onChange={(e: any) => setPilotageProjectForm({ ...pilotageProjectForm, client: e.target.value })} placeholder="Nom client" /></Field>
+          <Field label="Référence"><Input value={pilotageProjectForm.reference} onChange={(e: any) => setPilotageProjectForm({ ...pilotageProjectForm, reference: e.target.value })} placeholder="D2026422" /></Field>
+          <Field label="Statut"><Select value={pilotageProjectForm.status} onChange={(e: any) => setPilotageProjectForm({ ...pilotageProjectForm, status: e.target.value })}><option value="en_cours">En cours</option><option value="pause">En pause</option><option value="termine">Terminé</option><option value="archive">Archivé</option></Select></Field>
+          <Field label="Adresse"><Input value={pilotageProjectForm.address} onChange={(e: any) => setPilotageProjectForm({ ...pilotageProjectForm, address: e.target.value })} /></Field>
+          <Field label="Notes"><Input value={pilotageProjectForm.notes} onChange={(e: any) => setPilotageProjectForm({ ...pilotageProjectForm, notes: e.target.value })} /></Field>
+          <div className="md:col-span-2 flex flex-wrap gap-2"><Button variant="green">{editingPilotageProjectId ? "Modifier le chantier" : "+ Créer chantier"}</Button><Button type="button" variant="secondary" onClick={resetPilotageProjectForm}>Réinitialiser</Button></div>
+        </form>
+      </Card>
+      <Card>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-xl font-black text-slate-900">Liste des chantiers</h3><p className="text-sm text-slate-500">Sélectionne un chantier pour importer ou saisir ses ouvrages.</p></div><Badge tone="blue">{pilotageProjectList.length}</Badge></div>
+        <div className="max-h-[320px] space-y-2 overflow-auto pr-1">
+          {pilotageProjectList.map((p: any) => { const t = pilotageProjectTotals(p.id); const selected = workProjectFilter === p.id; return <div key={p.id} className={selected ? "rounded-2xl border border-sky-300 bg-sky-50 p-3" : "rounded-2xl border bg-white p-3"}>
+            <div className="flex flex-wrap items-center justify-between gap-2"><button type="button" onClick={() => { setWorkProjectFilter(p.id); setWorkItemForm({ ...workItemForm, project_id: p.id }); }} className="text-left"><b className="text-slate-900">{workProjectLabel(p)}</b><br /><span className="text-xs font-semibold text-slate-500">{p.reference || "Sans référence"} · {t.count} ouvrage(s) · marge {money(t.margin)} · {t.profitability}%</span></button><div className="flex flex-wrap gap-2"><Button type="button" variant="secondary" onClick={() => { setWorkProjectFilter(p.id); setWorkItemForm({ ...workItemForm, project_id: p.id }); }}>Ouvrir</Button><Button type="button" variant="amber" onClick={() => editPilotageProject(p)}>Modifier</Button><Button type="button" variant="danger" onClick={() => deletePilotageProject(p)}>Supprimer</Button></div></div>
+          </div>; })}
+          {pilotageProjectList.length === 0 && <div className="rounded-2xl border border-dashed p-5 text-sm text-slate-500">Aucun chantier de pilotage. Crée ton premier chantier, puis importe l'Excel OBAT dedans.</div>}
+        </div>
+      </Card>
+    </div>
+
     <Card>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
-        <Field label="Chantier"><Select value={workProjectFilter} onChange={(e: any) => { setWorkProjectFilter(e.target.value); setWorkItemForm({ ...workItemForm, project_id: e.target.value }); }}><option value="">Tous les chantiers</option>{activeProjects.map((p: any) => <option key={p.id} value={p.id}>{p.name} · {p.client || "Client"}</option>)}</Select></Field>
+        <Field label="Chantier"><Select value={workProjectFilter} onChange={(e: any) => { setWorkProjectFilter(e.target.value); setWorkItemForm({ ...workItemForm, project_id: e.target.value }); }}><option value="">Tous les chantiers</option>{pilotageProjectList.map((p: any) => <option key={p.id} value={p.id}>{workProjectLabel(p)}</option>)}</Select></Field>
         <Field label="Recherche"><Input placeholder="Ouvrage, salarié, catégorie..." value={workSearch} onChange={(e: any) => setWorkSearch(e.target.value)} /></Field>
         <div className="rounded-2xl bg-slate-50 p-4"><p className="text-xs font-black uppercase text-slate-500">Total ouvrages</p><p className="mt-1 text-2xl font-black text-slate-900">{workTotals.count}</p></div>
-        <div className="rounded-2xl bg-blue-50 p-4"><p className="text-xs font-black uppercase text-slate-500">Heures prévues</p><p className="mt-1 text-2xl font-black text-blue-700">{workTotals.planned} h</p></div>
-        <div className="rounded-2xl bg-indigo-50 p-4"><p className="text-xs font-black uppercase text-slate-500">Heures réelles</p><p className="mt-1 text-2xl font-black text-indigo-700">{workTotals.real} h</p></div>
+        <div className="rounded-2xl bg-blue-50 p-4"><p className="text-xs font-black uppercase text-slate-500">Journées suivies</p><p className="mt-1 text-2xl font-black text-blue-700">{workDateGroups.length}</p></div>
+        <div className="rounded-2xl bg-indigo-50 p-4"><p className="text-xs font-black uppercase text-slate-500">Coût salariés</p><p className="mt-1 text-2xl font-black text-indigo-700">{money(workTotals.laborCost)}</p></div>
         <div className={workTotals.margin >= 0 ? "rounded-2xl bg-emerald-50 p-4" : "rounded-2xl bg-red-50 p-4"}><p className="text-xs font-black uppercase text-slate-500">Marge globale</p><p className={workTotals.margin >= 0 ? "mt-1 text-2xl font-black text-emerald-700" : "mt-1 text-2xl font-black text-red-600"}>{money(workTotals.margin)}</p><p className="text-xs font-black">{workTotals.profitability} %</p></div>
       </div>
     </Card>
@@ -4612,35 +4715,38 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
         {editingWorkItemId && <Button type="button" variant="secondary" onClick={resetWorkItemForm}>Annuler modification</Button>}
       </div>
       <form onSubmit={saveWorkItem} className="grid gap-4 md:grid-cols-6">
-        <Field label="Chantier"><Select required value={workItemForm.project_id} onChange={(e: any) => setWorkItemForm({ ...workItemForm, project_id: e.target.value })}><option value="">Choisir</option>{activeProjects.map((p: any) => <option key={p.id} value={p.id}>{p.name} · {p.client || "Client"}</option>)}</Select></Field>
+        <Field label="Chantier"><Select required value={workItemForm.project_id} onChange={(e: any) => setWorkItemForm({ ...workItemForm, project_id: e.target.value })}><option value="">Choisir</option>{pilotageProjectList.map((p: any) => <option key={p.id} value={p.id}>{workProjectLabel(p)}</option>)}</Select></Field>
         <Field label="N°"><Input value={workItemForm.numero} onChange={(e: any) => setWorkItemForm({ ...workItemForm, numero: e.target.value })} placeholder="1.1.1" /></Field>
         <Field label="Désignation"><Input required value={workItemForm.designation} onChange={(e: any) => setWorkItemForm({ ...workItemForm, designation: e.target.value })} placeholder="Terrassement" /></Field>
         <Field label="Catégorie"><Input value={workItemForm.category} onChange={(e: any) => setWorkItemForm({ ...workItemForm, category: e.target.value })} placeholder="Maçonnerie" /></Field>
         <Field label="Qté"><Input type="number" step="0.01" value={workItemForm.quantity} onChange={(e: any) => setWorkItemForm({ ...workItemForm, quantity: e.target.value })} /></Field>
         <Field label="Unité"><Input value={workItemForm.unit} onChange={(e: any) => setWorkItemForm({ ...workItemForm, unit: e.target.value })} placeholder="m², ml, ens" /></Field>
         <Field label="Montant ouvrage HT"><Input type="number" step="0.01" value={workItemForm.sold_ht} onChange={(e: any) => setWorkItemForm({ ...workItemForm, sold_ht: e.target.value })} /></Field>
-        <Field label="Heures prévues"><Input type="number" step="0.25" value={workItemForm.planned_hours} onChange={(e: any) => setWorkItemForm({ ...workItemForm, planned_hours: e.target.value })} /></Field>
-        <Field label="Heures réelles"><Input type="number" step="0.25" value={workItemForm.real_hours} onChange={(e: any) => setWorkItemForm({ ...workItemForm, real_hours: e.target.value })} /></Field>
-        <Field label="Coût horaire salarié"><Input type="number" step="0.01" value={workItemForm.labor_rate} onChange={(e: any) => setWorkItemForm({ ...workItemForm, labor_rate: e.target.value })} /></Field>
-        <Field label="Salariés attribués"><Input value={workItemForm.employee_names} onChange={(e: any) => setWorkItemForm({ ...workItemForm, employee_names: e.target.value })} placeholder="Théo, Kevin..." /></Field>
+        <Field label="Date de réalisation"><Input type="date" value={workItemForm.realization_date} onChange={(e: any) => setWorkItemForm({ ...workItemForm, realization_date: e.target.value })} /></Field>
+        <Field label="Salariés présents"><Select multiple value={workItemForm.employee_ids} onChange={(e: any) => setWorkItemForm({ ...workItemForm, employee_ids: Array.from(e.target.selectedOptions).map((o: any) => o.value) })} className="min-h-[92px]">{activeEmployees.map((emp: any) => <option key={emp.id} value={emp.id}>{employeeName(emp)}{emp.daily_cost ? ` — ${money(Number(emp.daily_cost))}/j` : ""}</option>)}</Select></Field>
         <Field label="Marchandises HT"><Input type="number" step="0.01" value={workItemForm.merchandise_ht} onChange={(e: any) => setWorkItemForm({ ...workItemForm, merchandise_ht: e.target.value })} /></Field>
         <Field label="Sous-traitance HT"><Input type="number" step="0.01" value={workItemForm.subcontract_ht} onChange={(e: any) => setWorkItemForm({ ...workItemForm, subcontract_ht: e.target.value })} /></Field>
         <Field label="Autres frais HT"><Input type="number" step="0.01" value={workItemForm.other_costs_ht} onChange={(e: any) => setWorkItemForm({ ...workItemForm, other_costs_ht: e.target.value })} /></Field>
         <Field label="Avancement %"><Input type="number" min="0" max="100" step="1" value={workItemForm.progress} onChange={(e: any) => setWorkItemForm({ ...workItemForm, progress: e.target.value })} /></Field>
         <Field label="Notes"><Input value={workItemForm.notes} onChange={(e: any) => setWorkItemForm({ ...workItemForm, notes: e.target.value })} /></Field>
         <div className="rounded-2xl bg-slate-50 p-4 text-sm md:col-span-6">
-          {(() => { const preview = workItemNumbers(workItemForm); return <div className="grid gap-3 md:grid-cols-5"><div><b>Coût MO</b><br />{money(preview.laborCost)}</div><div><b>Marchandise</b><br />{money(preview.merchandise)}</div><div><b>Coût total</b><br />{money(preview.totalCost)}</div><div><b>Marge</b><br /><span className={preview.margin >= 0 ? "font-black text-emerald-700" : "font-black text-red-600"}>{money(preview.margin)}</span></div><div><b>Rentabilité</b><br /><span className={preview.profitability >= 0 ? "font-black text-emerald-700" : "font-black text-red-600"}>{preview.profitability} %</span></div></div>; })()}
+          {(() => { const preview = workItemNumbers(workItemForm); return <div className="grid gap-3 md:grid-cols-5"><div><b>Date</b><br />{formatDisplayDate(workItemForm.realization_date)}</div><div><b>Marchandise</b><br />{money(preview.merchandise)}</div><div><b>Coût hors salariés</b><br />{money(preview.totalCost)}</div><div><b>Marge</b><br /><span className={preview.margin >= 0 ? "font-black text-emerald-700" : "font-black text-red-600"}>{money(preview.margin)}</span></div><div><b>Rentabilité</b><br /><span className={preview.profitability >= 0 ? "font-black text-emerald-700" : "font-black text-red-600"}>{preview.profitability} %</span></div></div>; })()}
         </div>
         <div className="flex gap-3 md:col-span-6"><Button variant="green">{editingWorkItemId ? "Enregistrer modification" : "+ Ajouter l'ouvrage"}</Button><Button type="button" variant="secondary" onClick={resetWorkItemForm}>Réinitialiser</Button></div>
       </form>
     </Card>
 
+    <Card className="border-l-4 border-emerald-500">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-xl font-black text-slate-900">Rentabilité par date</h3><p className="text-sm text-slate-500">Les salariés sont comptés une seule fois par journée, même s'ils réalisent plusieurs postes.</p></div><Badge tone="green">{workDateGroups.length}</Badge></div>
+      <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="text-xs uppercase text-slate-500"><th className="p-3">Date</th><th className="p-3">Salariés sur place</th><th className="p-3">Ouvrages</th><th className="p-3">Vendu HT</th><th className="p-3">Coût salariés</th><th className="p-3">Marchandises</th><th className="p-3">Coût total</th><th className="p-3">Marge</th><th className="p-3">Rentabilité</th></tr></thead><tbody>{workDateGroups.map((g: any) => <tr key={g.date} className="border-t"><td className="p-3 font-black">{g.date === "Non daté" ? "Non daté" : formatDisplayDate(g.date)}</td><td className="p-3">{g.employeeNames}</td><td className="p-3">{g.count}</td><td className="p-3 font-bold">{money(g.sold)}</td><td className="p-3">{money(g.laborCost)}</td><td className="p-3">{money(g.merchandise)}</td><td className="p-3">{money(g.totalCost)}</td><td className={g.margin >= 0 ? "p-3 font-black text-emerald-700" : "p-3 font-black text-red-600"}>{money(g.margin)}</td><td className={g.profitability >= 0 ? "p-3 font-black text-emerald-700" : "p-3 font-black text-red-600"}>{g.profitability} %</td></tr>)}{workDateGroups.length === 0 && <tr><td colSpan={9} className="p-6 text-center text-slate-500">Aucune journée à analyser.</td></tr>}</tbody></table></div>
+    </Card>
+
     <Card>
       <div className="overflow-x-auto">
         <table className="w-full text-left text-sm">
-          <thead><tr className="text-xs uppercase text-slate-500"><th className="p-3">N°</th><th className="p-3">Désignation</th><th className="p-3">Qté</th><th className="p-3">Salariés</th><th className="p-3">H prévues</th><th className="p-3">H réelles</th><th className="p-3">Prix HT</th><th className="p-3">Coût total</th><th className="p-3">Marge</th><th className="p-3">Rentabilité</th><th className="p-3">Avancement</th><th className="p-3">Actions</th></tr></thead>
-          <tbody>{filteredWorkItems.map((x: any) => { const n = workItemNumbers(x); return <tr key={x.id} className={editingWorkItemId === x.id ? "border-t bg-sky-50" : "border-t"}><td className="p-3 font-bold">{x.numero || "-"}</td><td className="p-3"><b>{x.designation}</b><br /><span className="text-xs text-slate-500">{workProjectName(x.project_id)}{x.category ? ` · ${x.category}` : ""}</span></td><td className="p-3">{Number(x.quantity || 0)} {x.unit || ""}</td><td className="p-3">{x.employee_names || "-"}</td><td className="p-3">{n.plannedHours} h</td><td className="p-3">{n.realHours} h</td><td className="p-3 font-bold">{money(n.sold)}</td><td className="p-3">{money(n.totalCost)}</td><td className={n.margin >= 0 ? "p-3 font-black text-emerald-700" : "p-3 font-black text-red-600"}>{money(n.margin)}</td><td className={n.profitability >= 0 ? "p-3 font-black text-emerald-700" : "p-3 font-black text-red-600"}>{n.profitability} %</td><td className="p-3"><div className="min-w-[110px]"><b>{Number(x.progress || 0)} %</b><div className="mt-1 h-2 rounded-full bg-slate-200"><div className={Number(x.progress || 0) >= 100 ? "h-2 rounded-full bg-emerald-500" : Number(x.progress || 0) > 0 ? "h-2 rounded-full bg-amber-500" : "h-2 rounded-full bg-slate-300"} style={{ width: `${Math.max(0, Math.min(100, Number(x.progress || 0)))}%` }} /></div></div></td><td className="p-3"><div className="flex flex-wrap gap-2"><Button variant="secondary" onClick={() => duplicateWorkItem(x)}>Dupliquer</Button><Button variant="amber" onClick={() => editWorkItem(x)}>Modifier</Button><Button variant="danger" onClick={() => deleteWorkItem(x)}>Supprimer</Button></div></td></tr>; })}{filteredWorkItems.length === 0 && <tr><td colSpan={12} className="p-6 text-center text-slate-500">Aucun ouvrage. Ajoute une première ligne manuellement ou importe un Excel OBAT.</td></tr>}</tbody>
-          <tfoot><tr className="border-t bg-slate-50 font-black"><td className="p-3" colSpan={4}>TOTAL</td><td className="p-3">{workTotals.planned} h</td><td className="p-3">{workTotals.real} h</td><td className="p-3">{money(workTotals.sold)}</td><td className="p-3">{money(workTotals.cost)}</td><td className={workTotals.margin >= 0 ? "p-3 text-emerald-700" : "p-3 text-red-600"}>{money(workTotals.margin)}</td><td className={workTotals.profitability >= 0 ? "p-3 text-emerald-700" : "p-3 text-red-600"}>{workTotals.profitability} %</td><td className="p-3" colSpan={2}></td></tr></tfoot>
+          <thead><tr className="text-xs uppercase text-slate-500"><th className="p-3">Date</th><th className="p-3">N°</th><th className="p-3">Désignation</th><th className="p-3">Qté</th><th className="p-3">Salariés</th><th className="p-3">Prix HT</th><th className="p-3">Marchandises</th><th className="p-3">Coût hors salariés</th><th className="p-3">Marge hors salariés</th><th className="p-3">Rentabilité</th><th className="p-3">Avancement</th><th className="p-3">Actions</th></tr></thead>
+          <tbody>{filteredWorkItems.map((x: any) => { const n = workItemNumbers(x); return <tr key={x.id} className={editingWorkItemId === x.id ? "border-t bg-sky-50" : "border-t"}><td className="p-3 font-bold">{x.realization_date ? formatDisplayDate(x.realization_date) : "Non daté"}</td><td className="p-3 font-bold">{x.numero || "-"}</td><td className="p-3"><b>{x.designation}</b><br /><span className="text-xs text-slate-500">{workProjectName(x.project_id)}{x.category ? ` · ${x.category}` : ""}</span></td><td className="p-3">{Number(x.quantity || 0)} {x.unit || ""}</td><td className="p-3">{employeeLabelFromIds(employeeIdsFromWorkItem(x), x.employee_names || "")}</td><td className="p-3 font-bold">{money(n.sold)}</td><td className="p-3">{money(n.merchandise)}</td><td className="p-3">{money(n.totalCost)}</td><td className={n.margin >= 0 ? "p-3 font-black text-emerald-700" : "p-3 font-black text-red-600"}>{money(n.margin)}</td><td className={n.profitability >= 0 ? "p-3 font-black text-emerald-700" : "p-3 font-black text-red-600"}>{n.profitability} %</td><td className="p-3"><div className="min-w-[110px]"><b>{Number(x.progress || 0)} %</b><div className="mt-1 h-2 rounded-full bg-slate-200"><div className={Number(x.progress || 0) >= 100 ? "h-2 rounded-full bg-emerald-500" : Number(x.progress || 0) > 0 ? "h-2 rounded-full bg-amber-500" : "h-2 rounded-full bg-slate-300"} style={{ width: `${Math.max(0, Math.min(100, Number(x.progress || 0)))}%` }} /></div></div></td><td className="p-3"><div className="flex flex-wrap gap-2"><Button variant="secondary" onClick={() => duplicateWorkItem(x)}>Dupliquer</Button><Button variant="amber" onClick={() => editWorkItem(x)}>Modifier</Button><Button variant="danger" onClick={() => deleteWorkItem(x)}>Supprimer</Button></div></td></tr>; })}{filteredWorkItems.length === 0 && <tr><td colSpan={12} className="p-6 text-center text-slate-500">Aucun ouvrage. Ajoute une première ligne manuellement ou importe un Excel OBAT.</td></tr>}</tbody>
+          <tfoot><tr className="border-t bg-slate-50 font-black"><td className="p-3" colSpan={5}>TOTAL</td><td className="p-3">{money(workTotals.sold)}</td><td className="p-3">{money(workTotals.merchandise)}</td><td className="p-3">{money(workTotals.cost)}</td><td className={workTotals.margin >= 0 ? "p-3 text-emerald-700" : "p-3 text-red-600"}>{money(workTotals.margin)}</td><td className={workTotals.profitability >= 0 ? "p-3 text-emerald-700" : "p-3 text-red-600"}>{workTotals.profitability} %</td><td className="p-3" colSpan={2}></td></tr></tfoot>
         </table>
       </div>
     </Card>
@@ -4690,7 +4796,7 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
       </div>
     </Card>
     <div className="grid gap-4 md:grid-cols-5"><Card className="border-l-4 border-emerald-500"><p className="text-xs font-black uppercase text-slate-500">CA HT</p><p className="mt-2 text-2xl font-black text-emerald-700">{money(allStats.revenue)}</p><p className="text-xs text-slate-500">Factures clients</p></Card><Card className="border-l-4 border-blue-500"><p className="text-xs font-black uppercase text-slate-500">TVA collectée</p><p className="mt-2 text-2xl font-black text-blue-700">{money(allStats.revenueTVA)}</p><p className="text-xs text-slate-500">Sur factures clients</p></Card><Card className="border-l-4 border-red-500"><p className="text-xs font-black uppercase text-slate-500">Dépenses HT</p><p className="mt-2 text-2xl font-black text-red-600">{money(allStats.purchases + expensesHT)}</p><p className="text-xs text-slate-500">Achats + charges</p></Card><Card className="border-l-4 border-blue-500"><p className="text-xs font-black uppercase text-slate-500">Factures clientes en attente de règlement</p><p className="mt-2 text-2xl font-black text-blue-700">{money(clientOutstandingTotal)}</p><p className="text-xs text-slate-500">Total à encaisser</p></Card><Card className={tvaBalanceGlobal >= 0 ? "border-l-4 border-red-500" : "border-l-4 border-emerald-500"}><p className="text-xs font-black uppercase text-slate-500">{tvaBalanceGlobal >= 0 ? "Solde TVA due" : "TVA récupérable"}</p><p className={tvaBalanceGlobal >= 0 ? "mt-2 text-2xl font-black text-red-600" : "mt-2 text-2xl font-black text-emerald-700"}>{money(Math.abs(tvaBalanceGlobal))}</p><p className="text-xs text-slate-500">Collectée - déductible</p></Card></div>
-    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">{actionCard("factures", "📄", "Créer facturation client", "Sur chantiers actifs", "bg-emerald-600")}{actionCard("calcul-rentabilite", "📊", "Calcul rentabilité", "Simulation marge devis", "bg-amber-600")}{actionCard("paiements", "💶", "Règlements clients", "Factures clientes en attente de règlement", "bg-blue-600")}{actionCard("charges", "🏢", "Charges entreprises", "Gérer les charges fixes", "bg-purple-600")}{actionCard("supplier-invoices", "🧾", "Factures fournisseurs", "Encours fournisseurs indépendant", "bg-red-600")}{actionCard("ouvrage-pilotage", "🧱", "Pilotage des ouvrages", "Temps, salariés, achats, rentabilité", "bg-sky-600")}{actionCard("achats", "🧾", "Récapitulatif des factures d’achats", "Voir le détail des achats", "bg-cyan-600")}</div>
+    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">{actionCard("factures", "📄", "Créer facturation client", "Sur chantiers actifs", "bg-emerald-600")}{actionCard("calcul-rentabilite", "📊", "Calcul rentabilité", "Simulation marge devis", "bg-amber-600")}{actionCard("paiements", "💶", "Règlements clients", "Factures clientes en attente de règlement", "bg-blue-600")}{actionCard("charges", "🏢", "Charges entreprises", "Gérer les charges fixes", "bg-purple-600")}{actionCard("supplier-invoices", "🧾", "Factures fournisseurs", "Encours fournisseurs indépendant", "bg-red-600")}{actionCard("ouvrage-pilotage", "🧱", "Pilotage des ouvrages", "Dates, salariés, achats, rentabilité", "bg-sky-600")}{actionCard("achats", "🧾", "Récapitulatif des factures d’achats", "Voir le détail des achats", "bg-cyan-600")}</div>
     <div className="grid gap-5 xl:grid-cols-3"><Card><div className="mb-4 flex flex-wrap items-center justify-between gap-3"><h3 className="text-lg font-black uppercase text-slate-800">Répartition du CA HT</h3><Button variant="secondary" onClick={generateAccountingPdfFromGestion}>Rapport comptable PDF</Button></div><SimplePie values={searchedAccountingProjects.slice(0, 6).map((p: any) => ({ label: `${p.name}${p.status === "archive" ? " · archivé" : ""}`, value: projectStats(p.id, true).revenueTotal }))} /></Card><Card><h3 className="mb-4 text-lg font-black uppercase text-slate-800">Répartition des dépenses HT</h3><SimplePie values={[{ label: "Achats", value: allStats.purchases }, { label: "Main d’œuvre", value: allStats.labor }, { label: "Charges fixes", value: expensesHT }]} /></Card><Card className={globalResultHT >= 0 ? "border-l-4 border-emerald-500" : "border-l-4 border-red-500"}><div className="mb-4 flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-lg font-black uppercase text-slate-800">Résultat global HT</h3><p className="text-xs text-slate-500">CA, achats, MO et charges fixes</p></div><div className={globalResultHT >= 0 ? "rounded-2xl bg-emerald-50 px-4 py-2 text-right" : "rounded-2xl bg-red-50 px-4 py-2 text-right"}><p className="text-xs font-black uppercase text-slate-500">Résultat</p><p className={globalResultHT >= 0 ? "text-2xl font-black text-emerald-700" : "text-2xl font-black text-red-600"}>{money(globalResultHT)}</p><p className={globalResultHT >= 0 ? "text-lg font-black text-emerald-700" : "text-lg font-black text-red-600"}>{globalMarginRate}% de marge</p></div></div><SimplePie values={[{ label: "CA HT", value: allStats.revenue }, { label: "Achats HT", value: allStats.purchases }, { label: "MO", value: allStats.labor }, { label: "Charges fixes", value: expensesHT }]} /></Card></div>
     <div><div className="mb-4 flex flex-wrap items-center justify-between gap-3"><h3 className="text-xl font-black uppercase text-slate-900">Chantiers actifs — rentabilité</h3><Badge tone="blue">{searchedActiveProjects.length} chantier(s)</Badge></div><div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">{searchedActiveProjects.map((p: any) => { const s = projectStats(p.id, false); return <Card key={p.id} className="overflow-hidden p-0"><div className="p-5"><div className="flex items-start justify-between gap-3"><div><h4 className="text-xl font-black text-slate-900">{p.name}</h4><p className="text-sm text-slate-500">{p.client || "Client non renseigné"}</p></div><Badge tone="green">En cours</Badge></div><div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs"><div className="rounded-2xl bg-emerald-50 p-2"><b>CA HT</b><br /><span className="font-black text-emerald-700">{money(s.revenueTotal)}</span></div><div className="rounded-2xl bg-red-50 p-2"><b>Achats HT</b><br /><span className="font-black text-red-700">{money(s.supplierTotal)}</span></div><div className="rounded-2xl bg-blue-50 p-2"><b>MO</b><br /><span className="font-black text-blue-700">{money(s.laborTotal)}</span></div><div className="rounded-2xl bg-slate-50 p-2"><b>Marge</b><br /><span className={s.margin >= 0 ? "font-black text-emerald-700" : "font-black text-red-600"}>{money(s.margin)}</span></div><div className="rounded-2xl bg-purple-50 p-2"><b>TVA</b><br /><span className="font-black text-purple-700">{money(Math.abs(s.tvaBalance))}</span></div><div className={s.marginRate >= 0 ? "rounded-2xl bg-emerald-50 p-2" : "rounded-2xl bg-red-50 p-2"}><b>Rentabilité</b><br /><span className={s.marginRate >= 0 ? "font-black text-emerald-700" : "font-black text-red-600"}>{s.marginRate}%</span></div></div><div className="mt-4 grid grid-cols-3 gap-2"><Button variant="secondary" onClick={() => openProjectFullDetail(p)}>Voir</Button><Button variant="secondary" onClick={() => generateProjectPdfFromGestion(p)}>Rapport PDF</Button><Button variant="amber" onClick={() => archiveProject(p, true)}>Archiver</Button></div></div></Card>; })}{searchedActiveProjects.length === 0 && <Card><p className="text-center text-slate-500">Aucun chantier actif trouvé.</p></Card>}</div></div>
     <Card className="bg-slate-50"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-lg font-black">Chantiers archivés</h3><p className="text-sm text-slate-500">Les chantiers archivés ne sont plus visibles dans Chantiers actifs ni dans Gestion. Leurs factures, retours et documents restent consultables ici.</p></div><Button variant="secondary" onClick={() => setTab("archives")}>Accéder aux archives chantiers</Button></div>{tab === "archives" && <div className="mt-4 grid gap-4">{archivedProjects.map((p: any) => { const s = projectStats(p.id, false); return <div key={p.id} className="rounded-2xl border bg-white p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><Badge tone="slate">Archivé</Badge><h4 className="mt-2 text-xl font-black">{p.name}</h4><p className="text-sm text-slate-500">{p.client || "Client non renseigné"}</p></div><Button variant="green" onClick={() => archiveProject(p, false)}>Réactiver</Button></div><div className="mt-3 grid gap-3 md:grid-cols-4"><div><b>CA HT</b><br />{money(s.revenueTotal)}</div><div><b>Achats HT</b><br />{money(s.supplierTotal)}</div><div><b>Marge</b><br />{money(s.margin)}</div><div><b>TVA</b><br />{money(Math.abs(s.tvaBalance))}</div></div></div>; })}{archivedProjects.length === 0 && <p className="text-sm text-slate-500">Aucun chantier archivé.</p>}</div>}</Card>

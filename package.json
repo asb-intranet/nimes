@@ -1,6 +1,6 @@
 {
   "name": "asb-intranet",
-  "version": "103.0.0",
+  "version": "1.0.105",
   "private": true,
   "scripts": {
     "dev": "next dev",
