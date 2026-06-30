@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import * as XLSX from "xlsx";
 import { supabase } from "@/lib/supabase";
 import { Card, Button, Field, Input, Select, Textarea, Section, Badge } from "@/components/Ui";
 import {
@@ -3952,6 +3953,83 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
     const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = "pilotage-ouvrages-asb.csv"; a.click(); URL.revokeObjectURL(url);
   }
 
+
+  function normalizeObatHeader(value: any) {
+    return String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  }
+  function numberFromObat(value: any) {
+    if (typeof value === "number") return value;
+    const cleaned = String(value ?? "").replace(/\s/g, "").replace(/€/g, "").replace(/,/g, ".").replace(/[^0-9.-]/g, "");
+    const n = Number(cleaned);
+    return Number.isFinite(n) ? n : 0;
+  }
+  function findObatColumn(headers: string[], keywords: string[]) {
+    return headers.findIndex((h: string) => keywords.some((k: string) => h.includes(k)));
+  }
+  async function importObatExcel(e: any) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!workProjectFilter) return alert("Choisis d'abord le chantier dans le filtre, puis importe le fichier OBAT.");
+    try {
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data, { type: "array" });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" }) as any[][];
+      const headerIndex = rows.findIndex((r: any[]) => {
+        const h = r.map(normalizeObatHeader).join(" | ");
+        return h.includes("designation") && (h.includes("quantite") || h.includes("qte")) && h.includes("total");
+      });
+      if (headerIndex < 0) return alert("Impossible de trouver l'en-tête OBAT. Il faut les colonnes Désignation, Quantité, Unité et Total HT.");
+      const headers = rows[headerIndex].map(normalizeObatHeader);
+      const colNumero = findObatColumn(headers, ["numero", "n "]);
+      const colDesignation = findObatColumn(headers, ["designation", "libelle"]);
+      const colQty = findObatColumn(headers, ["quantite", "qte", "qt "]);
+      const colUnit = findObatColumn(headers, ["unite", "unit"]);
+      const colPu = findObatColumn(headers, ["prix unitaire ht", "pu ht", "p u ht", "prix u ht"]);
+      const colTotal = findObatColumn(headers, ["total ht", "montant ht", "prix total ht"]);
+      let currentCategory = "";
+      const imported = rows.slice(headerIndex + 1).map((r: any[], idx: number) => {
+        const designation = String(r[colDesignation] ?? "").trim();
+        const quantity = colQty >= 0 ? numberFromObat(r[colQty]) : 0;
+        const unit = colUnit >= 0 ? String(r[colUnit] ?? "").trim() : "";
+        const pu = colPu >= 0 ? numberFromObat(r[colPu]) : 0;
+        const total = colTotal >= 0 ? numberFromObat(r[colTotal]) : quantity * pu;
+        const numero = colNumero >= 0 ? String(r[colNumero] ?? "").trim() : "";
+        const lower = designation.toLowerCase();
+        if (designation && !quantity && !total && !lower.includes("total") && designation.length > 2) currentCategory = designation;
+        if (!designation || lower.includes("total") || (!quantity && !total)) return null;
+        return {
+          project_id: workProjectFilter,
+          position: workItems.length + idx + 1,
+          numero: numero || null,
+          designation,
+          category: currentCategory || null,
+          quantity,
+          unit: unit || null,
+          sold_ht: total,
+          planned_hours: 0,
+          real_hours: 0,
+          labor_rate: 45,
+          employee_names: null,
+          merchandise_ht: 0,
+          subcontract_ht: 0,
+          other_costs_ht: 0,
+          progress: 0,
+          notes: `Import OBAT : ${file.name}`
+        };
+      }).filter(Boolean);
+      if (imported.length === 0) return alert("Aucune ligne d'ouvrage exploitable trouvée dans ce fichier OBAT.");
+      if (!confirm(`${imported.length} lignes OBAT vont être ajoutées au chantier ${workProjectName(workProjectFilter)}. Continuer ?`)) return;
+      const { error } = await supabase.from("chantier_work_items").insert(imported);
+      if (error) return alert("Import OBAT impossible : " + error.message + "\n\nVérifie que le script Supabase V100/V102 est lancé.");
+      await refreshAll();
+      alert(`${imported.length} lignes d'ouvrage importées depuis OBAT.`);
+    } catch (err: any) {
+      alert("Lecture du fichier Excel impossible : " + (err?.message || err));
+    }
+  }
+
   function generateSupplierInvoicesPdf() {
     const rows = periodSupplierInvoices.map((i: any) => `<tr><td>${i.invoice_number || "—"}</td><td><b>${i.supplier || ""}</b></td><td>${projectLabel(i.project_id)}</td><td>${formatDisplayDate(i.invoice_date)}</td><td>${formatDisplayDate(i.due_date)}</td><td class="num">${money(amountTTC(i))}</td><td class="num">${money(Number(i.paid_ttc || 0))}</td><td class="num">${money(Math.max(0, amountTTC(i) - Number(i.paid_ttc || 0)))}</td><td>${i.status || ""}</td></tr>`).join("");
     const html = `<!doctype html><html><head><meta charset="utf-8"><title>Factures fournisseurs ASB</title><style>body{font-family:Arial,sans-serif;color:#0f172a;padding:32px}.head{display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid #0f172a;padding-bottom:16px}.logo{height:58px}.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:24px 0}.kpi{border:1px solid #e2e8f0;border-radius:16px;padding:14px;background:#f8fafc}.kpi b{font-size:18px}table{width:100%;border-collapse:collapse;font-size:12px}th{background:#0f172a;color:white;text-align:left;padding:10px}td{border-bottom:1px solid #e2e8f0;padding:9px}.num{text-align:right;font-weight:bold}.note{margin-top:24px;color:#64748b;font-size:11px}</style></head><body><div class="head"><div><h1>Factures fournisseurs</h1><p>Période : ${periodLabel}</p></div><img class="logo" src="/logo-asb.png" /></div><div class="kpis"><div class="kpi">Total HT<br><b>${money(supplierTotalHT)}</b></div><div class="kpi">TVA<br><b>${money(supplierTotalTVA)}</b></div><div class="kpi">Total TTC<br><b>${money(supplierTotalTTC)}</b></div><div class="kpi">Encours<br><b>${money(supplierOutstandingTTC)}</b></div></div><table><thead><tr><th>N°</th><th>Fournisseur</th><th>Chantier</th><th>Date</th><th>Échéance</th><th>TTC</th><th>Réglé</th><th>Encours</th><th>Statut</th></tr></thead><tbody>${rows || `<tr><td colspan="9">Aucune facture fournisseur.</td></tr>`}</tbody></table><p class="note">Document interne ASB — suivi des encours fournisseurs indépendant des règlements clients.</p><script>window.print()</script></body></html>`;
@@ -4510,7 +4588,11 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
         <h1 className="mt-3 text-3xl font-black text-slate-900">Pilotage des ouvrages</h1>
         <p className="text-sm text-slate-500">Module manuel : temps passé, salariés attribués, achats et rentabilité par ouvrage.</p>
       </div>
-      <Button variant="secondary" onClick={exportWorkItemsCsv}>Exporter Excel</Button>
+      <div className="flex flex-wrap gap-2">
+        <input id="obat-work-import" type="file" accept=".xlsx,.xls" className="hidden" onChange={importObatExcel} />
+        <Button variant="secondary" onClick={() => document.getElementById("obat-work-import")?.click()}>Importer Excel OBAT</Button>
+        <Button variant="secondary" onClick={exportWorkItemsCsv}>Exporter Excel</Button>
+      </div>
     </div>
 
     <Card>
@@ -4557,7 +4639,7 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
       <div className="overflow-x-auto">
         <table className="w-full text-left text-sm">
           <thead><tr className="text-xs uppercase text-slate-500"><th className="p-3">N°</th><th className="p-3">Désignation</th><th className="p-3">Qté</th><th className="p-3">Salariés</th><th className="p-3">H prévues</th><th className="p-3">H réelles</th><th className="p-3">Prix HT</th><th className="p-3">Coût total</th><th className="p-3">Marge</th><th className="p-3">Rentabilité</th><th className="p-3">Avancement</th><th className="p-3">Actions</th></tr></thead>
-          <tbody>{filteredWorkItems.map((x: any) => { const n = workItemNumbers(x); return <tr key={x.id} className={editingWorkItemId === x.id ? "border-t bg-sky-50" : "border-t"}><td className="p-3 font-bold">{x.numero || "-"}</td><td className="p-3"><b>{x.designation}</b><br /><span className="text-xs text-slate-500">{workProjectName(x.project_id)}{x.category ? ` · ${x.category}` : ""}</span></td><td className="p-3">{Number(x.quantity || 0)} {x.unit || ""}</td><td className="p-3">{x.employee_names || "-"}</td><td className="p-3">{n.plannedHours} h</td><td className="p-3">{n.realHours} h</td><td className="p-3 font-bold">{money(n.sold)}</td><td className="p-3">{money(n.totalCost)}</td><td className={n.margin >= 0 ? "p-3 font-black text-emerald-700" : "p-3 font-black text-red-600"}>{money(n.margin)}</td><td className={n.profitability >= 0 ? "p-3 font-black text-emerald-700" : "p-3 font-black text-red-600"}>{n.profitability} %</td><td className="p-3"><div className="min-w-[110px]"><b>{Number(x.progress || 0)} %</b><div className="mt-1 h-2 rounded-full bg-slate-200"><div className={Number(x.progress || 0) >= 100 ? "h-2 rounded-full bg-emerald-500" : Number(x.progress || 0) > 0 ? "h-2 rounded-full bg-amber-500" : "h-2 rounded-full bg-slate-300"} style={{ width: `${Math.max(0, Math.min(100, Number(x.progress || 0)))}%` }} /></div></div></td><td className="p-3"><div className="flex flex-wrap gap-2"><Button variant="secondary" onClick={() => duplicateWorkItem(x)}>Dupliquer</Button><Button variant="amber" onClick={() => editWorkItem(x)}>Modifier</Button><Button variant="danger" onClick={() => deleteWorkItem(x)}>Supprimer</Button></div></td></tr>; })}{filteredWorkItems.length === 0 && <tr><td colSpan={12} className="p-6 text-center text-slate-500">Aucun ouvrage. Ajoute une première ligne manuellement.</td></tr>}</tbody>
+          <tbody>{filteredWorkItems.map((x: any) => { const n = workItemNumbers(x); return <tr key={x.id} className={editingWorkItemId === x.id ? "border-t bg-sky-50" : "border-t"}><td className="p-3 font-bold">{x.numero || "-"}</td><td className="p-3"><b>{x.designation}</b><br /><span className="text-xs text-slate-500">{workProjectName(x.project_id)}{x.category ? ` · ${x.category}` : ""}</span></td><td className="p-3">{Number(x.quantity || 0)} {x.unit || ""}</td><td className="p-3">{x.employee_names || "-"}</td><td className="p-3">{n.plannedHours} h</td><td className="p-3">{n.realHours} h</td><td className="p-3 font-bold">{money(n.sold)}</td><td className="p-3">{money(n.totalCost)}</td><td className={n.margin >= 0 ? "p-3 font-black text-emerald-700" : "p-3 font-black text-red-600"}>{money(n.margin)}</td><td className={n.profitability >= 0 ? "p-3 font-black text-emerald-700" : "p-3 font-black text-red-600"}>{n.profitability} %</td><td className="p-3"><div className="min-w-[110px]"><b>{Number(x.progress || 0)} %</b><div className="mt-1 h-2 rounded-full bg-slate-200"><div className={Number(x.progress || 0) >= 100 ? "h-2 rounded-full bg-emerald-500" : Number(x.progress || 0) > 0 ? "h-2 rounded-full bg-amber-500" : "h-2 rounded-full bg-slate-300"} style={{ width: `${Math.max(0, Math.min(100, Number(x.progress || 0)))}%` }} /></div></div></td><td className="p-3"><div className="flex flex-wrap gap-2"><Button variant="secondary" onClick={() => duplicateWorkItem(x)}>Dupliquer</Button><Button variant="amber" onClick={() => editWorkItem(x)}>Modifier</Button><Button variant="danger" onClick={() => deleteWorkItem(x)}>Supprimer</Button></div></td></tr>; })}{filteredWorkItems.length === 0 && <tr><td colSpan={12} className="p-6 text-center text-slate-500">Aucun ouvrage. Ajoute une première ligne manuellement ou importe un Excel OBAT.</td></tr>}</tbody>
           <tfoot><tr className="border-t bg-slate-50 font-black"><td className="p-3" colSpan={4}>TOTAL</td><td className="p-3">{workTotals.planned} h</td><td className="p-3">{workTotals.real} h</td><td className="p-3">{money(workTotals.sold)}</td><td className="p-3">{money(workTotals.cost)}</td><td className={workTotals.margin >= 0 ? "p-3 text-emerald-700" : "p-3 text-red-600"}>{money(workTotals.margin)}</td><td className={workTotals.profitability >= 0 ? "p-3 text-emerald-700" : "p-3 text-red-600"}>{workTotals.profitability} %</td><td className="p-3" colSpan={2}></td></tr></tfoot>
         </table>
       </div>
