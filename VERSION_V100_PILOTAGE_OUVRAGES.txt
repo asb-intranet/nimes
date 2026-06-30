@@ -1,0 +1,14 @@
+ASB Intranet V100 — Pilotage des ouvrages manuel
+
+Ajouts :
+- Gestion > Pilotage des ouvrages.
+- Saisie manuelle d'ouvrages par chantier.
+- Temps prévu / temps réel.
+- Salariés attribués en saisie libre.
+- Montant vendu HT de l'ouvrage.
+- Coûts salariés, marchandises, sous-traitance et autres frais.
+- Calcul marge et rentabilité par ouvrage.
+- Ajout, modification, suppression, duplication.
+- Export CSV compatible Excel.
+
+SQL à lancer : supabase/schema-v100-pilotage-ouvrages.sql
