@@ -275,6 +275,7 @@ export default function Page() {
     setClientSpecPaymentTerms(csp.data || []);
     setClientPaymentSchedules(cps.data || []);
     setClientPaymentScheduleItems(cpsi.data || []);
+
   }
 
   async function signIn(e: any) {
@@ -3792,6 +3793,23 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
   const [workProjectFilter, setWorkProjectFilter] = useState<string>("");
   const [workSearch, setWorkSearch] = useState<string>("");
   const [showProjectWorkItems, setShowProjectWorkItems] = useState<boolean>(false);
+  const [pilotagePeriods, setPilotagePeriods] = useState<any[]>([]);
+  const [pilotagePeriodPurchases, setPilotagePeriodPurchases] = useState<any[]>([]);
+  const emptyWorkPeriodForm = { start_date: formatDate(new Date()), end_date: formatDate(new Date()), status: "en_cours", employee_ids: [] as string[], selected_item_ids: [] as string[], notes: "" };
+  const [workPeriodForm, setWorkPeriodForm] = useState<any>(emptyWorkPeriodForm);
+  const [editingWorkPeriodId, setEditingWorkPeriodId] = useState<string | null>(null);
+  const emptyWorkPeriodPurchaseForm = { period_id: "", supplier: "", designation: "", amount_ht: "", purchase_date: formatDate(new Date()), invoice_ref: "", notes: "" };
+  const [workPeriodPurchaseForm, setWorkPeriodPurchaseForm] = useState<any>(emptyWorkPeriodPurchaseForm);
+  const [editingWorkPeriodPurchaseId, setEditingWorkPeriodPurchaseId] = useState<string | null>(null);
+  async function refreshPilotagePeriods() {
+    const [wper, wpp] = await Promise.all([
+      supabase.from("pilotage_work_periods").select("*").order("start_date", { ascending: true }),
+      supabase.from("pilotage_work_period_purchases").select("*").order("purchase_date", { ascending: true })
+    ]);
+    setPilotagePeriods(wper.data || []);
+    setPilotagePeriodPurchases(wpp.data || []);
+  }
+  useEffect(() => { refreshPilotagePeriods(); }, [workProjectFilter]);
   const emptyPilotageProjectForm = { name: "", client: "", address: "", reference: "", notes: "", status: "en_cours" };
   const [pilotageProjectForm, setPilotageProjectForm] = useState<any>(emptyPilotageProjectForm);
   const [editingPilotageProjectId, setEditingPilotageProjectId] = useState<string | null>(null);
@@ -4095,6 +4113,149 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
     const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = "pilotage-ouvrages-asb.csv"; a.click(); URL.revokeObjectURL(url);
   }
 
+
+
+  function selectedItemIdsFromPeriod(p: any): string[] {
+    const raw = Array.isArray(p.selected_item_ids) ? p.selected_item_ids.join(",") : String(p.selected_item_ids || "");
+    return raw.split(",").map((v: string) => v.trim()).filter(Boolean);
+  }
+  function employeeIdsFromPeriod(p: any): string[] {
+    const raw = Array.isArray(p.employee_ids) ? p.employee_ids.join(",") : String(p.employee_ids || "");
+    return raw.split(",").map((v: string) => v.trim()).filter(Boolean);
+  }
+  const selectedProjectPeriods = selectedPilotageProject ? (pilotagePeriods || []).filter((p: any) => p.project_id === selectedPilotageProject.id) : [];
+  const selectedProjectPeriodPurchases = selectedPilotageProject ? (pilotagePeriodPurchases || []).filter((p: any) => p.project_id === selectedPilotageProject.id) : [];
+  function periodPurchases(periodId: string) { return (pilotagePeriodPurchases || []).filter((p: any) => p.period_id === periodId); }
+  function periodItems(period: any) {
+    const ids = selectedItemIdsFromPeriod(period);
+    return (workItems || []).filter((x: any) => ids.includes(x.id));
+  }
+  function periodNumbers(period: any) {
+    const items = periodItems(period);
+    const empIds = employeeIdsFromPeriod(period);
+    const days = daysBetween(period.start_date, period.end_date || period.start_date);
+    const sold = items.reduce((s: number, x: any) => s + Number(x.sold_ht || 0), 0);
+    const itemMerchandise = items.reduce((s: number, x: any) => s + Number(x.merchandise_ht || 0), 0);
+    const purchases = periodPurchases(period.id).reduce((s: number, x: any) => s + Number(x.amount_ht || 0), 0);
+    const laborCost = empIds.reduce((s: number, id: string) => s + employeeDayCost(id), 0) * days;
+    const totalCost = laborCost + itemMerchandise + purchases;
+    const margin = sold - totalCost;
+    const profitability = sold > 0 ? Math.round((margin / sold) * 1000) / 10 : 0;
+    return { items, empIds, days, sold, itemMerchandise, purchases, laborCost, totalCost, margin, profitability };
+  }
+  function projectPeriodTotals(projectId: string) {
+    const periods = (pilotagePeriods || []).filter((p: any) => p.project_id === projectId);
+    const totals = periods.reduce((a: any, p: any) => { const n = periodNumbers(p); a.periods += 1; a.sold += n.sold; a.laborCost += n.laborCost; a.purchases += n.purchases + n.itemMerchandise; a.cost += n.totalCost; a.margin += n.margin; return a; }, { periods: 0, sold: 0, laborCost: 0, purchases: 0, cost: 0, margin: 0 });
+    totals.profitability = totals.sold > 0 ? Math.round((totals.margin / totals.sold) * 1000) / 10 : 0;
+    return totals;
+  }
+  function resetWorkPeriodForm() {
+    setEditingWorkPeriodId(null);
+    setWorkPeriodForm({ ...emptyWorkPeriodForm, start_date: formatDate(new Date()), end_date: formatDate(new Date()), employee_ids: [], selected_item_ids: [], notes: "" });
+  }
+  function editWorkPeriod(p: any) {
+    setEditingWorkPeriodId(p.id);
+    setWorkPeriodForm({ start_date: p.start_date || formatDate(new Date()), end_date: p.end_date || p.start_date || formatDate(new Date()), status: p.status || "en_cours", employee_ids: employeeIdsFromPeriod(p), selected_item_ids: selectedItemIdsFromPeriod(p), notes: p.notes || "" });
+    setWorkPeriodPurchaseForm({ ...emptyWorkPeriodPurchaseForm, period_id: p.id, purchase_date: p.start_date || formatDate(new Date()) });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+  function addEmployeeToWorkPeriod(employeeId: string) {
+    if (!employeeId) return;
+    const current = Array.isArray(workPeriodForm.employee_ids) ? workPeriodForm.employee_ids : [];
+    if (current.includes(employeeId)) return;
+    setWorkPeriodForm({ ...workPeriodForm, employee_ids: [...current, employeeId] });
+  }
+  function removeEmployeeFromWorkPeriod(employeeId: string) {
+    const current = Array.isArray(workPeriodForm.employee_ids) ? workPeriodForm.employee_ids : [];
+    setWorkPeriodForm({ ...workPeriodForm, employee_ids: current.filter((id: string) => id !== employeeId) });
+  }
+  function toggleWorkPeriodItem(itemId: string) {
+    const current = Array.isArray(workPeriodForm.selected_item_ids) ? workPeriodForm.selected_item_ids : [];
+    setWorkPeriodForm({ ...workPeriodForm, selected_item_ids: current.includes(itemId) ? current.filter((id: string) => id !== itemId) : [...current, itemId] });
+  }
+  async function saveWorkPeriod(e: any) {
+    e.preventDefault();
+    if (!workProjectFilter) return alert("Ouvre d'abord un chantier.");
+    if (!workPeriodForm.start_date || !workPeriodForm.end_date) return alert("Dates Du / Au obligatoires.");
+    if (new Date(workPeriodForm.end_date) < new Date(workPeriodForm.start_date)) return alert("La date de fin doit être après la date de début.");
+    const payload = {
+      project_id: workProjectFilter,
+      start_date: workPeriodForm.start_date,
+      end_date: workPeriodForm.end_date,
+      status: workPeriodForm.status || "en_cours",
+      employee_ids: (Array.isArray(workPeriodForm.employee_ids) ? workPeriodForm.employee_ids : []).join(","),
+      employee_names: employeeLabelFromIds(Array.isArray(workPeriodForm.employee_ids) ? workPeriodForm.employee_ids : []),
+      selected_item_ids: (Array.isArray(workPeriodForm.selected_item_ids) ? workPeriodForm.selected_item_ids : []).join(","),
+      notes: workPeriodForm.notes || null
+    };
+    const q = editingWorkPeriodId ? supabase.from("pilotage_work_periods").update(payload).eq("id", editingWorkPeriodId) : supabase.from("pilotage_work_periods").insert(payload).select("id").single();
+    const { data, error } = await q;
+    if (error) return alert("Période impossible : " + error.message + "\n\nLance le script Supabase V110.");
+    const savedId = editingWorkPeriodId || data?.id;
+    if (savedId) {
+      await supabase.from("chantier_work_items").update({ realization_date: payload.start_date, employee_ids: payload.employee_ids, employee_names: payload.employee_names, progress: 100 }).in("id", Array.isArray(workPeriodForm.selected_item_ids) ? workPeriodForm.selected_item_ids : []).eq("project_id", workProjectFilter);
+      setWorkPeriodPurchaseForm({ ...workPeriodPurchaseForm, period_id: savedId });
+    }
+    resetWorkPeriodForm();
+    await refreshAll();
+    await refreshPilotagePeriods();
+  }
+  async function deleteWorkPeriod(p: any) {
+    if (!confirm(`Supprimer la période ${formatDisplayRange(p.start_date, p.end_date)} et ses achats associés ?`)) return;
+    await supabase.from("pilotage_work_period_purchases").delete().eq("period_id", p.id);
+    const { error } = await supabase.from("pilotage_work_periods").delete().eq("id", p.id);
+    if (error) return alert(error.message);
+    if (editingWorkPeriodId === p.id) resetWorkPeriodForm();
+    await refreshAll();
+    await refreshPilotagePeriods();
+  }
+  async function duplicateWorkPeriod(p: any) {
+    const payload = { project_id: p.project_id, start_date: p.start_date, end_date: p.end_date, status: "en_cours", employee_ids: p.employee_ids || null, employee_names: p.employee_names || null, selected_item_ids: p.selected_item_ids || null, notes: p.notes ? `${p.notes} - copie` : "Copie" };
+    const { error } = await supabase.from("pilotage_work_periods").insert(payload);
+    if (error) return alert(error.message);
+    await refreshAll();
+    await refreshPilotagePeriods();
+  }
+  async function toggleCloseWorkPeriod(p: any) {
+    const next = p.status === "cloturee" ? "en_cours" : "cloturee";
+    const { error } = await supabase.from("pilotage_work_periods").update({ status: next }).eq("id", p.id);
+    if (error) return alert(error.message);
+    await refreshAll();
+  }
+  function editWorkPeriodPurchase(p: any) {
+    setEditingWorkPeriodPurchaseId(p.id);
+    setWorkPeriodPurchaseForm({ period_id: p.period_id || "", supplier: p.supplier || "", designation: p.designation || "", amount_ht: String(p.amount_ht || ""), purchase_date: p.purchase_date || formatDate(new Date()), invoice_ref: p.invoice_ref || "", notes: p.notes || "" });
+  }
+  function resetWorkPeriodPurchaseForm() {
+    setEditingWorkPeriodPurchaseId(null);
+    setWorkPeriodPurchaseForm({ ...emptyWorkPeriodPurchaseForm, period_id: editingWorkPeriodId || "", purchase_date: formatDate(new Date()) });
+  }
+  async function saveWorkPeriodPurchase(e: any) {
+    e.preventDefault();
+    if (!workProjectFilter) return alert("Ouvre d'abord un chantier.");
+    if (!workPeriodPurchaseForm.period_id || !workPeriodPurchaseForm.designation || !workPeriodPurchaseForm.amount_ht) return alert("Période, désignation et montant obligatoires.");
+    const payload = { project_id: workProjectFilter, period_id: workPeriodPurchaseForm.period_id, supplier: workPeriodPurchaseForm.supplier || null, designation: workPeriodPurchaseForm.designation, amount_ht: Number(workPeriodPurchaseForm.amount_ht || 0), purchase_date: workPeriodPurchaseForm.purchase_date || null, invoice_ref: workPeriodPurchaseForm.invoice_ref || null, notes: workPeriodPurchaseForm.notes || null };
+    const q = editingWorkPeriodPurchaseId ? supabase.from("pilotage_work_period_purchases").update(payload).eq("id", editingWorkPeriodPurchaseId) : supabase.from("pilotage_work_period_purchases").insert(payload);
+    const { error } = await q;
+    if (error) return alert("Achat impossible : " + error.message + "\n\nLance le script Supabase V110.");
+    resetWorkPeriodPurchaseForm();
+    await refreshAll();
+    await refreshPilotagePeriods();
+  }
+  async function deleteWorkPeriodPurchase(p: any) {
+    if (!confirm(`Supprimer l'achat ${p.designation || ""} ?`)) return;
+    const { error } = await supabase.from("pilotage_work_period_purchases").delete().eq("id", p.id);
+    if (error) return alert(error.message);
+    await refreshAll();
+    await refreshPilotagePeriods();
+  }
+  function generateWorkPeriodPdf(period: any) {
+    const n = periodNumbers(period);
+    const rows = n.items.map((x: any) => `<tr><td>${x.numero || "—"}</td><td>${x.designation || ""}</td><td class="num">${money(Number(x.sold_ht || 0))}</td></tr>`).join("");
+    const buys = periodPurchases(period.id).map((x: any) => `<tr><td>${formatDisplayDate(x.purchase_date)}</td><td>${x.supplier || "—"}</td><td>${x.designation || ""}</td><td class="num">${money(x.amount_ht)}</td></tr>`).join("");
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Période de réalisation</title><style>body{font-family:Arial,sans-serif;color:#0f172a;padding:32px}.head{display:flex;justify-content:space-between;border-bottom:3px solid #0f172a;padding-bottom:16px}.logo{height:58px}.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin:20px 0}.kpi{background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:12px}.num{text-align:right;font-weight:bold}table{width:100%;border-collapse:collapse;font-size:12px;margin-top:10px}th{background:#0f172a;color:white;text-align:left;padding:9px}td{border-bottom:1px solid #e2e8f0;padding:8px}h2{margin-top:22px}</style></head><body><div class="head"><div><h1>${selectedPilotageProject?.name || "Chantier"}</h1><p>Période : ${formatDisplayRange(period.start_date, period.end_date)}</p><p>Salariés : ${employeeLabelFromIds(n.empIds)}</p></div><img class="logo" src="/logo-asb.png" /></div><div class="kpis"><div class="kpi">Vendu<br><b>${money(n.sold)}</b></div><div class="kpi">Salaires<br><b>${money(n.laborCost)}</b></div><div class="kpi">Achats<br><b>${money(n.purchases + n.itemMerchandise)}</b></div><div class="kpi">Marge<br><b>${money(n.margin)}</b></div><div class="kpi">Rentabilité<br><b>${n.profitability} %</b></div></div><h2>Ouvrages réalisés</h2><table><thead><tr><th>N°</th><th>Désignation</th><th>Vendu HT</th></tr></thead><tbody>${rows || `<tr><td colspan="3">Aucun ouvrage.</td></tr>`}</tbody></table><h2>Achats de la période</h2><table><thead><tr><th>Date</th><th>Fournisseur</th><th>Désignation</th><th>HT</th></tr></thead><tbody>${buys || `<tr><td colspan="4">Aucun achat.</td></tr>`}</tbody></table><script>window.print()</script></body></html>`;
+    const w = window.open("", "_blank"); if (w) { w.document.write(html); w.document.close(); }
+  }
 
   function normalizeObatHeader(value: any) {
     return String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
@@ -4729,13 +4890,13 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
   if (tab === "ouvrage-pilotage") return selectedPilotageProject ? <div className="space-y-5">
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div>
-        <Button variant="secondary" onClick={() => { setWorkProjectFilter(""); setShowProjectWorkItems(false); resetWorkItemForm(); }}>← Retour aux chantiers de pilotage</Button>
+        <Button variant="secondary" onClick={() => { setWorkProjectFilter(""); setShowProjectWorkItems(false); resetWorkItemForm(); resetWorkPeriodForm(); }}>← Retour aux chantiers de pilotage</Button>
         <h1 className="mt-3 text-3xl font-black text-slate-900">{selectedPilotageProject.name}</h1>
         <p className="text-sm text-slate-500">{selectedPilotageProject.client || "Client non renseigné"}{selectedPilotageProject.reference ? ` · ${selectedPilotageProject.reference}` : ""}</p>
       </div>
       <div className="flex flex-wrap gap-2">
         <Button variant="secondary" onClick={() => setShowProjectWorkItems(!showProjectWorkItems)}>{showProjectWorkItems ? "Masquer les ouvrages" : "Voir / modifier les ouvrages"}</Button>
-        <Button variant="danger" onClick={deleteAllWorkItemsForSelectedProject}>Tout supprimer</Button>
+        <Button variant="danger" onClick={deleteAllWorkItemsForSelectedProject}>Supprimer tous les ouvrages</Button>
         <Button variant="secondary" onClick={exportWorkItemsCsv}>Exporter CSV</Button>
         <label className="inline-flex cursor-pointer items-center rounded-xl bg-slate-900 px-4 py-2 text-sm font-black text-white shadow-sm hover:bg-slate-800">
           Importer Excel OBAT
@@ -4744,93 +4905,97 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
       </div>
     </div>
 
-    <Card>
-      <div className="grid gap-4 md:grid-cols-5">
-        <div><p className="text-xs font-black uppercase text-slate-500">Ouvrages</p><p className="mt-1 text-2xl font-black text-slate-900">{workTotals.count}</p></div>
-        <div><p className="text-xs font-black uppercase text-slate-500">Vendu HT</p><p className="mt-1 text-2xl font-black text-slate-900">{money(workTotals.sold)}</p></div>
-        <div><p className="text-xs font-black uppercase text-slate-500">Coût total</p><p className="mt-1 text-2xl font-black text-slate-900">{money(workTotals.cost)}</p><p className="text-xs text-slate-500">Salariés + marchandises</p></div>
-        <div><p className="text-xs font-black uppercase text-slate-500">Marge</p><p className={workTotals.margin >= 0 ? "mt-1 text-2xl font-black text-emerald-700" : "mt-1 text-2xl font-black text-red-600"}>{money(workTotals.margin)}</p></div>
-        <div><p className="text-xs font-black uppercase text-slate-500">Rentabilité</p><p className={workTotals.profitability >= 0 ? "mt-1 text-2xl font-black text-emerald-700" : "mt-1 text-2xl font-black text-red-600"}>{workTotals.profitability} %</p></div>
+    {(() => { const pt = projectPeriodTotals(selectedPilotageProject.id); return <Card>
+      <div className="grid gap-4 md:grid-cols-6">
+        <div><p className="text-xs font-black uppercase text-slate-500">Périodes</p><p className="mt-1 text-2xl font-black text-slate-900">{pt.periods}</p></div>
+        <div><p className="text-xs font-black uppercase text-slate-500">Vendu HT</p><p className="mt-1 text-2xl font-black text-slate-900">{money(pt.sold)}</p></div>
+        <div><p className="text-xs font-black uppercase text-slate-500">Salaires</p><p className="mt-1 text-2xl font-black text-slate-900">{money(pt.laborCost)}</p></div>
+        <div><p className="text-xs font-black uppercase text-slate-500">Achats</p><p className="mt-1 text-2xl font-black text-slate-900">{money(pt.purchases)}</p></div>
+        <div><p className="text-xs font-black uppercase text-slate-500">Marge</p><p className={pt.margin >= 0 ? "mt-1 text-2xl font-black text-emerald-700" : "mt-1 text-2xl font-black text-red-600"}>{money(pt.margin)}</p></div>
+        <div><p className="text-xs font-black uppercase text-slate-500">Rentabilité</p><p className={pt.profitability >= 0 ? "mt-1 text-2xl font-black text-emerald-700" : "mt-1 text-2xl font-black text-red-600"}>{pt.profitability} %</p></div>
       </div>
-    </Card>
+    </Card>; })()}
 
     <Card className="border-l-4 border-sky-500">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h3 className="text-xl font-black text-slate-900">Nouvelle journée de réalisation</h3>
-          <p className="text-sm text-slate-500">Saisie rapide : choisis la date, ajoute les salariés présents un par un, puis coche les ouvrages réalisés ce jour-là.</p>
+          <h3 className="text-xl font-black text-slate-900">{editingWorkPeriodId ? "Modifier la période" : "Nouvelle période de réalisation"}</h3>
+          <p className="text-sm text-slate-500">Saisie rapide : période Du/Au, salariés présents, ouvrages réalisés et achats associés.</p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="secondary" onClick={selectAllVisibleWorkDayItems}>Tout sélectionner</Button>
-          <Button type="button" variant="secondary" onClick={clearWorkDayItems}>Vider</Button>
-        </div>
+        {editingWorkPeriodId && <Button type="button" variant="secondary" onClick={resetWorkPeriodForm}>Annuler modification</Button>}
       </div>
-      <form onSubmit={saveWorkDayAssignment} className="space-y-4">
-        <div className="grid gap-4 md:grid-cols-3">
-          <Field label="Date de réalisation"><Input type="date" value={workDayForm.date} onChange={(e: any) => setWorkDayForm({ ...workDayForm, date: e.target.value })} /></Field>
-          <Field label="Ajouter un salarié"><Select value="" onChange={(e: any) => addEmployeeToWorkDay(e.target.value)}><option value="">Choisir un salarié à ajouter</option>{activeEmployees.filter((emp: any) => !(Array.isArray(workDayForm.employee_ids) ? workDayForm.employee_ids : []).includes(emp.id)).map((emp: any) => <option key={emp.id} value={emp.id}>{employeeName(emp)}{emp.daily_cost ? ` — ${money(Number(emp.daily_cost))}/j` : ""}</option>)}</Select></Field>
-          <div className="rounded-2xl bg-slate-50 p-4 text-sm"><b>Résumé journée</b><br />{(Array.isArray(workDayForm.selected_item_ids) ? workDayForm.selected_item_ids : []).length} ouvrage(s) sélectionné(s)<br />{(Array.isArray(workDayForm.employee_ids) ? workDayForm.employee_ids : []).length} salarié(s) présent(s)</div>
+      <form onSubmit={saveWorkPeriod} className="space-y-5">
+        <div className="grid gap-4 md:grid-cols-4">
+          <Field label="Du"><Input type="date" value={workPeriodForm.start_date} onChange={(e: any) => setWorkPeriodForm({ ...workPeriodForm, start_date: e.target.value, end_date: workPeriodForm.end_date || e.target.value })} /></Field>
+          <Field label="Au"><Input type="date" value={workPeriodForm.end_date} onChange={(e: any) => setWorkPeriodForm({ ...workPeriodForm, end_date: e.target.value })} /></Field>
+          <Field label="Statut"><Select value={workPeriodForm.status} onChange={(e: any) => setWorkPeriodForm({ ...workPeriodForm, status: e.target.value })}><option value="en_cours">En cours</option><option value="cloturee">Clôturée</option></Select></Field>
+          <Field label="Observation"><Input value={workPeriodForm.notes} onChange={(e: any) => setWorkPeriodForm({ ...workPeriodForm, notes: e.target.value })} placeholder="Ex : phase terrassement" /></Field>
         </div>
-        <div>
-          <p className="mb-2 text-xs font-black uppercase text-slate-500">Salariés présents</p>
-          <div className="flex min-h-[44px] flex-wrap gap-2 rounded-2xl border bg-slate-50 p-3">
-            {(Array.isArray(workDayForm.employee_ids) ? workDayForm.employee_ids : []).map((id: string) => <button key={id} type="button" onClick={() => removeEmployeeFromWorkDay(id)} className="rounded-full bg-blue-100 px-3 py-1 text-xs font-black text-blue-700 hover:bg-red-100 hover:text-red-700">{employeeLabelFromIds([id])} ×</button>)}
-            {(!Array.isArray(workDayForm.employee_ids) || workDayForm.employee_ids.length === 0) && <span className="text-xs font-semibold text-slate-400">Ajoute les salariés présents avec la liste déroulante.</span>}
+
+        <div className="rounded-2xl border bg-slate-50 p-4">
+          <div className="mb-3 flex flex-wrap items-end gap-3">
+            <Field label="Ajouter un salarié"><Select value="" onChange={(e: any) => addEmployeeToWorkPeriod(e.target.value)}><option value="">Sélectionner...</option>{employees.filter((emp: any) => emp.active !== false && emp.archived !== true).map((emp: any) => <option key={emp.id} value={emp.id}>{employeeName(emp)} · {emp.daily_cost || 0} €/jour</option>)}</Select></Field>
+            <Badge tone="blue">{daysBetween(workPeriodForm.start_date, workPeriodForm.end_date)} jour(s)</Badge>
+          </div>
+          <div className="flex flex-wrap gap-2">{(Array.isArray(workPeriodForm.employee_ids) ? workPeriodForm.employee_ids : []).map((id: string) => <button type="button" key={id} onClick={() => removeEmployeeFromWorkPeriod(id)} className="rounded-full bg-slate-900 px-3 py-1 text-xs font-black text-white">{employeeLabelFromIds([id])} ✕</button>)}{(!workPeriodForm.employee_ids || workPeriodForm.employee_ids.length === 0) && <p className="text-sm text-slate-500">Aucun salarié sélectionné.</p>}</div>
+        </div>
+
+        <div className="rounded-2xl border p-4">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3"><div><h4 className="font-black text-slate-900">Ouvrages réalisés sur la période</h4><p className="text-xs text-slate-500">Les ouvrages viennent de l'import OBAT du chantier.</p></div><Badge>{(Array.isArray(workPeriodForm.selected_item_ids) ? workPeriodForm.selected_item_ids : []).length} sélectionné(s)</Badge></div>
+          <div className="max-h-[320px] overflow-y-auto rounded-xl border">
+            {selectedProjectWorkItems.map((x: any) => <label key={x.id} className="flex cursor-pointer items-start gap-3 border-b p-3 hover:bg-slate-50"><input type="checkbox" className="mt-1" checked={(Array.isArray(workPeriodForm.selected_item_ids) ? workPeriodForm.selected_item_ids : []).includes(x.id)} onChange={() => toggleWorkPeriodItem(x.id)} /><span className="flex-1"><b>{x.numero ? `${x.numero} · ` : ""}{x.designation}</b><br /><span className="text-xs text-slate-500">{Number(x.quantity || 0)} {x.unit || ""} · {money(x.sold_ht || 0)}</span></span></label>)}
+            {selectedProjectWorkItems.length === 0 && <div className="p-6 text-center text-sm text-slate-500">Aucun ouvrage. Importe d'abord ton Excel OBAT dans ce chantier.</div>}
           </div>
         </div>
-        <div className="rounded-2xl border bg-white">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b p-4">
-            <div><h4 className="font-black text-slate-900">Ouvrages réalisés ce jour-là</h4><p className="text-xs text-slate-500">Les lignes importées depuis OBAT restent dans le chantier. Ici tu coches seulement ce qui a été réalisé sur la journée.</p></div>
-            <Field label="Recherche"><Input value={workSearch} onChange={(e: any) => setWorkSearch(e.target.value)} placeholder="Rechercher un ouvrage..." /></Field>
-          </div>
-          <div className="max-h-[460px] overflow-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="sticky top-0 bg-slate-50"><tr className="text-xs uppercase text-slate-500"><th className="p-3">OK</th><th className="p-3">N°</th><th className="p-3">Désignation</th><th className="p-3">Qté</th><th className="p-3">Prix HT</th><th className="p-3">Déjà imputé</th></tr></thead>
-              <tbody>{selectedProjectWorkItems.map((x: any) => { const checked = (Array.isArray(workDayForm.selected_item_ids) ? workDayForm.selected_item_ids : []).includes(x.id); const n = workItemNumbers(x); return <tr key={x.id} onClick={() => toggleWorkDayItem(x.id)} className={checked ? "cursor-pointer border-t bg-sky-50" : "cursor-pointer border-t hover:bg-slate-50"}><td className="p-3"><input type="checkbox" checked={checked} onChange={() => toggleWorkDayItem(x.id)} onClick={(e: any) => e.stopPropagation()} /></td><td className="p-3 font-bold">{x.numero || "-"}</td><td className="p-3"><b>{x.designation}</b><br /><span className="text-xs text-slate-500">{x.category || "Sans catégorie"}</span></td><td className="p-3">{Number(x.quantity || 0)} {x.unit || ""}</td><td className="p-3 font-bold">{money(n.sold)}</td><td className="p-3">{x.realization_date ? formatDisplayDate(x.realization_date) : <span className="text-slate-400">Non</span>}</td></tr>; })}{selectedProjectWorkItems.length === 0 && <tr><td colSpan={6} className="p-6 text-center text-slate-500">Aucun ouvrage dans ce chantier. Importe d'abord un Excel OBAT ou ajoute une ligne dans “Voir / modifier les ouvrages”.</td></tr>}</tbody>
-            </table>
-          </div>
+
+        <div className="rounded-2xl bg-slate-900 p-4 text-white">
+          {(() => { const selected = selectedProjectWorkItems.filter((x: any) => (Array.isArray(workPeriodForm.selected_item_ids) ? workPeriodForm.selected_item_ids : []).includes(x.id)); const sold = selected.reduce((s: number, x: any) => s + Number(x.sold_ht || 0), 0); const merch = selected.reduce((s: number, x: any) => s + Number(x.merchandise_ht || 0), 0); const days = daysBetween(workPeriodForm.start_date, workPeriodForm.end_date); const labor = (Array.isArray(workPeriodForm.employee_ids) ? workPeriodForm.employee_ids : []).reduce((s: number, id: string) => s + employeeDayCost(id), 0) * days; const purchases = editingWorkPeriodId ? periodPurchases(editingWorkPeriodId).reduce((s: number, p: any) => s + Number(p.amount_ht || 0), 0) : 0; const total = merch + labor + purchases; const margin = sold - total; const rate = sold > 0 ? Math.round((margin / sold) * 1000) / 10 : 0; return <div className="grid gap-3 md:grid-cols-6"><div><b>Vendu HT</b><br />{money(sold)}</div><div><b>Salariés</b><br />{money(labor)}</div><div><b>Achats</b><br />{money(purchases + merch)}</div><div><b>Coût total</b><br />{money(total)}</div><div><b>Marge</b><br /><span className={margin >= 0 ? "font-black text-emerald-300" : "font-black text-red-300"}>{money(margin)}</span></div><div><b>Rentabilité</b><br /><span className={rate >= 0 ? "font-black text-emerald-300" : "font-black text-red-300"}>{rate} %</span></div></div>; })()}
         </div>
-        <div className="rounded-2xl bg-slate-50 p-4 text-sm">
-          {(() => { const ids = Array.isArray(workDayForm.selected_item_ids) ? workDayForm.selected_item_ids : []; const selected = selectedProjectWorkItems.filter((x: any) => ids.includes(x.id)); const sold = selected.reduce((s: number, x: any) => s + Number(x.sold_ht || 0), 0); const merch = selected.reduce((s: number, x: any) => s + Number(x.merchandise_ht || 0), 0); const sub = selected.reduce((s: number, x: any) => s + Number(x.subcontract_ht || 0), 0); const other = selected.reduce((s: number, x: any) => s + Number(x.other_costs_ht || 0), 0); const labor = (Array.isArray(workDayForm.employee_ids) ? workDayForm.employee_ids : []).reduce((s: number, id: string) => s + employeeDayCost(id), 0); const total = merch + sub + other + labor; const margin = sold - total; const rate = sold > 0 ? Math.round((margin / sold) * 1000) / 10 : 0; return <div className="grid gap-3 md:grid-cols-6"><div><b>Vendu HT</b><br />{money(sold)}</div><div><b>Salariés</b><br />{money(labor)}</div><div><b>Marchandises</b><br />{money(merch)}</div><div><b>Coût total</b><br />{money(total)}</div><div><b>Marge</b><br /><span className={margin >= 0 ? "font-black text-emerald-700" : "font-black text-red-600"}>{money(margin)}</span></div><div><b>Rentabilité</b><br /><span className={rate >= 0 ? "font-black text-emerald-700" : "font-black text-red-600"}>{rate} %</span></div></div>; })()}
-        </div>
-        <div className="flex flex-wrap gap-3"><Button variant="green">Enregistrer la journée</Button><Button type="button" variant="secondary" onClick={() => resetWorkDayForm()}>Réinitialiser</Button></div>
+        <div className="flex flex-wrap gap-3"><Button variant="green">{editingWorkPeriodId ? "Modifier la période" : "Enregistrer la période"}</Button><Button type="button" variant="secondary" onClick={resetWorkPeriodForm}>Réinitialiser</Button></div>
       </form>
+    </Card>
+
+    <Card className="border-l-4 border-amber-500">
+      <div className="mb-4"><h3 className="text-xl font-black text-slate-900">Achats de période</h3><p className="text-sm text-slate-500">Ajoute les achats directement sur la période concernée.</p></div>
+      <form onSubmit={saveWorkPeriodPurchase} className="grid gap-3 md:grid-cols-6">
+        <Field label="Période"><Select value={workPeriodPurchaseForm.period_id} onChange={(e: any) => setWorkPeriodPurchaseForm({ ...workPeriodPurchaseForm, period_id: e.target.value })}><option value="">Choisir...</option>{selectedProjectPeriods.map((p: any) => <option key={p.id} value={p.id}>{formatDisplayRange(p.start_date, p.end_date)}</option>)}</Select></Field>
+        <Field label="Fournisseur"><Input value={workPeriodPurchaseForm.supplier} onChange={(e: any) => setWorkPeriodPurchaseForm({ ...workPeriodPurchaseForm, supplier: e.target.value })} /></Field>
+        <Field label="Désignation"><Input required value={workPeriodPurchaseForm.designation} onChange={(e: any) => setWorkPeriodPurchaseForm({ ...workPeriodPurchaseForm, designation: e.target.value })} /></Field>
+        <Field label="Montant HT"><Input required type="number" step="0.01" value={workPeriodPurchaseForm.amount_ht} onChange={(e: any) => setWorkPeriodPurchaseForm({ ...workPeriodPurchaseForm, amount_ht: e.target.value })} /></Field>
+        <Field label="Date"><Input type="date" value={workPeriodPurchaseForm.purchase_date} onChange={(e: any) => setWorkPeriodPurchaseForm({ ...workPeriodPurchaseForm, purchase_date: e.target.value })} /></Field>
+        <Field label="Facture"><Input value={workPeriodPurchaseForm.invoice_ref} onChange={(e: any) => setWorkPeriodPurchaseForm({ ...workPeriodPurchaseForm, invoice_ref: e.target.value })} /></Field>
+        <div className="md:col-span-6 flex gap-2"><Button variant="green">{editingWorkPeriodPurchaseId ? "Modifier l'achat" : "+ Ajouter l'achat"}</Button>{editingWorkPeriodPurchaseId && <Button type="button" variant="secondary" onClick={resetWorkPeriodPurchaseForm}>Annuler</Button>}</div>
+      </form>
+    </Card>
+
+    <Card className="border-l-4 border-emerald-500">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-xl font-black text-slate-900">Historique des périodes</h3><p className="text-sm text-slate-500">Rentabilité calculée sur la durée complète : jours × salariés + achats + marchandises.</p></div><Badge tone="green">{selectedProjectPeriods.length}</Badge></div>
+      <div className="space-y-3">{selectedProjectPeriods.map((p: any) => { const n = periodNumbers(p); return <div key={p.id} className="rounded-2xl border bg-white p-4 shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-3"><div><h4 className="text-lg font-black text-slate-900">{formatDisplayRange(p.start_date, p.end_date)} <Badge tone={p.status === "cloturee" ? "slate" : "green"}>{p.status === "cloturee" ? "Clôturée" : "En cours"}</Badge></h4><p className="text-sm text-slate-500">{n.days} jour(s) · {employeeLabelFromIds(n.empIds)} · {n.items.length} ouvrage(s)</p>{p.notes && <p className="mt-1 text-sm text-slate-600">{p.notes}</p>}</div><div className="flex flex-wrap gap-2"><Button variant="secondary" onClick={() => editWorkPeriod(p)}>Modifier</Button><Button variant="secondary" onClick={() => duplicateWorkPeriod(p)}>Dupliquer</Button><Button variant="amber" onClick={() => toggleCloseWorkPeriod(p)}>{p.status === "cloturee" ? "Réouvrir" : "Clôturer"}</Button><Button variant="secondary" onClick={() => generateWorkPeriodPdf(p)}>PDF</Button><Button variant="danger" onClick={() => deleteWorkPeriod(p)}>Supprimer</Button></div></div>
+        <div className="mt-4 grid gap-3 md:grid-cols-6 text-sm"><div><b>Vendu</b><br />{money(n.sold)}</div><div><b>Salaires</b><br />{money(n.laborCost)}</div><div><b>Achats</b><br />{money(n.purchases + n.itemMerchandise)}</div><div><b>Coût total</b><br />{money(n.totalCost)}</div><div><b>Marge</b><br /><span className={n.margin >= 0 ? "font-black text-emerald-700" : "font-black text-red-600"}>{money(n.margin)}</span></div><div><b>Rentabilité</b><br /><span className={n.profitability >= 0 ? "font-black text-emerald-700" : "font-black text-red-600"}>{n.profitability} %</span></div></div>
+        {periodPurchases(p.id).length > 0 && <div className="mt-3 rounded-xl bg-slate-50 p-3 text-sm"><b>Achats :</b> {periodPurchases(p.id).map((a: any) => `${a.supplier || ""} ${a.designation || ""} ${money(a.amount_ht)}`).join(" · ")}<div className="mt-2 flex flex-wrap gap-2">{periodPurchases(p.id).map((a: any) => <span key={a.id} className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-xs font-bold shadow-sm">{a.designation} {money(a.amount_ht)} <button type="button" onClick={() => editWorkPeriodPurchase(a)}>Modifier</button><button type="button" onClick={() => deleteWorkPeriodPurchase(a)}>✕</button></span>)}</div></div>}
+      </div>; })}{selectedProjectPeriods.length === 0 && <div className="rounded-2xl border border-dashed p-8 text-center text-slate-500">Aucune période créée. Commence par importer ton Excel OBAT, puis crée une période Du/Au.</div>}</div>
     </Card>
 
     {editingWorkItemId && <Card className="border-l-4 border-amber-500">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-xl font-black text-slate-900">Modifier un ouvrage</h3><p className="text-sm text-slate-500">Modification détaillée d'une ligne importée.</p></div><Button type="button" variant="secondary" onClick={resetWorkItemForm}>Annuler modification</Button></div>
       <form onSubmit={saveWorkItem} className="grid gap-4 md:grid-cols-6">
-        <Field label="Date"><Input type="date" value={workItemForm.realization_date} onChange={(e: any) => setWorkItemForm({ ...workItemForm, realization_date: e.target.value })} /></Field>
         <Field label="N°"><Input value={workItemForm.numero} onChange={(e: any) => setWorkItemForm({ ...workItemForm, numero: e.target.value })} /></Field>
         <Field label="Désignation"><Input required value={workItemForm.designation} onChange={(e: any) => setWorkItemForm({ ...workItemForm, designation: e.target.value })} /></Field>
         <Field label="Qté"><Input type="number" step="0.01" value={workItemForm.quantity} onChange={(e: any) => setWorkItemForm({ ...workItemForm, quantity: e.target.value })} /></Field>
         <Field label="Unité"><Input value={workItemForm.unit} onChange={(e: any) => setWorkItemForm({ ...workItemForm, unit: e.target.value })} /></Field>
         <Field label="Montant HT"><Input type="number" step="0.01" value={workItemForm.sold_ht} onChange={(e: any) => setWorkItemForm({ ...workItemForm, sold_ht: e.target.value })} /></Field>
         <Field label="Marchandises HT"><Input type="number" step="0.01" value={workItemForm.merchandise_ht} onChange={(e: any) => setWorkItemForm({ ...workItemForm, merchandise_ht: e.target.value })} /></Field>
-        <Field label="Sous-traitance HT"><Input type="number" step="0.01" value={workItemForm.subcontract_ht} onChange={(e: any) => setWorkItemForm({ ...workItemForm, subcontract_ht: e.target.value })} /></Field>
-        <Field label="Autres frais HT"><Input type="number" step="0.01" value={workItemForm.other_costs_ht} onChange={(e: any) => setWorkItemForm({ ...workItemForm, other_costs_ht: e.target.value })} /></Field>
-        <Field label="Avancement %"><Input type="number" min="0" max="100" step="1" value={workItemForm.progress} onChange={(e: any) => setWorkItemForm({ ...workItemForm, progress: e.target.value })} /></Field>
         <Field label="Notes"><Input value={workItemForm.notes} onChange={(e: any) => setWorkItemForm({ ...workItemForm, notes: e.target.value })} /></Field>
         <div className="flex gap-3 md:col-span-6"><Button variant="green">Enregistrer modification</Button><Button type="button" variant="secondary" onClick={resetWorkItemForm}>Annuler</Button></div>
       </form>
     </Card>}
 
-    <Card className="border-l-4 border-emerald-500">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-xl font-black text-slate-900">Rentabilité par date</h3><p className="text-sm text-slate-500">Les salariés sélectionnés sont regroupés par date et comptés une seule fois par journée.</p></div><Badge tone="green">{workDateGroups.length}</Badge></div>
-      <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="text-xs uppercase text-slate-500"><th className="p-3">Date</th><th className="p-3">Salariés sur place</th><th className="p-3">Ouvrages réalisés</th><th className="p-3">Vendu HT</th><th className="p-3">Coût salariés</th><th className="p-3">Marchandises</th><th className="p-3">Coût total</th><th className="p-3">Marge</th><th className="p-3">Rentabilité</th></tr></thead><tbody>{workDateGroups.map((g: any) => <tr key={g.date} className="border-t"><td className="p-3 font-black">{g.date === "Non daté" ? "Non daté" : formatDisplayDate(g.date)}</td><td className="p-3">{g.employeeNames}</td><td className="p-3">{g.count}</td><td className="p-3 font-bold">{money(g.sold)}</td><td className="p-3">{money(g.laborCost)}</td><td className="p-3">{money(g.merchandise)}</td><td className="p-3">{money(g.totalCost)}</td><td className={g.margin >= 0 ? "p-3 font-black text-emerald-700" : "p-3 font-black text-red-600"}>{money(g.margin)}</td><td className={g.profitability >= 0 ? "p-3 font-black text-emerald-700" : "p-3 font-black text-red-600"}>{g.profitability} %</td></tr>)}{workDateGroups.length === 0 && <tr><td colSpan={9} className="p-6 text-center text-slate-500">Aucune journée à analyser.</td></tr>}</tbody></table></div>
-    </Card>
-
-    {!showProjectWorkItems && <Card className="border-dashed"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-lg font-black text-slate-900">Ouvrages importés masqués</h3><p className="text-sm text-slate-500">Le tableau des lignes Excel n'est plus affiché automatiquement pour garder la page lisible.</p></div><Button variant="secondary" onClick={() => setShowProjectWorkItems(true)}>Voir / modifier les ouvrages</Button></div></Card>}
+    {!showProjectWorkItems && <Card className="border-dashed"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-lg font-black text-slate-900">Ouvrages importés masqués</h3><p className="text-sm text-slate-500">La page reste concentrée sur les périodes. Les lignes OBAT sont accessibles seulement ici.</p></div><Button variant="secondary" onClick={() => setShowProjectWorkItems(true)}>Voir / modifier les ouvrages</Button></div></Card>}
 
     {showProjectWorkItems && <Card>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-xl font-black text-slate-900">Ouvrages du chantier</h3><p className="text-sm text-slate-500">Les lignes importées OBAT sont masquées par défaut. Clique sur “Voir / modifier les ouvrages” uniquement quand tu veux les consulter ou les modifier.</p></div><Field label="Recherche"><Input value={workSearch} onChange={(e: any) => setWorkSearch(e.target.value)} placeholder="Rechercher un ouvrage..." /></Field></div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-left text-sm">
-          <thead><tr className="text-xs uppercase text-slate-500"><th className="p-3">Date</th><th className="p-3">N°</th><th className="p-3">Désignation</th><th className="p-3">Qté</th><th className="p-3">Salariés</th><th className="p-3">Prix HT</th><th className="p-3">Marchandises</th><th className="p-3">Coût hors salariés</th><th className="p-3">Marge hors salariés</th><th className="p-3">Rentabilité</th><th className="p-3">Avancement</th><th className="p-3">Actions</th></tr></thead>
-          <tbody>{selectedProjectWorkItems.map((x: any) => { const n = workItemNumbers(x); return <tr key={x.id} className={editingWorkItemId === x.id ? "border-t bg-sky-50" : "border-t"}><td className="p-3 font-bold">{x.realization_date ? formatDisplayDate(x.realization_date) : "Non daté"}</td><td className="p-3 font-bold">{x.numero || "-"}</td><td className="p-3"><b>{x.designation}</b><br /><span className="text-xs text-slate-500">{x.category || "Sans catégorie"}</span></td><td className="p-3">{Number(x.quantity || 0)} {x.unit || ""}</td><td className="p-3">{employeeLabelFromIds(employeeIdsFromWorkItem(x), x.employee_names || "")}</td><td className="p-3 font-bold">{money(n.sold)}</td><td className="p-3">{money(n.merchandise)}</td><td className="p-3">{money(n.totalCost)}</td><td className={n.margin >= 0 ? "p-3 font-black text-emerald-700" : "p-3 font-black text-red-600"}>{money(n.margin)}</td><td className={n.profitability >= 0 ? "p-3 font-black text-emerald-700" : "p-3 font-black text-red-600"}>{n.profitability} %</td><td className="p-3"><div className="min-w-[110px]"><b>{Number(x.progress || 0)} %</b><div className="mt-1 h-2 rounded-full bg-slate-200"><div className={Number(x.progress || 0) >= 100 ? "h-2 rounded-full bg-emerald-500" : Number(x.progress || 0) > 0 ? "h-2 rounded-full bg-amber-500" : "h-2 rounded-full bg-slate-300"} style={{ width: `${Math.max(0, Math.min(100, Number(x.progress || 0)))}%` }} /></div></div></td><td className="p-3"><div className="flex flex-wrap gap-2"><Button variant="secondary" onClick={() => duplicateWorkItem(x)}>Dupliquer</Button><Button variant="amber" onClick={() => editWorkItem(x)}>Modifier</Button><Button variant="danger" onClick={() => deleteWorkItem(x)}>Supprimer</Button></div></td></tr>; })}{selectedProjectWorkItems.length === 0 && <tr><td colSpan={12} className="p-6 text-center text-slate-500">Aucun ouvrage dans ce chantier. Importe un Excel OBAT ou ajoute une ligne manuellement.</td></tr>}</tbody>
-          <tfoot><tr className="border-t bg-slate-50 font-black"><td className="p-3" colSpan={5}>TOTAL</td><td className="p-3">{money(workTotals.sold)}</td><td className="p-3">{money(workTotals.merchandise)}</td><td className="p-3">{money(workTotals.cost)}</td><td className={workTotals.margin >= 0 ? "p-3 text-emerald-700" : "p-3 text-red-600"}>{money(workTotals.margin)}</td><td className={workTotals.profitability >= 0 ? "p-3 text-emerald-700" : "p-3 text-red-600"}>{workTotals.profitability} %</td><td className="p-3" colSpan={2}></td></tr></tfoot>
-        </table>
-      </div>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-xl font-black text-slate-900">Ouvrages du chantier</h3><p className="text-sm text-slate-500">Import OBAT, modification et suppression des lignes d'ouvrages.</p></div><Field label="Recherche"><Input value={workSearch} onChange={(e: any) => setWorkSearch(e.target.value)} placeholder="Rechercher un ouvrage..." /></Field></div>
+      <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="text-xs uppercase text-slate-500"><th className="p-3">N°</th><th className="p-3">Désignation</th><th className="p-3">Qté</th><th className="p-3">Prix HT</th><th className="p-3">Marchandises</th><th className="p-3">Actions</th></tr></thead><tbody>{selectedProjectWorkItems.map((x: any) => <tr key={x.id} className="border-t"><td className="p-3 font-bold">{x.numero || "-"}</td><td className="p-3"><b>{x.designation}</b><br /><span className="text-xs text-slate-500">{x.category || "Sans catégorie"}</span></td><td className="p-3">{Number(x.quantity || 0)} {x.unit || ""}</td><td className="p-3 font-bold">{money(x.sold_ht || 0)}</td><td className="p-3">{money(x.merchandise_ht || 0)}</td><td className="p-3"><div className="flex flex-wrap gap-2"><Button variant="secondary" onClick={() => duplicateWorkItem(x)}>Dupliquer</Button><Button variant="amber" onClick={() => editWorkItem(x)}>Modifier</Button><Button variant="danger" onClick={() => deleteWorkItem(x)}>Supprimer</Button></div></td></tr>)}{selectedProjectWorkItems.length === 0 && <tr><td colSpan={6} className="p-6 text-center text-slate-500">Aucun ouvrage dans ce chantier. Importe un Excel OBAT.</td></tr>}</tbody></table></div>
     </Card>}
   </div> : <div className="space-y-5">
     <div className="flex flex-wrap items-center justify-between gap-3">
