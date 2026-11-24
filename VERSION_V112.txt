@@ -1,0 +1,1 @@
+V112 : retrait des accès Photos Express, Terrassement et Demandes internes (y compris tableau de bord). Clients / CDC déplacé dans Gestion, avec retour Gestion. Données et schéma Supabase inchangés.

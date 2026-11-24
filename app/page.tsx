@@ -12,14 +12,10 @@ import {
 const menu = [
   { id: "dashboard", title: "Tableau de bord", icon: LayoutDashboard },
   { id: "projects", title: "Chantiers", icon: Building2 },
-  { id: "clients", title: "Clients / CDC", icon: ClipboardList },
   { id: "storekeeper", title: "Magasinier", icon: Package },
-  { id: "earthworks", title: "Terrassement", icon: HardHat },
   { id: "planning", title: "Planning", icon: CalendarDays },
   { id: "employees", title: "Salariés", icon: Users },
   { id: "vehicles", title: "Véhicules", icon: Truck },
-  { id: "requests", title: "Demandes internes", icon: ClipboardList },
-  { id: "mobile", title: "Photos Express", icon: ImageIcon },
   { id: "management", title: "Gestion", icon: Euro },
   { id: "settings", title: "Paramètres", icon: Wrench }
 ];
@@ -312,7 +308,7 @@ export default function Page() {
   }, [active]);
 
   useEffect(() => {
-    if (userRole !== "admin" && !["projects", "planning", "earthworks"].includes(active)) {
+    if (userRole !== "admin" && !["projects", "planning"].includes(active)) {
       setActive("projects");
     }
   }, [userRole, active]);
@@ -346,10 +342,10 @@ export default function Page() {
         </div>
 
         <nav className="space-y-2">
-          {menu.filter((m) => userRole === "admin" || ["projects", "planning", "earthworks"].includes(m.id)).map((m) => {
+          {menu.filter((m) => userRole === "admin" || ["projects", "planning"].includes(m.id)).map((m) => {
             const Icon = m.icon;
             return (
-              <button key={m.id} onClick={() => openModule(m.id)} className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-bold ${active === m.id ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"}`}>
+              <button key={m.id} onClick={() => openModule(m.id)} className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-bold ${(active === m.id || (active === "clients" && m.id === "management")) ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"}`}>
                 <Icon size={18} /> {m.title}
               </button>
             );
@@ -364,17 +360,17 @@ export default function Page() {
       <main className="lg:ml-80">
         <header className="sticky top-0 z-20 border-b border-slate-100 bg-white/90 p-5 backdrop-blur">
           <div className="text-sm text-slate-500">Connecté : {session.user.email}</div>
-          <h1 className="text-3xl font-black">{menu.find((m) => m.id === active)?.title}</h1>
+          <h1 className="text-3xl font-black">{active === "clients" ? "Gestion / Clients / CDC" : menu.find((m) => m.id === active)?.title}</h1>
           <div className="mt-3 lg:hidden">
             <Button type="button" variant="secondary" className="w-full justify-center" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
               ☰ Menu
             </Button>
             {mobileMenuOpen && (
               <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
-                {menu.filter((m) => userRole === "admin" || ["projects", "planning", "earthworks"].includes(m.id)).map((m) => {
+                {menu.filter((m) => userRole === "admin" || ["projects", "planning"].includes(m.id)).map((m) => {
                   const Icon = m.icon;
                   return (
-                    <Button key={m.id} variant={active === m.id ? "primary" : "secondary"} onClick={() => { openModule(m.id); setMobileMenuOpen(false); }}>
+                    <Button key={m.id} variant={(active === m.id || (active === "clients" && m.id === "management")) ? "primary" : "secondary"} onClick={() => { openModule(m.id); setMobileMenuOpen(false); }}>
                       <Icon size={16} className="mr-2" /> {m.title}
                     </Button>
                   );
@@ -386,16 +382,13 @@ export default function Page() {
 
         <section className="p-5 pb-28 lg:p-8">
           {active === "dashboard" && userRole === "admin" && <Dashboard projects={projects} photos={photos} docs={docs} requests={requests} materials={materials} setActive={setActive} />}
-          {active === "clients" && userRole === "admin" && <ClientSpecs specs={clientSpecs} items={clientSpecItems} paymentTerms={clientSpecPaymentTerms} paymentSchedules={clientPaymentSchedules} paymentScheduleItems={clientPaymentScheduleItems} projects={projects} refreshAll={refreshAll} />}
+          {active === "clients" && userRole === "admin" && <div><Button variant="secondary" onClick={() => setActive("management")}>← Retour Gestion</Button><ClientSpecs specs={clientSpecs} items={clientSpecItems} paymentTerms={clientSpecPaymentTerms} paymentSchedules={clientPaymentSchedules} paymentScheduleItems={clientPaymentScheduleItems} projects={projects} refreshAll={refreshAll} /></div>}
           {active === "storekeeper" && userRole === "admin" && <Storekeeper projects={projects} materials={materials} invoices={invoices} returns={returns} refreshAll={refreshAll} />}
           {active === "projects" && <Projects projects={projects} photos={photos} docs={docs} notes={notes} materials={materials} vigilance={vigilance} invoices={invoices} revenues={revenues} returns={returns} employees={employees} links={links} planning={planning} refreshAll={refreshAll} />}
-          {active === "earthworks" && <Earthworks earthworks={earthworks} photos={earthworkPhotos} docs={earthworkDocs} notes={earthworkNotes} materials={earthworkMaterials} vigilance={earthworkVigilance} planning={earthworkPlanning} rentals={earthworkRentals} earthworkInvoices={earthworkInvoices} earthworkRevenues={earthworkRevenues} earthworkReturns={earthworkReturns} refreshAll={refreshAll} />}
           {active === "planning" && <Planning projects={projects} employees={employees} links={links} planning={planning} requests={requests} refreshAll={refreshAll} />}
           {active === "employees" && userRole === "admin" && <Employees employees={employees} projects={projects} refreshAll={refreshAll} />}
           {active === "vehicles" && userRole === "admin" && <Vehicles vehicles={vehicles} refreshAll={refreshAll} />}
-          {active === "requests" && userRole === "admin" && <Requests requests={requests} projects={projects} employees={employees} refreshAll={refreshAll} projectName={projectName} />}
-          {active === "mobile" && userRole === "admin" && <Mobile projects={projects} refreshAll={refreshAll} />}
-          {active === "management" && userRole === "admin" && <Management projects={projects} photos={photos} docs={docs} notes={notes} materials={materials} vigilance={vigilance} employees={employees} planning={planning} invoices={invoices} revenues={revenues} returns={returns} companyExpenses={companyExpenses} clientPayments={clientPayments} supplierInvoices={supplierInvoices} quoteCalculations={quoteCalculations} workItems={workItems} pilotageWorkProjects={pilotageWorkProjects} refreshAll={refreshAll} />}
+          {active === "management" && userRole === "admin" && <Management openClients={() => setActive("clients")} projects={projects} photos={photos} docs={docs} notes={notes} materials={materials} vigilance={vigilance} employees={employees} planning={planning} invoices={invoices} revenues={revenues} returns={returns} companyExpenses={companyExpenses} clientPayments={clientPayments} supplierInvoices={supplierInvoices} quoteCalculations={quoteCalculations} workItems={workItems} pilotageWorkProjects={pilotageWorkProjects} refreshAll={refreshAll} />}
           {active === "settings" && userRole === "admin" && <AccessSettings session={session} />}
         </section>
       </main>
@@ -1009,28 +1002,16 @@ function ClientSpecs({ specs, items, paymentTerms = [], paymentSchedules = [], p
 function Dashboard({ projects, photos, docs, requests, materials = [], setActive }: any) {
   const enCours = projects.filter((p: any) => p.status === "en_cours");
   const materialTodo = materials.filter((m: any) => !m.ready);
-  const openRequests = requests.filter((r: any) => !["termine", "traité", "traite", "closed", "fait"].includes(String(r.status || "").toLowerCase()));
-  const priorityRank: any = { urgente: 0, haute: 1, normale: 2, basse: 3 };
-  const priorityRequests = [...openRequests].sort((a: any, b: any) => (priorityRank[String(a.priority || "normale").toLowerCase()] ?? 2) - (priorityRank[String(b.priority || "normale").toLowerCase()] ?? 2)).slice(0, 6);
-  function priorityUi(priority: string) {
-    const p = String(priority || "normale").toLowerCase();
-    if (p === "urgente") return { label: "Urgente", tone: "red", card: "border-red-200 bg-red-50", text: "text-red-800", dot: "bg-red-500" };
-    if (p === "haute") return { label: "Haute", tone: "amber", card: "border-orange-200 bg-orange-50", text: "text-orange-800", dot: "bg-orange-500" };
-    if (p === "basse") return { label: "Basse", tone: "green", card: "border-emerald-200 bg-emerald-50", text: "text-emerald-800", dot: "bg-emerald-500" };
-    return { label: "Normale", tone: "blue", card: "border-blue-200 bg-blue-50", text: "text-blue-800", dot: "bg-blue-500" };
-  }
-
   const dashboardCards = [
     { title: "Chantiers en cours", value: enCours.length, subtitle: enCours.slice(0, 3).map((p: any) => p.name).join(" · ") || "Aucun chantier en cours", tone: "border-emerald-500 bg-emerald-50 text-emerald-700", action: "Voir chantiers", target: "projects" },
     { title: "Matériel à prévoir", value: materialTodo.length, subtitle: materialTodo.slice(0, 3).map((m: any) => m.title || "Matériel").join(" · ") || "Aucun matériel en attente", tone: "border-amber-400 bg-amber-50 text-amber-700", action: "Voir magasinier", target: "storekeeper" },
-    { title: "Demandes internes", value: openRequests.length, subtitle: openRequests.slice(0, 3).map((r: any) => r.title || r.message || "Demande").join(" · ") || "Aucune demande ouverte", tone: "border-blue-500 bg-blue-50 text-blue-700", action: "Voir demandes", target: "requests" }
   ];
 
   return (
     <div>
       <Section title="Tableau de bord" subtitle="Vue synthétique sans détail long, optimisée mobile." />
 
-      <div className="grid grid-cols-2 gap-3 md:gap-4 xl:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 md:gap-4 xl:grid-cols-2">
         {dashboardCards.map((card: any) => (
           <Card key={card.title} className={`border-l-8 ${card.tone}`}>
             <p className="text-xs font-black uppercase opacity-80">{card.title}</p>
@@ -1041,7 +1022,7 @@ function Dashboard({ projects, photos, docs, requests, materials = [], setActive
         ))}
       </div>
 
-      <div className="mt-6 grid gap-4 lg:grid-cols-3">
+      <div className="mt-6 grid gap-4 lg:grid-cols-2">
         <Card className="border-l-8 border-emerald-500">
           <h3 className="text-lg font-black">🏗️ Chantiers en cours</h3>
           <div className="mt-4 space-y-2">
@@ -1068,29 +1049,7 @@ function Dashboard({ projects, photos, docs, requests, materials = [], setActive
           </div>
         </Card>
 
-        <Card className="border-l-8 border-blue-500">
-          <div className="flex items-center justify-between gap-3">
-            <h3 className="text-lg font-black">💬 Priorités demandes internes</h3>
-            <Button variant="secondary" className="text-xs" onClick={() => setActive("requests")}>Voir tout</Button>
-          </div>
-          <div className="mt-4 space-y-2">
-            {priorityRequests.map((r: any) => {
-              const ui = priorityUi(r.priority);
-              return (
-                <div key={r.id} className={`rounded-2xl border p-3 ${ui.card}`}>
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="font-black line-clamp-1">{r.title || r.message || "Demande interne"}</div>
-                      <div className="text-xs text-slate-500">{projects.find((p: any) => p.id === r.project_id)?.name || "Sans chantier"}{r.planned_date ? ` · ${formatDisplayDate(r.planned_date)}` : ""}</div>
-                    </div>
-                    <Badge tone={ui.tone}><span className={`h-2 w-2 rounded-full ${ui.dot}`}></span>{ui.label}</Badge>
-                  </div>
-                </div>
-              );
-            })}
-            {openRequests.length === 0 && <p className="text-sm text-slate-500">Aucune demande ouverte.</p>}
-          </div>
-        </Card>
+
       </div>
     </div>
   );
@@ -3598,7 +3557,7 @@ function Storekeeper({ projects, materials, invoices = [], returns = [], refresh
 }
 
 
-function Management({ projects, photos = [], docs = [], notes = [], materials = [], vigilance = [], employees, planning, invoices, revenues, returns = [], companyExpenses = [], clientPayments = [], supplierInvoices = [], quoteCalculations = [], workItems = [], pilotageWorkProjects = [], refreshAll }: any) {
+function Management({ openClients, projects, photos = [], docs = [], notes = [], materials = [], vigilance = [], employees, planning, invoices, revenues, returns = [], companyExpenses = [], clientPayments = [], supplierInvoices = [], quoteCalculations = [], workItems = [], pilotageWorkProjects = [], refreshAll }: any) {
   const [tab, setTab] = useState("pilotage");
   const [projectSearch, setProjectSearch] = useState("");
   const [selectedProjectFilter, setSelectedProjectFilter] = useState("");
@@ -4640,7 +4599,7 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
 
   const visiblePurchaseInvoices = periodActiveInvoices;
   const actionCard = (id: string, icon: string, title: string, sub: string, tone: string) => (
-    <button onClick={() => setTab(id)} className="group flex min-h-[92px] items-center justify-between rounded-3xl border border-slate-200 bg-white px-6 py-4 text-left shadow-sm ring-1 ring-slate-100 transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-lg">
+    <button onClick={() => id === "clients" ? openClients() : setTab(id)} className="group flex min-h-[92px] items-center justify-between rounded-3xl border border-slate-200 bg-white px-6 py-4 text-left shadow-sm ring-1 ring-slate-100 transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-lg">
       <div className="flex items-center gap-4"><span className={`grid h-14 w-14 shrink-0 place-items-center rounded-2xl text-2xl text-white shadow-sm ${tone}`}>{icon}</span><span><b className="block text-lg font-black text-slate-900">{title}</b><span className="text-sm font-semibold text-slate-500">{sub}</span></span></div>
       <span className="text-3xl font-black text-slate-400 group-hover:text-slate-900">›</span>
     </button>
@@ -5079,7 +5038,7 @@ function Management({ projects, photos = [], docs = [], notes = [], materials = 
       </div>
     </Card>
     <div className="grid gap-4 md:grid-cols-5"><Card className="border-l-4 border-emerald-500"><p className="text-xs font-black uppercase text-slate-500">CA HT</p><p className="mt-2 text-2xl font-black text-emerald-700">{money(allStats.revenue)}</p><p className="text-xs text-slate-500">Factures clients</p></Card><Card className="border-l-4 border-blue-500"><p className="text-xs font-black uppercase text-slate-500">TVA collectée</p><p className="mt-2 text-2xl font-black text-blue-700">{money(allStats.revenueTVA)}</p><p className="text-xs text-slate-500">Sur factures clients</p></Card><Card className="border-l-4 border-red-500"><p className="text-xs font-black uppercase text-slate-500">Dépenses HT</p><p className="mt-2 text-2xl font-black text-red-600">{money(allStats.purchases + expensesHT)}</p><p className="text-xs text-slate-500">Achats + charges</p></Card><Card className="border-l-4 border-blue-500"><p className="text-xs font-black uppercase text-slate-500">Factures clientes en attente de règlement</p><p className="mt-2 text-2xl font-black text-blue-700">{money(clientOutstandingTotal)}</p><p className="text-xs text-slate-500">Total à encaisser</p></Card><Card className={tvaBalanceGlobal >= 0 ? "border-l-4 border-red-500" : "border-l-4 border-emerald-500"}><p className="text-xs font-black uppercase text-slate-500">{tvaBalanceGlobal >= 0 ? "Solde TVA due" : "TVA récupérable"}</p><p className={tvaBalanceGlobal >= 0 ? "mt-2 text-2xl font-black text-red-600" : "mt-2 text-2xl font-black text-emerald-700"}>{money(Math.abs(tvaBalanceGlobal))}</p><p className="text-xs text-slate-500">Collectée - déductible</p></Card></div>
-    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">{actionCard("factures", "📄", "Créer facturation client", "Sur chantiers actifs", "bg-emerald-600")}{actionCard("calcul-rentabilite", "📊", "Calcul rentabilité", "Simulation marge devis", "bg-amber-600")}{actionCard("paiements", "💶", "Règlements clients", "Factures clientes en attente de règlement", "bg-blue-600")}{actionCard("charges", "🏢", "Charges entreprises", "Gérer les charges fixes", "bg-purple-600")}{actionCard("supplier-invoices", "🧾", "Factures fournisseurs", "Encours fournisseurs indépendant", "bg-red-600")}{actionCard("ouvrage-pilotage", "🧱", "Pilotage des ouvrages", "Dates, salariés, achats, rentabilité", "bg-sky-600")}{actionCard("achats", "🧾", "Récapitulatif des factures d’achats", "Voir le détail des achats", "bg-cyan-600")}</div>
+    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">{actionCard("factures", "📄", "Créer facturation client", "Sur chantiers actifs", "bg-emerald-600")}{actionCard("calcul-rentabilite", "📊", "Calcul rentabilité", "Simulation marge devis", "bg-amber-600")}{actionCard("paiements", "💶", "Règlements clients", "Factures clientes en attente de règlement", "bg-blue-600")}{actionCard("charges", "🏢", "Charges entreprises", "Gérer les charges fixes", "bg-purple-600")}{actionCard("supplier-invoices", "🧾", "Factures fournisseurs", "Encours fournisseurs indépendant", "bg-red-600")}{actionCard("ouvrage-pilotage", "🧱", "Pilotage des ouvrages", "Dates, salariés, achats, rentabilité", "bg-sky-600")}{actionCard("achats", "🧾", "Récapitulatif des factures d’achats", "Voir le détail des achats", "bg-cyan-600")}{actionCard("clients", "📋", "Clients / CDC", "Clients et cahiers des charges", "bg-indigo-600")}</div>
     <div className="grid gap-5 xl:grid-cols-3"><Card><div className="mb-4 flex flex-wrap items-center justify-between gap-3"><h3 className="text-lg font-black uppercase text-slate-800">Répartition du CA HT</h3><Button variant="secondary" onClick={generateAccountingPdfFromGestion}>Rapport comptable PDF</Button></div><SimplePie values={searchedAccountingProjects.slice(0, 6).map((p: any) => ({ label: `${p.name}${p.status === "archive" ? " · archivé" : ""}`, value: projectStats(p.id, true).revenueTotal }))} /></Card><Card><h3 className="mb-4 text-lg font-black uppercase text-slate-800">Répartition des dépenses HT</h3><SimplePie values={[{ label: "Achats", value: allStats.purchases }, { label: "Main d’œuvre", value: allStats.labor }, { label: "Charges fixes", value: expensesHT }]} /></Card><Card className={globalResultHT >= 0 ? "border-l-4 border-emerald-500" : "border-l-4 border-red-500"}><div className="mb-4 flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-lg font-black uppercase text-slate-800">Résultat global HT</h3><p className="text-xs text-slate-500">CA, achats, MO et charges fixes</p></div><div className={globalResultHT >= 0 ? "rounded-2xl bg-emerald-50 px-4 py-2 text-right" : "rounded-2xl bg-red-50 px-4 py-2 text-right"}><p className="text-xs font-black uppercase text-slate-500">Résultat</p><p className={globalResultHT >= 0 ? "text-2xl font-black text-emerald-700" : "text-2xl font-black text-red-600"}>{money(globalResultHT)}</p><p className={globalResultHT >= 0 ? "text-lg font-black text-emerald-700" : "text-lg font-black text-red-600"}>{globalMarginRate}% de marge</p></div></div><SimplePie values={[{ label: "CA HT", value: allStats.revenue }, { label: "Achats HT", value: allStats.purchases }, { label: "MO", value: allStats.labor }, { label: "Charges fixes", value: expensesHT }]} /></Card></div>
     <div><div className="mb-4 flex flex-wrap items-center justify-between gap-3"><h3 className="text-xl font-black uppercase text-slate-900">Chantiers actifs — rentabilité</h3><Badge tone="blue">{searchedActiveProjects.length} chantier(s)</Badge></div><div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">{searchedActiveProjects.map((p: any) => { const s = projectStats(p.id, false); return <Card key={p.id} className="overflow-hidden p-0"><div className="p-5"><div className="flex items-start justify-between gap-3"><div><h4 className="text-xl font-black text-slate-900">{p.name}</h4><p className="text-sm text-slate-500">{p.client || "Client non renseigné"}</p></div><Badge tone="green">En cours</Badge></div><div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs"><div className="rounded-2xl bg-emerald-50 p-2"><b>CA HT</b><br /><span className="font-black text-emerald-700">{money(s.revenueTotal)}</span></div><div className="rounded-2xl bg-red-50 p-2"><b>Achats HT</b><br /><span className="font-black text-red-700">{money(s.supplierTotal)}</span></div><div className="rounded-2xl bg-blue-50 p-2"><b>MO</b><br /><span className="font-black text-blue-700">{money(s.laborTotal)}</span></div><div className="rounded-2xl bg-slate-50 p-2"><b>Marge</b><br /><span className={s.margin >= 0 ? "font-black text-emerald-700" : "font-black text-red-600"}>{money(s.margin)}</span></div><div className="rounded-2xl bg-purple-50 p-2"><b>TVA</b><br /><span className="font-black text-purple-700">{money(Math.abs(s.tvaBalance))}</span></div><div className={s.marginRate >= 0 ? "rounded-2xl bg-emerald-50 p-2" : "rounded-2xl bg-red-50 p-2"}><b>Rentabilité</b><br /><span className={s.marginRate >= 0 ? "font-black text-emerald-700" : "font-black text-red-600"}>{s.marginRate}%</span></div></div><div className="mt-4 grid grid-cols-3 gap-2"><Button variant="secondary" onClick={() => openProjectFullDetail(p)}>Voir</Button><Button variant="secondary" onClick={() => generateProjectPdfFromGestion(p)}>Rapport PDF</Button><Button variant="amber" onClick={() => archiveProject(p, true)}>Archiver</Button></div></div></Card>; })}{searchedActiveProjects.length === 0 && <Card><p className="text-center text-slate-500">Aucun chantier actif trouvé.</p></Card>}</div></div>
     <Card className="bg-slate-50"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-lg font-black">Chantiers archivés</h3><p className="text-sm text-slate-500">Les chantiers archivés ne sont plus visibles dans Chantiers actifs ni dans Gestion. Leurs factures, retours et documents restent consultables ici.</p></div><Button variant="secondary" onClick={() => setTab("archives")}>Accéder aux archives chantiers</Button></div>{tab === "archives" && <div className="mt-4 grid gap-4">{archivedProjects.map((p: any) => { const s = projectStats(p.id, false); return <div key={p.id} className="rounded-2xl border bg-white p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><Badge tone="slate">Archivé</Badge><h4 className="mt-2 text-xl font-black">{p.name}</h4><p className="text-sm text-slate-500">{p.client || "Client non renseigné"}</p></div><Button variant="green" onClick={() => archiveProject(p, false)}>Réactiver</Button></div><div className="mt-3 grid gap-3 md:grid-cols-4"><div><b>CA HT</b><br />{money(s.revenueTotal)}</div><div><b>Achats HT</b><br />{money(s.supplierTotal)}</div><div><b>Marge</b><br />{money(s.margin)}</div><div><b>TVA</b><br />{money(Math.abs(s.tvaBalance))}</div></div></div>; })}{archivedProjects.length === 0 && <p className="text-sm text-slate-500">Aucun chantier archivé.</p>}</div>}</Card>
