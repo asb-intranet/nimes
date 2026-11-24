@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import EmployeePortal from "./EmployeePortal";
 import * as XLSX from "xlsx";
 import { supabase } from "@/lib/supabase";
 import { Card, Button, Field, Input, Select, Textarea, Section, Badge } from "@/components/Ui";
@@ -150,7 +151,7 @@ export default function Page() {
   const [invoices, setInvoices] = useState<any[]>([]);
   const [revenues, setRevenues] = useState<any[]>([]);
   const [returns, setReturns] = useState<any[]>([]);
-  const [userRole, setUserRole] = useState("admin");
+  const [userRole, setUserRole] = useState("none");
   const [earthworks, setEarthworks] = useState<any[]>([]);
   const [earthworkPhotos, setEarthworkPhotos] = useState<any[]>([]);
   const [earthworkDocs, setEarthworkDocs] = useState<any[]>([]);
@@ -176,18 +177,21 @@ export default function Page() {
   const [dataWarning, setDataWarning] = useState<string>("");
   
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setUserRole(data.session?.user?.user_metadata?.role || "admin");
-      if (data.session) refreshAll();
-      setLoading(false);
-    });
-
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, currentSession) => {
-      setSession(currentSession);
-      setUserRole(currentSession?.user?.user_metadata?.role || "admin");
-      if (currentSession) refreshAll();
-    });
+    let generation = 0;
+    async function applySession(current: any) {
+      const g = ++generation;
+      setLoading(true); setSession(current); setUserRole("none");
+      if (current) {
+        const result = await supabase.rpc("asb_role");
+        if (g !== generation) return;
+        const role = result.error ? "none" : result.data;
+        setUserRole(role);
+        if (role === "admin") await refreshAll();
+      }
+      if (g === generation) setLoading(false);
+    }
+    supabase.auth.getSession().then(({data}) => applySession(data.session));
+    const {data: listener} = supabase.auth.onAuthStateChange((event,current) => { if(event !== "INITIAL_SESSION" && event !== "TOKEN_REFRESHED") setTimeout(()=>applySession(current),0); });
 
     return () => listener.subscription.unsubscribe();
   }, []);
@@ -332,6 +336,8 @@ export default function Page() {
     );
   }
 
+  if (userRole === "employee") return <EmployeePortal logout={signOut}/>;
+  if (userRole !== "admin") return <main className="p-8">Accès non autorisé. Vérifiez la migration V113 et votre compte. <Button onClick={signOut}>Déconnexion</Button></main>;
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <aside className="fixed left-0 top-0 hidden h-full w-80 border-r border-slate-100 bg-white p-6 lg:block">
@@ -389,7 +395,7 @@ export default function Page() {
           {active === "employees" && userRole === "admin" && <Employees employees={employees} projects={projects} refreshAll={refreshAll} />}
           {active === "vehicles" && userRole === "admin" && <Vehicles vehicles={vehicles} refreshAll={refreshAll} />}
           {active === "management" && userRole === "admin" && <Management openClients={() => setActive("clients")} projects={projects} photos={photos} docs={docs} notes={notes} materials={materials} vigilance={vigilance} employees={employees} planning={planning} invoices={invoices} revenues={revenues} returns={returns} companyExpenses={companyExpenses} clientPayments={clientPayments} supplierInvoices={supplierInvoices} quoteCalculations={quoteCalculations} workItems={workItems} pilotageWorkProjects={pilotageWorkProjects} refreshAll={refreshAll} />}
-          {active === "settings" && userRole === "admin" && <AccessSettings session={session} />}
+          {active === "settings" && userRole === "admin" && <AccessSettings session={session} employees={employees} />}
         </section>
       </main>
     </div>
@@ -1866,6 +1872,13 @@ function Planning({ projects, employees, links, planning, requests = [], refresh
     notes: ""
   };
 
+  const [view,setView]=useState("month");
+  const [taskRows,setTaskRows]=useState<any[]>([]);
+  const [draftTasks,setDraftTasks]=useState<any[]>([]);
+  const [weekEmployee,setWeekEmployee]=useState<any>(null);
+  const [weekDate,setWeekDate]=useState(new Date());
+  async function loadTasks(){const r=await supabase.from("asb_tasks").select("*");if(r.error) alert(r.error.message);else setTaskRows(r.data||[]);}
+  useEffect(()=>{loadTasks();const timer=setInterval(loadTasks,15000);return ()=>clearInterval(timer)},[]);
   const [cursor, setCursor] = useState(new Date());
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<any>(null);
@@ -1922,12 +1935,14 @@ function Planning({ projects, employees, links, planning, requests = [], refresh
   function openCreatePlanning() {
     setEditing(null);
     setForm(emptyForm);
+    setDraftTasks([]);
     setShowForm(true);
     setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 50);
   }
 
   function openEditPlanning(item: any) {
     setEditing(item);
+    setDraftTasks(item.task_group ? taskRows.filter(t=>t.task_group===item.task_group) : []);
     setForm({
       project_id: item.project_id || "",
       employee_ids: item.employee_id ? [item.employee_id] : [],
@@ -1972,7 +1987,11 @@ function Planning({ projects, employees, links, planning, requests = [], refresh
     const assignmentError = await ensureProjectAssignments(form.project_id, form.employee_ids);
     if (assignmentError) return alert(assignmentError.message);
 
+    if ((form.end_date || form.start_date) < form.start_date) return alert("Dates invalides");
+    const group = editing?.task_group || crypto.randomUUID();
+    if(draftTasks.some(t=>!t.label.trim() || (t.employee_id && !form.employee_ids.includes(t.employee_id) && !editing))) return alert("Vérifiez les prestations et leurs salariés");
     const basePayload = {
+      task_group: group,
       project_id: form.project_id,
       title: form.title,
       start_date: form.start_date,
@@ -1992,6 +2011,10 @@ function Planning({ projects, employees, links, planning, requests = [], refresh
       if (error) return alert(error.message);
     }
 
+    const removed=taskRows.filter(t=>t.task_group===group&&!draftTasks.some(d=>d.id===t.id));
+    if(removed.length){const r=await supabase.from("asb_tasks").delete().in("id",removed.map(t=>t.id));if(r.error)return alert(r.error.message);}
+    if(draftTasks.length){const r=await supabase.from("asb_tasks").upsert(draftTasks.map(t=>({id:t.id,task_group:group,label:t.label,employee_id:t.employee_id||null,done_at:t.done_at||null,done_by:t.done_by||null})));if(r.error)return alert(r.error.message);}
+    await loadTasks();
     setEditing(null);
     setShowForm(false);
     setForm(emptyForm);
@@ -2050,7 +2073,7 @@ function Planning({ projects, employees, links, planning, requests = [], refresh
       if (employeeFilter !== "all" && p.employee_id !== employeeFilter) return;
       if (term && !`${project?.name || p.project_name_snapshot || ""} ${project?.client || ""} ${project?.address || ""} ${p.title || ""}`.toLowerCase().includes(term)) return;
 
-      const key = `${p.project_id}-${p.title || "planning"}-${start}-${end}`;
+      const key = `${p.id}`;
       if (!grouped[key]) grouped[key] = { ...p, employee_ids: [], start_date: start, end_date: end };
       if (p.employee_id && !grouped[key].employee_ids.includes(p.employee_id)) grouped[key].employee_ids.push(p.employee_id);
     });
@@ -2114,6 +2137,7 @@ function Planning({ projects, employees, links, planning, requests = [], refresh
             </div>
 
             <div className="md:col-span-2 xl:col-span-3"><Field label="Notes"><Textarea value={form.notes} onChange={(e: any) => setForm({ ...form, notes: e.target.value })} /></Field></div>
+            <div className="md:col-span-2 xl:col-span-3 space-y-2"><h3 className="font-black">Prestations à réaliser (facultatif)</h3>{editing?.task_group&&<p className="text-sm">Les prestations collectives sont partagées avec les autres salariés de cette intervention.</p>}{draftTasks.map((t,i)=><div key={t.id} className="flex flex-wrap gap-2 rounded-xl border p-2"><Input value={t.label} placeholder="Prestation" onChange={(e:any)=>setDraftTasks(old=>old.map((x,j)=>j===i?{...x,label:e.target.value}:x))}/><Select value={t.employee_id||""} onChange={(e:any)=>setDraftTasks(old=>old.map((x,j)=>j===i?{...x,employee_id:e.target.value||null}:x))}><option value="">Collective</option>{employees.filter((e:any)=>form.employee_ids.includes(e.id)|| (editing?.task_group&&planning.some((p:any)=>p.task_group===editing.task_group&&p.employee_id===e.id))).map((e:any)=><option key={e.id} value={e.id}>Individuelle – {e.firstname} {e.lastname}</option>)}</Select><Button type="button" variant="secondary" onClick={()=>setDraftTasks(old=>old.filter((_,j)=>j!==i))}>Supprimer</Button></div>)}<Button type="button" variant="secondary" onClick={()=>setDraftTasks(old=>[...old,{id:crypto.randomUUID(),label:"",employee_id:null}])}>+ Ajouter une prestation</Button></div>
             <div className="flex flex-wrap gap-2 md:col-span-2 xl:col-span-3">
               <Button>{editing ? "Enregistrer la modification" : "Ajouter au planning"}</Button>
               <Button type="button" variant="secondary" onClick={() => { setShowForm(false); setEditing(null); setForm(emptyForm); }}>Annuler</Button>
@@ -2182,7 +2206,7 @@ function Planning({ projects, employees, links, planning, requests = [], refresh
     <div>
       <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
         <Section title="Planning simple" subtitle="Une couleur = un chantier. Les salariés prennent automatiquement la couleur du chantier." />
-        <Button onClick={openCreatePlanning}>+ Créer planning</Button>
+        <div className="flex gap-2"><Button variant={view==="month"?"primary":"secondary"} onClick={()=>setView("month")}>Mois</Button><Button variant={view==="week"?"primary":"secondary"} onClick={()=>setView("week")}>Semaine</Button><Button onClick={openCreatePlanning}>+ Créer planning</Button></div>
       </div>
 
 
@@ -2201,7 +2225,7 @@ function Planning({ projects, employees, links, planning, requests = [], refresh
         </div>
       </Card>
 
-      <Card className="mb-5 overflow-hidden p-3 sm:p-5">
+      {view==="month"&&<Card className="mb-5 overflow-hidden p-3 sm:p-5">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div>
             <p className="text-[10px] font-black uppercase text-slate-500 sm:text-xs">Agenda mensuel type Google</p>
@@ -2222,10 +2246,10 @@ function Planning({ projects, employees, links, planning, requests = [], refresh
           <div className="divide-y">
             {monthWeeks.map((weekDays, weekIndex) => {
               const weekEvents = compactMonthEventsForWeek(weekDays);
-              const visibleEvents = weekEvents.filter((e: any) => e.lane < 3);
+              const visibleEvents = weekEvents;
               const hiddenCount = weekEvents.length - visibleEvents.length;
               return (
-                <div key={weekIndex} className="relative h-[106px] sm:h-[128px]">
+                <div key={weekIndex} className="relative" style={{height:Math.max(128,48+weekEvents.length*24)}}>
                   <div className="absolute inset-0 grid grid-cols-7">
                     {weekDays.map((day) => {
                       const key = formatDate(day);
@@ -2251,12 +2275,12 @@ function Planning({ projects, employees, links, planning, requests = [], refresh
                         <button
                           key={`${e.project_id}-${e.title}-${e.start_date}-${e.end_date}-${e.lane}`}
                           type="button"
-                          onClick={() => openProjectFull(e.project_id)}
+                          onClick={() => {setWeekEmployee(e.employee_id);setWeekDate(weekDays[0]);}}
                           className="absolute h-5 truncate rounded-lg border border-black/10 px-2 text-left text-[10px] font-black leading-5 shadow-md sm:h-6 sm:rounded-xl sm:px-3 sm:text-[12px] sm:leading-6"
                           style={{ left, width, top, background: bg, color: textColor, boxShadow: "0 6px 14px rgba(15,23,42,.18)" }}
                           title={`${projectNameLocal(e.project_id, e)} · ${e.title || "Planning"}${names ? ` · ${names}` : ""}`}
                         >
-                          {projectNameLocal(e.project_id, e)}
+                          {projectNameLocal(e.project_id, e)} · {names}
                         </button>
                       );
                     })}
@@ -2267,9 +2291,9 @@ function Planning({ projects, employees, links, planning, requests = [], refresh
             })}
           </div>
         </div>
-      </Card>
+      </Card>}
 
-      <div className="overflow-x-auto rounded-3xl border bg-white shadow-sm">
+      {view==="week"&&<div className="overflow-x-auto rounded-3xl border bg-white shadow-sm">
         <div className="min-w-[980px]">
           <div className="grid grid-cols-[190px_repeat(7,1fr)] border-b bg-slate-50">
             <div className="p-4 text-sm font-black text-slate-600">Salarié</div>
@@ -2284,7 +2308,7 @@ function Planning({ projects, employees, links, planning, requests = [], refresh
           {orderedEmployees.map((emp: any) => (
             <div key={emp.id} className="grid min-h-32 grid-cols-[190px_repeat(7,1fr)] border-b last:border-b-0">
               <div className="sticky left-0 z-10 border-r bg-white p-4">
-                <div className="font-black">{emp.firstname}</div>
+                <button className="font-black underline" onClick={()=>{setWeekEmployee(emp.id);setWeekDate(weekStart)}}>{emp.firstname}</button>
                 <div className="text-sm text-slate-500">{emp.lastname}</div>
               </div>
               {week.map((day) => {
@@ -2297,7 +2321,7 @@ function Planning({ projects, employees, links, planning, requests = [], refresh
                         const textColor = "#0f172a";
                         return (
                           <div key={e.id} className="rounded-2xl border border-black/10 p-3 text-left shadow-md" style={{ background: bg, color: textColor }}>
-                            <button type="button" onClick={() => openProjectFull(e.project_id)} className="block w-full text-left">
+                            <button type="button" onClick={() => {setWeekEmployee(e.employee_id);setWeekDate(weekStart);}} className="block w-full text-left">
                               <div className="text-sm font-black leading-tight">{projectNameLocal(e.project_id, e)}</div>
                               <div className="mt-1 text-xs opacity-90">{e.title}</div>
                               <div className="mt-1 text-[11px] opacity-80">{projectAddress(e.project_id)}</div>
@@ -2319,7 +2343,8 @@ function Planning({ projects, employees, links, planning, requests = [], refresh
 
           {orderedEmployees.length === 0 && <div className="p-8 text-center text-sm text-slate-500">Aucun salarié à afficher.</div>}
         </div>
-      </div>
+      </div>}
+      {weekEmployee&&<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={()=>setWeekEmployee(null)}><section role="dialog" aria-modal="true" className="max-h-[90vh] w-full max-w-xl overflow-auto rounded-2xl bg-white p-5" onClick={e=>e.stopPropagation()}><div className="flex justify-between"><h2 className="text-xl font-black">{employeeName(weekEmployee)} – semaine du {formatDisplayDate(startOfWeek(weekDate))}</h2><Button variant="secondary" onClick={()=>setWeekEmployee(null)}>Fermer</Button></div>{planning.filter((p:any)=>p.employee_id===weekEmployee&&p.start_date<=formatDate(addDays(startOfWeek(weekDate),6))&&(p.end_date||p.start_date)>=formatDate(startOfWeek(weekDate))).map((p:any)=>{const list=taskRows.filter(t=>t.task_group===p.task_group&&(!t.employee_id||t.employee_id===weekEmployee));return <div key={p.id} className="my-3 rounded-xl border p-3"><b>{projectNameLocal(p.project_id,p)} – {p.title}</b><p>{list.filter(t=>t.done_at).length}/{list.length} réalisées</p>{list.map(t=><label key={t.id} className="flex gap-2 border-t py-2"><input type="checkbox" checked={!!t.done_at} onChange={async e=>{const r=await supabase.from("asb_tasks").update({done_at:e.target.checked?new Date().toISOString():null,done_by:null}).eq("id",t.id);if(r.error)alert(r.error.message);else await loadTasks()}}/>{t.label} <small>{t.employee_id?"Individuelle":"Collective"}{t.done_by?` · ${employeeName(t.done_by)}`:""}</small></label>)}<Button variant="secondary" onClick={()=>{setWeekEmployee(null);openEditPlanning(p)}}>Modifier</Button></div>})}</section></div>}
     </div>
   );
 }
@@ -5047,7 +5072,13 @@ function Management({ openClients, projects, photos = [], docs = [], notes = [],
 }
 
 
-function AccessSettings({ session }: any) {
+function AccessSettings({ session, employees }: any) {
+  const [accessRows,setAccessRows]=useState<any[]>([]);
+  const [accessEmail,setAccessEmail]=useState("");
+  const [accessEmployee,setAccessEmployee]=useState("");
+  async function loadAccess(){const r=await supabase.from("asb_access").select("*").eq("role","employee");if(r.error)alert(r.error.message);else setAccessRows(r.data||[]);}
+  useEffect(()=>{loadAccess()},[]);
+
   const [managementCurrent, setManagementCurrent] = useState("");
   const [managementNew, setManagementNew] = useState("");
   const [managementConfirm, setManagementConfirm] = useState("");
@@ -5088,6 +5119,8 @@ function AccessSettings({ session }: any) {
 
   return <div className="space-y-5">
     <Section title="Paramètres d'accès" subtitle="Modifier les codes d'accès internes et le mot de passe de connexion." />
+    <Card><h3 className="text-xl font-black">Gestion des accès salariés</h3><p className="text-sm">Créer d’abord le compte dans Supabase Authentication, puis associer son adresse à la fiche salarié.</p><div className="my-3 space-y-2"><Input type="email" placeholder="Email du compte" value={accessEmail} onChange={(e:any)=>setAccessEmail(e.target.value)}/><Select value={accessEmployee} onChange={(e:any)=>setAccessEmployee(e.target.value)}><option value="">Choisir un salarié</option>{employees.filter((e:any)=>e.active!==false&&!e.archived).map((e:any)=><option key={e.id} value={e.id}>{e.firstname} {e.lastname}</option>)}</Select><Button onClick={async()=>{const r=await supabase.rpc("asb_link_employee",{account_email:accessEmail,emp:accessEmployee});if(r.error)alert(r.error.message);else{setAccessEmail("");setAccessEmployee("");await loadAccess()}}}>Associer le compte</Button></div>{accessRows.map(a=><div key={a.user_id} className="flex justify-between border-t py-3"><span>{employees.find((e:any)=>e.id===a.employee_id)?.firstname} {employees.find((e:any)=>e.id===a.employee_id)?.lastname}</span><Button variant="secondary" onClick={async()=>{const r=await supabase.from("asb_access").update({enabled:!a.enabled}).eq("user_id",a.user_id);if(r.error)alert(r.error.message);else await loadAccess()}}>{a.enabled?"Désactiver":"Réactiver"}</Button></div>)}</Card>
+
 
     <Card className="border-l-4 border-slate-900">
       <div className="flex flex-wrap items-start justify-between gap-3">
