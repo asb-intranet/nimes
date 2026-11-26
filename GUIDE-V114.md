@@ -1,0 +1,7 @@
+# ASB V114 — installation de test
+Prérequis : V113 et schema-v113.sql déjà appliqués. Sauvegarder la base, tester sur une copie, exécuter supabase/schema-v114.sql (RLS activé). Ne pas rejouer les anciennes migrations.
+Dans Vercel, Settings > Environment Variables, ajouter SUPABASE_SERVICE_ROLE_KEY (clé service_role Supabase, uniquement côté serveur, jamais dans GitHub). Déployer le ZIP comme habituellement.
+Salariés : enregistrer la fiche puis déplier Accès intranet sur sa carte. Créer le compte avec email et mot de passe de 12 caractères minimum, ou associer un compte Authentication existant. Tester la connexion dans une fenêtre privée. La désactivation est disponible sur la carte. La réinitialisation de mot de passe reste dans Supabase Authentication.
+Planning : onglet Prestations à réaliser, filtres semaine, salarié, chantier, état. Magasinier : demandes des salariés en haut de page. Les demandes ne créent aucune sortie de stock.
+Contrôles indispensables : compilation Vercel, compte admin, compte salarié, isolation entre deux salariés, validation collective, refus des accès directs aux tables et anciens RPC, demande matériel et changement de statut, désactivation. Les anciennes URL publiques de stockage restent à auditer. Ne pas distribuer les comptes avant ces contrôles.
+Limites : report des prestations non intégré ; création de compte après sauvegarde de la fiche (deux actions) ; matériel en saisie libre avec quantités ; pas de compilation complète ni test Supabase dans cet environnement.

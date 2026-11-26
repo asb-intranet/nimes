@@ -1,0 +1,11 @@
+begin;
+create table if not exists public.asb_material_requests(id uuid primary key default gen_random_uuid(),employee_id uuid not null references public.employees(id),employee_name text not null,project_id uuid not null references public.projects(id),content text not null check(length(content) between 1 and 8000),needed_on date not null,urgent boolean not null default false,status text not null default 'En attente' check(status in ('En attente','En préparation','Prête','Remise')),created_at timestamptz not null default now());
+alter table public.asb_material_requests enable row level security;
+drop policy if exists asb_requests_admin on public.asb_material_requests;
+create policy asb_requests_admin on public.asb_material_requests for all to authenticated using(public.asb_role()='admin') with check(public.asb_role()='admin');
+grant select,update on public.asb_material_requests to authenticated;
+create or replace function public.asb_request_material(site uuid, details text, needed date, priority boolean) returns void language plpgsql security definer set search_path='' as $$ declare emp uuid:=public.asb_employee(); begin if emp is null or not exists(select 1 from public.employee_planning p where p.employee_id=emp and p.project_id=site) then raise exception 'Chantier non autorisé'; end if; insert into public.asb_material_requests(employee_id,employee_name,project_id,content,needed_on,urgent) select emp,concat_ws(' ',firstname,lastname),site,trim(details),needed,priority from public.employees where id=emp; end $$;
+create or replace function public.asb_my_requests() returns jsonb language sql stable security definer set search_path='' as $$ select coalesce(jsonb_agg(jsonb_build_object('id',r.id,'name',p.name,'content',r.content,'status',r.status,'needed_on',r.needed_on) order by r.created_at desc),'[]'::jsonb) from public.asb_material_requests r join public.projects p on p.id=r.project_id where r.employee_id=public.asb_employee() $$;
+revoke all on function public.asb_request_material(uuid,text,date,boolean),public.asb_my_requests() from public,anon;
+grant execute on function public.asb_request_material(uuid,text,date,boolean),public.asb_my_requests() to authenticated;
+commit;

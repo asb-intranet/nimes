@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import {AccessPanel,TaskOverview,MaterialInbox} from "./V114";
 import EmployeePortal from "./EmployeePortal";
 import * as XLSX from "xlsx";
 import { supabase } from "@/lib/supabase";
@@ -2206,7 +2207,7 @@ function Planning({ projects, employees, links, planning, requests = [], refresh
     <div>
       <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
         <Section title="Planning simple" subtitle="Une couleur = un chantier. Les salariés prennent automatiquement la couleur du chantier." />
-        <div className="flex gap-2"><Button variant={view==="month"?"primary":"secondary"} onClick={()=>setView("month")}>Mois</Button><Button variant={view==="week"?"primary":"secondary"} onClick={()=>setView("week")}>Semaine</Button><Button onClick={openCreatePlanning}>+ Créer planning</Button></div>
+        <div className="flex gap-2"><Button variant={view==="month"?"primary":"secondary"} onClick={()=>setView("month")}>Mois</Button><Button variant={view==="week"?"primary":"secondary"} onClick={()=>setView("week")}>Semaine</Button><Button variant={view==="tasks"?"primary":"secondary"} onClick={()=>setView("tasks")}>Prestations à réaliser</Button><Button onClick={openCreatePlanning}>+ Créer planning</Button></div>
       </div>
 
 
@@ -2225,6 +2226,7 @@ function Planning({ projects, employees, links, planning, requests = [], refresh
         </div>
       </Card>
 
+      {view==="tasks"&&<TaskOverview employees={employees} projects={projects} planning={planning} tasks={taskRows} start={formatDate(weekStart)} end={formatDate(addDays(weekStart,6))} employeeFilter={employeeFilter} search={search}/>}
       {view==="month"&&<Card className="mb-5 overflow-hidden p-3 sm:p-5">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div>
@@ -2409,7 +2411,7 @@ function Employees({ employees, projects, refreshAll }: any) {
         </form></Card>}
         <Card><h3 className="mb-4 font-black">Affecter un salarié à un chantier</h3><form onSubmit={assign} className="space-y-3"><Field label="Salarié"><Select value={employeeId} onChange={(e: any) => setEmployeeId(e.target.value)}><option value="">Choisir salarié</option>{activeEmployees.map((e: any) => <option key={e.id} value={e.id}>{e.firstname} {e.lastname} — {e.position || e.role}</option>)}</Select></Field><Field label="Chantier"><Select value={projectId} onChange={(e: any) => setProjectId(e.target.value)}><option value="">Choisir chantier actif</option>{activeProjects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field><Button>Affecter au chantier</Button><p className="text-xs text-slate-500">Les affectations détaillées restent visibles dans chaque fiche chantier pour garder cette page légère.</p></form></Card>
       </div>
-      <div className="mt-6 grid gap-4 md:grid-cols-3">{visibleEmployees.map((e: any) => { const employeeAssignments = activeAssignments.filter((a: any) => a.employee_id === e.id); return <Card key={e.id}><div className="flex items-start justify-between gap-3"><div><h3 className="font-black">{e.firstname} {e.lastname}</h3><p className="text-sm text-slate-500">{e.position}</p><p className="text-sm font-bold text-slate-700">{e.daily_cost ? `${e.daily_cost} €/jour` : "Coût journée non renseigné"}</p></div><div className="flex flex-col items-end gap-2"><Badge>{e.role}</Badge>{(e.active === false || e.archived === true) && <Badge tone="amber">Archivé</Badge>}</div></div><div className="mt-4 space-y-1"><p className="text-xs font-bold uppercase text-slate-500">Chantiers affectés</p>{employeeAssignments.map((a: any) => <div key={a.id} className="rounded-xl bg-slate-50 px-3 py-2 text-xs font-bold">{projectNameLocal(a.project_id)}</div>)}{employeeAssignments.length === 0 && <p className="text-xs text-slate-400">Aucune affectation active.</p>}</div><div className="mt-4 grid grid-cols-2 gap-2"><Button variant="secondary" onClick={() => editEmployee(e)}>Modifier</Button>{(e.active === false || e.archived === true) ? <Button variant="green" onClick={() => restoreEmployee(e)}>Réactiver</Button> : <Button variant="danger" onClick={() => deleteEmployee(e)}>Archiver</Button>}</div></Card>; })}</div>
+      <div className="mt-6 grid gap-4 md:grid-cols-3">{visibleEmployees.map((e: any) => { const employeeAssignments = activeAssignments.filter((a: any) => a.employee_id === e.id); return <Card key={e.id}><div className="flex items-start justify-between gap-3"><div><h3 className="font-black">{e.firstname} {e.lastname}</h3><p className="text-sm text-slate-500">{e.position}</p><p className="text-sm font-bold text-slate-700">{e.daily_cost ? `${e.daily_cost} €/jour` : "Coût journée non renseigné"}</p></div><div className="flex flex-col items-end gap-2"><Badge>{e.role}</Badge>{(e.active === false || e.archived === true) && <Badge tone="amber">Archivé</Badge>}</div></div><div className="mt-4 space-y-1"><p className="text-xs font-bold uppercase text-slate-500">Chantiers affectés</p>{employeeAssignments.map((a: any) => <div key={a.id} className="rounded-xl bg-slate-50 px-3 py-2 text-xs font-bold">{projectNameLocal(a.project_id)}</div>)}{employeeAssignments.length === 0 && <p className="text-xs text-slate-400">Aucune affectation active.</p>}</div><div className="mt-4 grid grid-cols-2 gap-2"><Button variant="secondary" onClick={() => editEmployee(e)}>Modifier</Button>{(e.active === false || e.archived === true) ? <Button variant="green" onClick={() => restoreEmployee(e)}>Réactiver</Button> : <Button variant="danger" onClick={() => deleteEmployee(e)}>Archiver</Button>}</div><AccessPanel employee={e}/></Card>; })}</div>
     </div>
   );
 }
@@ -3347,6 +3349,7 @@ function Storekeeper({ projects, materials, invoices = [], returns = [], refresh
 
   return (
     <div>
+      <MaterialInbox projects={projects}/>
       {fullMaterial && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 p-3 md:p-8">
           <div className="mx-auto min-h-[90vh] max-w-5xl rounded-[2rem] bg-white p-4 shadow-2xl md:p-8">
@@ -5072,13 +5075,7 @@ function Management({ openClients, projects, photos = [], docs = [], notes = [],
 }
 
 
-function AccessSettings({ session, employees }: any) {
-  const [accessRows,setAccessRows]=useState<any[]>([]);
-  const [accessEmail,setAccessEmail]=useState("");
-  const [accessEmployee,setAccessEmployee]=useState("");
-  async function loadAccess(){const r=await supabase.from("asb_access").select("*").eq("role","employee");if(r.error)alert(r.error.message);else setAccessRows(r.data||[]);}
-  useEffect(()=>{loadAccess()},[]);
-
+function AccessSettings({ session }: any) {
   const [managementCurrent, setManagementCurrent] = useState("");
   const [managementNew, setManagementNew] = useState("");
   const [managementConfirm, setManagementConfirm] = useState("");
@@ -5119,7 +5116,7 @@ function AccessSettings({ session, employees }: any) {
 
   return <div className="space-y-5">
     <Section title="Paramètres d'accès" subtitle="Modifier les codes d'accès internes et le mot de passe de connexion." />
-    <Card><h3 className="text-xl font-black">Gestion des accès salariés</h3><p className="text-sm">Créer d’abord le compte dans Supabase Authentication, puis associer son adresse à la fiche salarié.</p><div className="my-3 space-y-2"><Input type="email" placeholder="Email du compte" value={accessEmail} onChange={(e:any)=>setAccessEmail(e.target.value)}/><Select value={accessEmployee} onChange={(e:any)=>setAccessEmployee(e.target.value)}><option value="">Choisir un salarié</option>{employees.filter((e:any)=>e.active!==false&&!e.archived).map((e:any)=><option key={e.id} value={e.id}>{e.firstname} {e.lastname}</option>)}</Select><Button onClick={async()=>{const r=await supabase.rpc("asb_link_employee",{account_email:accessEmail,emp:accessEmployee});if(r.error)alert(r.error.message);else{setAccessEmail("");setAccessEmployee("");await loadAccess()}}}>Associer le compte</Button></div>{accessRows.map(a=><div key={a.user_id} className="flex justify-between border-t py-3"><span>{employees.find((e:any)=>e.id===a.employee_id)?.firstname} {employees.find((e:any)=>e.id===a.employee_id)?.lastname}</span><Button variant="secondary" onClick={async()=>{const r=await supabase.from("asb_access").update({enabled:!a.enabled}).eq("user_id",a.user_id);if(r.error)alert(r.error.message);else await loadAccess()}}>{a.enabled?"Désactiver":"Réactiver"}</Button></div>)}</Card>
+
 
 
     <Card className="border-l-4 border-slate-900">
