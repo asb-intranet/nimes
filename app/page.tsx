@@ -340,10 +340,10 @@ export default function Page() {
   if (userRole === "employee") return <EmployeePortal logout={signOut}/>;
   if (userRole !== "admin") return <main className="p-8">Accès non autorisé. Vérifiez la migration V113 et votre compte. <Button onClick={signOut}>Déconnexion</Button></main>;
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      <aside className="fixed left-0 top-0 hidden h-full w-80 border-r border-slate-100 bg-white p-6 lg:block">
-        <div className="mb-8 rounded-3xl bg-white p-4 text-slate-900 shadow-sm">
-          <img src="/logo-asb.png" alt="ASB" className="mx-auto h-28 w-auto object-contain" />
+    <div className="asb-shell min-h-screen bg-slate-50 text-slate-900">
+      <aside className="asb-sidebar fixed left-0 top-0 hidden h-full w-64 overflow-y-auto p-4 lg:block">
+        <div className="mb-5 rounded-xl bg-white p-3 text-slate-900">
+          <img src="/logo-asb.png" alt="ASB" className="mx-auto h-20 w-auto object-contain" />
           <div className="mt-3 text-center text-2xl font-black">ASB Intranet</div>
           <div className="mt-1 text-center text-sm text-slate-500">Suivi chantier mobile</div>
         </div>
@@ -359,14 +359,14 @@ export default function Page() {
           })}
         </nav>
 
-        <Button variant="secondary" className="absolute bottom-6 left-6 right-6" onClick={signOut}>
+        <Button variant="secondary" className="mt-6 w-full" onClick={signOut}>
           <LogOut size={16} className="mr-2" /> Déconnexion
         </Button>
       </aside>
 
-      <main className="lg:ml-80">
-        <header className="sticky top-0 z-20 border-b border-slate-100 bg-white/90 p-5 backdrop-blur">
-          <div className="text-sm text-slate-500">Connecté : {session.user.email}</div>
+      <main className="lg:ml-64 min-w-0">
+        <header className="asb-header sticky top-0 z-20 p-3 lg:px-6">
+          <div className="flex items-center justify-between gap-3"><div className="truncate text-xs text-slate-200">Connecté : {session.user.email}</div><details className="relative shrink-0"><summary className="cursor-pointer list-none rounded-lg px-3 py-2 text-sm">Compte ▾</summary><div className="absolute right-0 top-full z-50 rounded-lg border bg-white p-2 text-slate-900 shadow-lg"><button className="flex items-center gap-2 whitespace-nowrap p-2" onClick={signOut}><LogOut size={16}/> Déconnexion</button></div></details></div>
           <h1 className="text-3xl font-black">{active === "clients" ? "Gestion / Clients / CDC" : menu.find((m) => m.id === active)?.title}</h1>
           <div className="mt-3 lg:hidden">
             <Button type="button" variant="secondary" className="w-full justify-center" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
@@ -387,7 +387,7 @@ export default function Page() {
           </div>
         </header>
 
-        <section className="p-5 pb-28 lg:p-8">
+        <section className="asb-content min-w-0 p-3 pb-28 lg:p-6">
           {active === "dashboard" && userRole === "admin" && <Dashboard projects={projects} photos={photos} docs={docs} requests={requests} materials={materials} setActive={setActive} />}
           {active === "clients" && userRole === "admin" && <div><Button variant="secondary" onClick={() => setActive("management")}>← Retour Gestion</Button><ClientSpecs specs={clientSpecs} items={clientSpecItems} paymentTerms={clientSpecPaymentTerms} paymentSchedules={clientPaymentSchedules} paymentScheduleItems={clientPaymentScheduleItems} projects={projects} refreshAll={refreshAll} /></div>}
           {active === "storekeeper" && userRole === "admin" && <Storekeeper projects={projects} materials={materials} invoices={invoices} returns={returns} refreshAll={refreshAll} />}

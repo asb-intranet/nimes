@@ -4,3 +4,19 @@
 
 body { background: #f8fafc; }
 input, select, textarea { outline: none; }
+:root { --asb-navy:#092b4d; --asb-yellow:#ffc400; }
+body { background:#f2f5f9; color:#10233d; }
+.asb-sidebar,.asb-header {background:var(--asb-navy);color:white;}
+.asb-header {border-bottom:3px solid var(--asb-yellow);}
+.asb-sidebar nav button {color:#e5edf7;border-radius:10px;}
+.asb-sidebar nav button:hover {background:#194365;color:white;}
+.asb-sidebar nav button.bg-slate-900 {background:var(--asb-yellow);color:#10233d;}
+.asb-content .rounded-3xl {border-radius:14px;}
+.asb-content .rounded-2xl {border-radius:11px;}
+.asb-content button.bg-slate-900 {background:var(--asb-navy);}
+.asb-content h2 {letter-spacing:-.025em;}
+.asb-content input:focus,.asb-content select:focus,.asb-content textarea:focus {outline:2px solid #547da6;outline-offset:1px;}
+.asb-employee header {background:var(--asb-navy);border-bottom:3px solid var(--asb-yellow);}
+.asb-employee input[type=checkbox] {width:24px;height:24px;accent-color:#15803d;flex-shrink:0;}
+.asb-bottom {padding-bottom:calc(12px + env(safe-area-inset-bottom));}
+@media(max-width:640px){.asb-content {overflow-x:auto;} .asb-content input,.asb-content select,.asb-content textarea,.asb-employee input,.asb-employee select,.asb-employee textarea {font-size:16px;} .asb-header h1{font-size:1.35rem;} }
