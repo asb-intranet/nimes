@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import {AccessPanel,TaskOverview,MaterialInbox} from "./V114";
+import {AdminMessages,TaskActions} from "./V120";
 import EmployeePortal from "./EmployeePortal";
 import * as XLSX from "xlsx";
 import { supabase } from "@/lib/supabase";
@@ -19,6 +20,7 @@ const menu = [
   { id: "employees", title: "Salariés", icon: Users },
   { id: "vehicles", title: "Véhicules", icon: Truck },
   { id: "management", title: "Gestion", icon: Euro },
+  { id: "messages", title: "Messages internes", icon: MessageSquare },
   { id: "settings", title: "Paramètres", icon: Wrench }
 ];
 
@@ -396,6 +398,7 @@ export default function Page() {
           {active === "employees" && userRole === "admin" && <Employees employees={employees} projects={projects} refreshAll={refreshAll} />}
           {active === "vehicles" && userRole === "admin" && <Vehicles vehicles={vehicles} refreshAll={refreshAll} />}
           {active === "management" && userRole === "admin" && <Management openClients={() => setActive("clients")} projects={projects} photos={photos} docs={docs} notes={notes} materials={materials} vigilance={vigilance} employees={employees} planning={planning} invoices={invoices} revenues={revenues} returns={returns} companyExpenses={companyExpenses} clientPayments={clientPayments} supplierInvoices={supplierInvoices} quoteCalculations={quoteCalculations} workItems={workItems} pilotageWorkProjects={pilotageWorkProjects} refreshAll={refreshAll} />}
+          {active === "messages" && userRole === "admin" && <AdminMessages employees={employees}/>}
           {active === "settings" && userRole === "admin" && <AccessSettings session={session} employees={employees} />}
         </section>
       </main>
@@ -2226,7 +2229,7 @@ function Planning({ projects, employees, links, planning, requests = [], refresh
         </div>
       </Card>
 
-      {view==="tasks"&&<TaskOverview employees={employees} projects={projects} planning={planning} tasks={taskRows} start={formatDate(weekStart)} end={formatDate(addDays(weekStart,6))} employeeFilter={employeeFilter} search={search}/>}
+      {view==="tasks"&&<TaskOverview employees={employees} projects={projects} planning={planning} tasks={taskRows} start={formatDate(weekStart)} end={formatDate(addDays(weekStart,6))} employeeFilter={employeeFilter} search={search} reload={loadTasks}/>}
       {view==="month"&&<Card className="mb-5 overflow-hidden p-3 sm:p-5">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div>
