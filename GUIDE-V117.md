@@ -1,0 +1,1 @@
+V117 : suppression de la liste des affectations dans les fiches salariés, sans suppression des données. Lecture serveur compatible avec les colonnes présentes et distinction entre erreur Supabase et salarié absent. Aucun SQL nouveau. Redéployer et tester sur un compte de test. Si erreur persistante, vérifier le projet Supabase et la clé service_role.
