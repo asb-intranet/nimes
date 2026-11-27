@@ -371,7 +371,7 @@ export default function Page() {
 
       <main className="lg:ml-64 min-w-0">
         <header className="asb-header sticky top-0 z-20 p-3 lg:px-6">
-          <div className="flex items-center justify-between gap-3"><div className="truncate text-xs text-slate-200">Connecté : {session.user.email}</div><details className="relative shrink-0"><summary className="cursor-pointer list-none rounded-lg px-3 py-2 text-sm">Compte ▾</summary><div className="absolute right-0 top-full z-50 rounded-lg border bg-white p-2 text-slate-900 shadow-lg"><button className="flex items-center gap-2 whitespace-nowrap p-2" onClick={signOut}><LogOut size={16}/> Déconnexion</button></div></details></div>
+          <div className="flex items-center justify-between gap-3"><div className="truncate text-xs text-slate-200">Connecté : {session.user.email}</div><details className="relative shrink-0"><summary className="cursor-pointer list-none rounded-lg px-3 py-2 text-sm">Compte ▾</summary><div className="absolute right-0 top-full z-50 rounded-lg border bg-white p-2 text-slate-900 shadow-lg"><div className="w-[min(320px,80vw)]"><PushSettings admin/></div><button className="flex items-center gap-2 whitespace-nowrap p-2" onClick={signOut}><LogOut size={16}/> Déconnexion</button></div></details></div>
           <h1 className="text-3xl font-black">{active === "clients" ? "Gestion / Clients / CDC" : menu.find((m) => m.id === active)?.title}</h1>
           <div className="mt-3 lg:hidden">
             <Button type="button" variant="secondary" className="w-full justify-center" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
@@ -392,7 +392,7 @@ export default function Page() {
           </div>
         </header>
 
-        <section className="asb-content min-w-0 p-3 pb-28 lg:p-6"><PushSettings admin/>
+        <section className="asb-content min-w-0 p-3 pb-28 lg:p-6">
           {active === "dashboard" && userRole === "admin" && <Dashboard projects={projects} photos={photos} docs={docs} requests={requests} materials={materials} setActive={setActive} />}
           {active === "clients" && userRole === "admin" && <div><Button variant="secondary" onClick={() => setActive("management")}>← Retour Gestion</Button><ClientSpecs specs={clientSpecs} items={clientSpecItems} paymentTerms={clientSpecPaymentTerms} paymentSchedules={clientPaymentSchedules} paymentScheduleItems={clientPaymentScheduleItems} projects={projects} refreshAll={refreshAll} /></div>}
           {active === "storekeeper" && userRole === "admin" && <Storekeeper projects={projects} materials={materials} invoices={invoices} returns={returns} refreshAll={refreshAll} />}
@@ -1894,7 +1894,7 @@ function Planning({ projects, employees, links, planning, requests = [], refresh
   const [search, setSearch] = useState("");
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
 
-  const activeProjects = projects.filter((p: any) => p.status !== "archive");
+  const activeProjects = projects.filter((p: any) => ["preparation", "en_cours"].includes(p.status));
   const selectedProject = projects.find((p: any) => p.id === selectedProjectId);
 
   const assignedIds = form.project_id
@@ -1906,7 +1906,7 @@ function Planning({ projects, employees, links, planning, requests = [], refresh
     .filter((e: any) => employeeFilter === "all" || e.id === employeeFilter)
     .sort((a: any, b: any) => `${a.firstname} ${a.lastname}`.localeCompare(`${b.firstname} ${b.lastname}`));
 
-  const formEmployees = [...employees].sort((a: any, b: any) => {
+  const formEmployees = employees.filter((e:any)=> (e.active !== false && e.archived !== true) || (editing && e.id === editing.employee_id)).sort((a: any, b: any) => {
     const aAssigned = assignedIds.includes(a.id) ? 0 : 1;
     const bAssigned = assignedIds.includes(b.id) ? 0 : 1;
     return aAssigned - bAssigned || `${a.firstname} ${a.lastname}`.localeCompare(`${b.firstname} ${b.lastname}`);
@@ -1991,6 +1991,7 @@ function Planning({ projects, employees, links, planning, requests = [], refresh
     if (!form.project_id || !form.title || !form.start_date) return alert("Chantier, tâche et date de début obligatoires");
     if (!form.employee_ids || form.employee_ids.length === 0) return alert("Sélectionne au moins un salarié");
 
+    if (!editing && (!activeProjects.some((p:any)=>p.id===form.project_id) || form.employee_ids.some((id:string)=>!activeEmployees.some((e:any)=>e.id===id)))) return alert("Sélectionnez uniquement des chantiers et salariés actifs.");
     const assignmentError = await ensureProjectAssignments(form.project_id, form.employee_ids);
     if (assignmentError) return alert(assignmentError.message);
 
@@ -2119,7 +2120,7 @@ function Planning({ projects, employees, links, planning, requests = [], refresh
 
         <Card id="planning-form" className="border-l-8" style={{ borderLeftColor: form.project_id ? projectColor(form.project_id) : "#e2e8f0" }}>
           <form onSubmit={savePlanning} className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            <Field label="Chantier"><Select value={form.project_id} onChange={(e: any) => setForm({ ...form, project_id: e.target.value, employee_ids: [] })}><option value="">Choisir chantier</option>{activeProjects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field>
+            <Field label="Chantier"><Select value={form.project_id} onChange={(e: any) => setForm({ ...form, project_id: e.target.value, employee_ids: [] })}><option value="">Choisir chantier</option>{projects.filter((p:any)=>activeProjects.includes(p)||(editing && p.id===editing.project_id)).map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field>
             <Field label="Tâche"><Input value={form.title} onChange={(e: any) => setForm({ ...form, title: e.target.value })} placeholder="Ex : Pose isolation, RDV client..." /></Field>
             <Field label="Date début"><Input type="date" value={form.start_date} onChange={(e: any) => setForm({ ...form, start_date: e.target.value })} /></Field>
             <Field label="Date fin"><Input type="date" value={form.end_date} onChange={(e: any) => setForm({ ...form, end_date: e.target.value })} /></Field>

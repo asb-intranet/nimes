@@ -1,0 +1,2 @@
+# V122
+Exécuter supabase/schema-v122.sql dans SQL Editor avant publication GitHub. Aucun changement des clés ou du webhook. Modifier objet, contenu et importance sans changer les destinataires ; la modification remet les confirmations de lecture à zéro, sans nouveau push. Suppression pour tous les destinataires. Réglages push dans Compte. Création planning : chantiers à préparer/en cours et salariés actifs uniquement. Les références historiques restent disponibles pour les interventions existantes. Tester avec admin et salarié après déploiement.
