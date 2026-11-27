@@ -1,0 +1,2 @@
+self.addEventListener('push',event=>{let data;try{data=event.data.json()}catch{return}event.waitUntil(self.registration.showNotification(data.title||'ASB Intranet',{body:data.body||'Nouvelle information',icon:'/icon-192.png',data:{kind:data.kind}}))});
+self.addEventListener('notificationclick',event=>{event.notification.close();const url=new URL('/',self.location.origin);url.searchParams.set('push',event.notification.data?.kind||'');event.waitUntil(self.clients.openWindow(url.href))});

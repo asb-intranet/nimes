@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import {AccessPanel,TaskOverview,MaterialInbox} from "./V114";
 import {AdminMessages,TaskActions} from "./V120";
+import PushSettings,{removePush} from "./PushSettings";
 import EmployeePortal from "./EmployeePortal";
 import * as XLSX from "xlsx";
 import { supabase } from "@/lib/supabase";
@@ -137,6 +138,7 @@ export default function Page() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [active, setActive] = useState("dashboard");
+  useEffect(()=>{const k=new URLSearchParams(window.location.search).get("push");if(k==="material")setActive("storekeeper");else if(k==="done")setActive("planning");},[]);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -288,6 +290,7 @@ export default function Page() {
   }
 
   async function signOut() {
+    try { await removePush(); } catch {}
     await supabase.auth.signOut();
     setSession(null);
   }
@@ -389,7 +392,7 @@ export default function Page() {
           </div>
         </header>
 
-        <section className="asb-content min-w-0 p-3 pb-28 lg:p-6">
+        <section className="asb-content min-w-0 p-3 pb-28 lg:p-6"><PushSettings admin/>
           {active === "dashboard" && userRole === "admin" && <Dashboard projects={projects} photos={photos} docs={docs} requests={requests} materials={materials} setActive={setActive} />}
           {active === "clients" && userRole === "admin" && <div><Button variant="secondary" onClick={() => setActive("management")}>← Retour Gestion</Button><ClientSpecs specs={clientSpecs} items={clientSpecItems} paymentTerms={clientSpecPaymentTerms} paymentSchedules={clientPaymentSchedules} paymentScheduleItems={clientPaymentScheduleItems} projects={projects} refreshAll={refreshAll} /></div>}
           {active === "storekeeper" && userRole === "admin" && <Storekeeper projects={projects} materials={materials} invoices={invoices} returns={returns} refreshAll={refreshAll} />}
